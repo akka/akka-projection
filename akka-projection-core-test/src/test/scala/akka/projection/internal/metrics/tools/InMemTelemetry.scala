@@ -16,12 +16,13 @@ import akka.actor.typed.ActorSystem
 import akka.actor.typed.Extension
 import akka.actor.typed.ExtensionId
 import akka.projection.ProjectionId
+import akka.projection.internal.BacklogStatusTelemetry
 import akka.projection.internal.Telemetry
 
 /**
  *
  */
-class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends Telemetry {
+class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends Telemetry with BacklogStatusTelemetry {
   private val instruments: InMemInstruments = InMemInstrumentsRegistry(system).forId(projectionId)
 
   import instruments._
@@ -56,6 +57,17 @@ class InMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_]) extends
   override def error(cause: Throwable): Unit = {
     lastErrorThrowable.set(cause)
     errorInvocations.incrementAndGet()
+  }
+
+  override def backlogStatusCheckIntervalSeconds(): Int = {
+    backlogStatusCheckIntervalSecondsInvocations.incrementAndGet()
+    backlogStatusInitialCheckIntervalSeconds.get()
+  }
+
+  override def reportTimestampBacklogStatus(latestSourceTimestamp: Long, latestOffsetTimestamp: Long): Unit = {
+    reportTimestampBacklogStatusInvocations.incrementAndGet()
+    backlogStatusLatestSourceTimestamp.set(latestSourceTimestamp)
+    backlogStatusLatestOffsetTimestamp.set(latestOffsetTimestamp)
   }
 
 }
@@ -97,5 +109,12 @@ class InMemInstruments() {
   val stoppedInvocations = new AtomicInteger(0)
   val failureInvocations = new AtomicInteger(0)
   val lastFailureThrowable = new AtomicReference[Throwable](null)
+
+  // backlog status checks
+  val backlogStatusCheckIntervalSecondsInvocations = new AtomicInteger(0)
+  val backlogStatusInitialCheckIntervalSeconds = new AtomicInteger(0)
+  val reportTimestampBacklogStatusInvocations = new AtomicInteger(0)
+  val backlogStatusLatestSourceTimestamp = new AtomicLong(0)
+  val backlogStatusLatestOffsetTimestamp = new AtomicLong(0)
 
 }

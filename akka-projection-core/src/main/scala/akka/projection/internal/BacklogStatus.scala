@@ -64,13 +64,13 @@ object BacklogStatusTelemetry {
       backlogStatusTelemetry <- Option(telemetry).collect {
         case statusTelemetry: BacklogStatusTelemetry => statusTelemetry
       }
-      checkInterval <- Option(backlogStatusTelemetry.backlogStatusCheckIntervalSeconds()).filter(_ > 0).map(_.seconds)
       backlogStatusSourceProvider <- Option(sourceProvider).collect {
         case provider: BacklogStatusSourceProvider if provider.supportsLatestEventTimestamp => provider
       }
       backlogStatusProjectionState <- Option(projectionState).collect {
         case state: BacklogStatusProjectionState => state
       }
+      checkInterval <- Option(backlogStatusTelemetry.backlogStatusCheckIntervalSeconds()).filter(_ > 0).map(_.seconds)
     } yield {
       implicit val ec: ExecutionContext = system.executionContext
       system.scheduler.scheduleAtFixedRate(checkInterval, checkInterval) { () =>
