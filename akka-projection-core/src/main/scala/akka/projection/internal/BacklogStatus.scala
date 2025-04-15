@@ -58,12 +58,26 @@ object BacklogStatusTelemetry {
   private[internal] def start[Offset, Envelope](
       telemetry: Telemetry,
       sourceProvider: SourceProvider[Offset, Envelope],
+      projectionState: InternalProjectionState[Offset, Envelope])(implicit system: ActorSystem[_]): Seq[Cancellable] = {
+    val backlogStatusTelemetries: Seq[BacklogStatusTelemetry] = telemetry match {
+      case backlogStatusTelemetry: BacklogStatusTelemetry => Seq(backlogStatusTelemetry)
+      case ensemble: EnsembleTelemetry =>
+        ensemble.telemetries.collect {
+          case backlogStatusTelemetry: BacklogStatusTelemetry => backlogStatusTelemetry
+        }
+      case _ => Seq.empty
+    }
+    backlogStatusTelemetries.flatMap { backlogStatusTelemetry =>
+      startBacklogStatusChecks(backlogStatusTelemetry, sourceProvider, projectionState)
+    }
+  }
+
+  private def startBacklogStatusChecks[Offset, Envelope](
+      backlogStatusTelemetry: BacklogStatusTelemetry,
+      sourceProvider: SourceProvider[Offset, Envelope],
       projectionState: InternalProjectionState[Offset, Envelope])(
       implicit system: ActorSystem[_]): Option[Cancellable] = {
     for {
-      backlogStatusTelemetry <- Option(telemetry).collect {
-        case statusTelemetry: BacklogStatusTelemetry => statusTelemetry
-      }
       backlogStatusSourceProvider <- Option(sourceProvider).collect {
         case provider: BacklogStatusSourceProvider if provider.supportsLatestEventTimestamp => provider
       }

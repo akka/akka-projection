@@ -56,7 +56,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
   private var telemetry: Telemetry = NoopTelemetry
   private[projection] def getTelemetry() = telemetry
 
-  private var backlogStatusChecks: Option[Cancellable] = None
+  private var backlogStatusChecks: Seq[Cancellable] = Seq.empty
 
   def readPaused(): Future[Boolean]
   def readOffsets(): Future[Option[Offset]]

@@ -48,8 +48,8 @@ import org.slf4j.LoggerFactory
  * MetricsSpecs should create a [[TelemetryTester]] and run the projection using `runInternal` (see existing
  * `XyzMetricsSpec` for more examples.
  */
-abstract class InternalProjectionStateMetricsSpec
-    extends ScalaTestWithActorTestKit(InternalProjectionStateMetricsSpec.config)
+abstract class InternalProjectionStateMetricsSpec(config: Config = InternalProjectionStateMetricsSpec.config)
+    extends ScalaTestWithActorTestKit(config)
     with AnyWordSpecLike
     with BeforeAndAfter
     with LogCapturing {
@@ -87,7 +87,9 @@ abstract class InternalProjectionStateMetricsSpec
 }
 
 object InternalProjectionStateMetricsSpec {
-  def config: Config =
+  def config: Config = testConfig(classOf[InMemTelemetry])
+
+  def testConfig(telemetryClasses: Class[_]*): Config =
     ConfigFactory.parseString(s"""
       akka {
         loglevel = "DEBUG"
@@ -99,9 +101,12 @@ object InternalProjectionStateMetricsSpec {
         random-factor = 0.1
       }
       akka.projection {
-        telemetry.implementations = [${classOf[InMemTelemetry].getName}]
+        telemetry.implementations = [${telemetryClasses.map(_.getName).map(quoted).mkString(", ")}]
       }
       """)
+
+  def quoted(value: String): String = "\"" + value + "\""
+
   case class Envelope(id: String, offset: Long, message: String) {
     // some time in the past...
     val creationTimestamp = System.currentTimeMillis() - 1000L

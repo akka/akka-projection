@@ -26,6 +26,7 @@ import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.internal.metrics.tools.InMemInstruments
 import akka.projection.internal.metrics.tools.InMemInstrumentsRegistry
+import akka.projection.internal.metrics.tools.InMemTelemetry
 import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec
 import akka.projection.internal.metrics.tools.TestHandlers
 import akka.projection.scaladsl.SourceProvider
@@ -171,6 +172,49 @@ class BacklogStatusTelemetrySpec extends InternalProjectionStateMetricsSpec {
   }
 }
 
+class BacklogStatusTelemetryEnsembleSpec
+    extends InternalProjectionStateMetricsSpec(
+      InternalProjectionStateMetricsSpec
+        .testConfig(classOf[InMemTelemetry], classOf[BacklogStatusTelemetrySpec.SecondInMemTelemetry])) {
+
+  import BacklogStatusTelemetrySpec._
+
+  "BacklogStatusTelemetry" should {
+
+    "support multiple telemetry implementations in ensemble" in {
+      val projectionId1 = genRandomProjectionId()
+      val projectionId2 = secondProjectionId(projectionId1)
+      val projectionSettings = ProjectionSettings(system)
+      val sourceProvider = new TestBacklogStatusSourceProvider(supportsLatestEventTimestamp = true)
+      val projectionState = new TestBacklogStatusProjectionState(projectionId1, sourceProvider, projectionSettings)
+      val instruments1 = InMemInstrumentsRegistry(system).forId(projectionId1)
+      val instruments2 = InMemInstrumentsRegistry(system).forId(projectionId2)
+
+      instruments1.backlogStatusInitialCheckIntervalSeconds.set(1)
+      instruments2.backlogStatusInitialCheckIntervalSeconds.set(2)
+
+      projectionState.start()
+
+      eventually(timeout(3.seconds)) {
+        sourceProvider.isRunning shouldBe true
+        instruments1.startedInvocations.get shouldBe 1
+        instruments1.backlogStatusCheckIntervalSecondsInvocations.get shouldBe 1
+        instruments1.backlogStatusInitialCheckIntervalSeconds.get shouldBe 1
+        instruments2.startedInvocations.get shouldBe 1
+        instruments2.backlogStatusCheckIntervalSecondsInvocations.get shouldBe 1
+        instruments2.backlogStatusInitialCheckIntervalSeconds.get shouldBe 2
+      }
+
+      sourceProvider.complete()
+
+      eventually(timeout(3.seconds)) {
+        instruments1.stoppedInvocations.get shouldBe 1
+        instruments2.stoppedInvocations.get shouldBe 1
+      }
+    }
+  }
+}
+
 object BacklogStatusTelemetrySpec {
 
   final case class TestOffset(timestamp: Instant)
@@ -244,4 +288,10 @@ object BacklogStatusTelemetrySpec {
 
     override def saveOffset(projectionId: ProjectionId, offset: TestOffset): Future[Done] = Future.successful(Done)
   }
+
+  final class SecondInMemTelemetry(projectionId: ProjectionId, system: ActorSystem[_])
+      extends InMemTelemetry(secondProjectionId(projectionId), system)
+
+  def secondProjectionId(projectionId: ProjectionId, suffix: String = "2"): ProjectionId =
+    ProjectionId(projectionId.name, s"${projectionId.key}-$suffix")
 }
