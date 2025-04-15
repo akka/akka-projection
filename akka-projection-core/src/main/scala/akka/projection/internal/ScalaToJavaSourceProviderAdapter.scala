@@ -23,6 +23,7 @@ import java.util.function.Supplier
 import scala.jdk.FutureConverters._
 import scala.jdk.OptionConverters._
 import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
 
 /**
  * INTERNAL API: Adapter from scaladsl.SourceProvider with BySlicesSourceProvider to javadsl.SourceProvider with BySlicesSourceProvider
@@ -48,6 +49,7 @@ private[projection] sealed class ScalaToJavaBySlicesSourceProviderAdapter[Offset
     val delegate: scaladsl.SourceProvider[Offset, Envelope] with BySlicesSourceProvider)
     extends javadsl.SourceProvider[Offset, Envelope]
     with BySlicesSourceProvider
+    with BacklogStatusSourceProvider
     with EventTimestampQuery
     with LoadEventQuery {
   override def source(
@@ -82,6 +84,21 @@ private[projection] sealed class ScalaToJavaBySlicesSourceProviderAdapter[Offset
         throw new IllegalStateException(
           s"loadEnvelope was called but delegate of type [${delegate.getClass}] does not implement akka.persistence.query.typed.scaladsl.LoadEventQuery")
     }
+
+  override private[akka] def supportsLatestEventTimestamp: Boolean =
+    delegate match {
+      case sourceProvider: BacklogStatusSourceProvider =>
+        sourceProvider.supportsLatestEventTimestamp
+      case _ => false
+    }
+
+  override private[akka] def latestEventTimestamp(): Future[Option[Instant]] = {
+    delegate match {
+      case sourceProvider: BacklogStatusSourceProvider =>
+        sourceProvider.latestEventTimestamp()
+      case _ => Future.successful(None)
+    }
+  }
 
 }
 

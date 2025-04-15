@@ -4,6 +4,7 @@
 
 package akka.projection.r2dbc.internal
 
+import java.time.Instant
 import java.util.concurrent.atomic.AtomicLong
 
 import scala.annotation.nowarn
@@ -41,6 +42,7 @@ import akka.projection.eventsourced.scaladsl.EventSourcedProvider.LoadEventsByPe
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
+import akka.projection.internal.BacklogStatusProjectionState
 import akka.projection.internal.CanTriggerReplay
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.GroupedHandlerStrategy
@@ -1105,7 +1107,8 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
         offsetStrategy,
         handlerStrategy,
         statusObserver,
-        settings) {
+        settings)
+      with BacklogStatusProjectionState {
 
     implicit val executionContext: ExecutionContext = system.executionContext
     override val logger: LoggingAdapter = Logging(system.classicSystem, classOf[R2dbcProjectionImpl[_, _]])
@@ -1190,6 +1193,9 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
           }
       }
     }
+
+    override private[akka] def latestOffsetTimestamp(): Future[Option[Instant]] =
+      Future.successful(offsetStore.getState().latestOffset.map(_.timestamp))
 
     private[projection] def newRunningInstance(): RunningProjection =
       new R2dbcRunningProjection(RunningProjection.withBackoff(() => this.mappedSource(), settings), this)

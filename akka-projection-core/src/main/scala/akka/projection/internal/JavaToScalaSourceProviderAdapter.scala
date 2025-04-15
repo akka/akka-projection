@@ -65,6 +65,7 @@ private[projection] class JavaToScalaSourceProviderAdapter[Offset, Envelope](
     val delegate: javadsl.SourceProvider[Offset, Envelope])
     extends scaladsl.SourceProvider[Offset, Envelope]
     with BySlicesSourceProvider
+    with BacklogStatusSourceProvider
     with EventTimestampQuery
     with LoadEventQuery {
 
@@ -110,6 +111,19 @@ private[projection] class JavaToScalaSourceProviderAdapter[Offset, Envelope](
             s"EventTimestampQuery when LoadEventQuery is used."))
     }
 
+  override private[akka] def supportsLatestEventTimestamp: Boolean =
+    delegate match {
+      case sourceProvider: BacklogStatusSourceProvider =>
+        sourceProvider.supportsLatestEventTimestamp
+      case _ => false
+    }
+
+  override private[akka] def latestEventTimestamp(): Future[Option[Instant]] =
+    delegate match {
+      case sourceProvider: BacklogStatusSourceProvider =>
+        sourceProvider.latestEventTimestamp()
+      case _ => Future.successful(None)
+    }
 }
 
 /**

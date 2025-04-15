@@ -12,6 +12,10 @@ import java.util.function.Supplier
 import java.util.function.{ Function => JFunction }
 
 import scala.annotation.nowarn
+import scala.concurrent.ExecutionContext
+import scala.concurrent.Future
+import scala.jdk.FutureConverters._
+import scala.jdk.OptionConverters._
 
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
@@ -26,11 +30,13 @@ import akka.persistence.query.typed.javadsl.CurrentEventsByPersistenceIdTypedQue
 import akka.persistence.query.typed.javadsl.EventTimestampQuery
 import akka.persistence.query.typed.javadsl.EventsBySliceQuery
 import akka.persistence.query.typed.javadsl.EventsBySliceStartingFromSnapshotsQuery
+import akka.persistence.query.typed.javadsl.LatestEventTimestampQuery
 import akka.persistence.query.typed.javadsl.LoadEventQuery
 import akka.projection.BySlicesSourceProvider
 import akka.projection.eventsourced.EventEnvelope
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider.LoadEventsByPersistenceIdSourceProvider
 import akka.projection.internal.CanTriggerReplay
+import akka.projection.internal.BacklogStatusSourceProvider
 import akka.projection.javadsl
 import akka.projection.javadsl.SourceProvider
 import akka.stream.javadsl.Source
@@ -280,7 +286,8 @@ object EventSourcedProvider {
       with BySlicesSourceProvider
       with EventTimestampQuerySourceProvider
       with LoadEventQuerySourceProvider
-      with LoadEventsByPersistenceIdSourceProvider[Event] {
+      with LoadEventsByPersistenceIdSourceProvider[Event]
+      with BacklogStatusSourceProvider {
 
     override def readJournal: ReadJournal = eventsBySlicesQuery
 
@@ -313,6 +320,21 @@ object EventSourcedProvider {
         case _ => None // not supported by this query
       }
     }
+
+    /** INTERNAL API */
+    @InternalApi
+    override private[akka] def supportsLatestEventTimestamp: Boolean =
+      eventsBySlicesQuery.isInstanceOf[LatestEventTimestampQuery]
+
+    /** INTERNAL API */
+    @InternalApi
+    override private[akka] def latestEventTimestamp(): Future[Option[Instant]] = {
+      eventsBySlicesQuery match {
+        case query: LatestEventTimestampQuery =>
+          query.latestEventTimestamp(entityType, minSlice, maxSlice).asScala.map(_.toScala)(ExecutionContext.parasitic)
+        case _ => Future.successful(None)
+      }
+    }
   }
 
   /**
@@ -332,7 +354,8 @@ object EventSourcedProvider {
       with BySlicesSourceProvider
       with EventTimestampQuerySourceProvider
       with LoadEventQuerySourceProvider
-      with LoadEventsByPersistenceIdSourceProvider[Event] {
+      with LoadEventsByPersistenceIdSourceProvider[Event]
+      with BacklogStatusSourceProvider {
 
     override def readJournal: ReadJournal = eventsBySlicesQuery
 
@@ -371,6 +394,20 @@ object EventSourcedProvider {
       }
     }
 
+    /** INTERNAL API */
+    @InternalApi
+    override private[akka] def supportsLatestEventTimestamp: Boolean =
+      eventsBySlicesQuery.isInstanceOf[LatestEventTimestampQuery]
+
+    /** INTERNAL API */
+    @InternalApi
+    override private[akka] def latestEventTimestamp(): Future[Option[Instant]] = {
+      eventsBySlicesQuery match {
+        case query: LatestEventTimestampQuery =>
+          query.latestEventTimestamp(entityType, minSlice, maxSlice).asScala.map(_.toScala)(ExecutionContext.parasitic)
+        case _ => Future.successful(None)
+      }
+    }
   }
 
   /**
