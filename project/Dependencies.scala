@@ -50,7 +50,7 @@ object Dependencies {
     val scalaTest = "3.2.18"
     val testContainers = "1.19.3"
     val junit = "4.13.2"
-    val jacksonDatabind = "2.17.2" // this should match the version of jackson used by akka-serialization-jackson
+    val jacksonDatabind = "2.18.3" // this should match the version of jackson used by akka-serialization-jackson
   }
 
   object Compile {
