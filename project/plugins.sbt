@@ -7,7 +7,7 @@ addSbtPlugin("de.heikoseeberger" % "sbt-header" % "5.10.0")
 addSbtPlugin("com.github.sbt" % "sbt-ci-release" % "1.9.3")
 
 // remember to bump in Dependencies.scala and samples/grpc/ projects as well if changing
-addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "2.5.3")
+addSbtPlugin("com.lightbend.akka.grpc" % "sbt-akka-grpc" % "2.5.5")
 
 // Documentation
 addSbtPlugin("io.akka" % "sbt-paradox-akka" % "24.10.7")

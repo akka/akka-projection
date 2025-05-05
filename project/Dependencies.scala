@@ -16,13 +16,13 @@ object Dependencies {
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
 
   object Versions {
-    val Akka = sys.props.getOrElse("build.akka.version", "2.10.4")
+    val Akka = sys.props.getOrElse("build.akka.version", "2.10.5")
     val AkkaVersionInDocs = VersionNumber(Akka).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
 
-    val Alpakka = "9.0.0"
+    val Alpakka = "9.0.2"
     val AlpakkaVersionInDocs = VersionNumber(Alpakka).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
 
-    val AlpakkaKafka = "7.0.0"
+    val AlpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "7.0.2")
     val AlpakkaKafkaVersionInDocs = VersionNumber(AlpakkaKafka).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
@@ -32,21 +32,20 @@ object Dependencies {
 
     val AkkaProjectionVersionInDocs = "1.6"
 
-    val AkkaPersistenceCassandra = "1.3.0"
-    val AkkaPersistenceJdbc = "5.5.0"
+    val AkkaPersistenceCassandra = "1.3.2"
+    val AkkaPersistenceJdbc = "5.5.2"
 
-    val AkkaPersistenceR2dbc = "1.3.6"
+    val AkkaPersistenceR2dbc = "1.3.7"
     val AkkaPersistenceR2dbcVersionInDocs = VersionNumber(AkkaPersistenceR2dbc).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
 
-    val AkkaPersistenceDynamodb = "2.0.5"
+    val AkkaPersistenceDynamodb = "2.0.6"
     val AkkaPersistenceDynamodbVersionInDocs = VersionNumber(AkkaPersistenceDynamodb).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
 
-    val alpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "7.0.0")
-    val slick = "3.5.2"
+    val slick = "3.5.1"
     val scalaTest = "3.2.18"
     val testContainers = "1.19.3"
     val junit = "4.13.2"
@@ -84,7 +83,7 @@ object Dependencies {
 
     val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.Alpakka
 
-    val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-kafka" % Versions.alpakkaKafka
+    val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-kafka" % Versions.AlpakkaKafka
 
     // must be provided on classpath when using Apache Kafka 2.6.0+
     val jackson = "com.fasterxml.jackson.core" % "jackson-databind" % Versions.jacksonDatabind
@@ -111,7 +110,7 @@ object Dependencies {
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % sbt.Test
     val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % sbt.Test
 
-    val logback = "ch.qos.logback" % "logback-classic" % "1.5.7" % sbt.Test
+    val logback = "ch.qos.logback" % "logback-classic" % "1.5.18" % sbt.Test
 
     val cassandraContainer =
       "org.testcontainers" % "cassandra" % Versions.testContainers % sbt.Test
@@ -126,7 +125,7 @@ object Dependencies {
       "org.testcontainers" % "oracle-xe" % Versions.testContainers % sbt.Test
 
     val alpakkaKafkaTestkit =
-      "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.alpakkaKafka % sbt.Test
+      "com.typesafe.akka" %% "akka-stream-kafka-testkit" % Versions.AlpakkaKafka % sbt.Test
 
   }
 

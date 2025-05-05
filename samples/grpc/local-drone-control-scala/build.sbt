@@ -30,10 +30,10 @@ run / javaOptions ++= sys.props
   .fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
 Global / cancelable := false // ctrl-c
 
-val AkkaVersion = "2.10.4"
-val AkkaHttpVersion = "10.7.0"
-val AkkaManagementVersion = "1.6.0"
-val AkkaPersistenceR2dbcVersion = "1.3.6"
+val AkkaVersion = "2.10.5"
+val AkkaHttpVersion = "10.7.1"
+val AkkaManagementVersion = "1.6.2"
+val AkkaPersistenceR2dbcVersion = "1.3.7"
 val AkkaProjectionVersion =
   sys.props.getOrElse("akka-projection.version", "1.6.12")
 val AkkaDiagnosticsVersion = "2.2.0"
@@ -77,7 +77,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion,
   // Common dependencies for logging and testing
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-  "ch.qos.logback" % "logback-classic" % "1.5.7",
+  "ch.qos.logback" % "logback-classic" % "1.5.18",
   "org.scalatest" %% "scalatest" % "3.2.19" % Test,
   // Prometheus client for custom metrics
   "io.prometheus" % "simpleclient" % "0.16.0",
