@@ -80,11 +80,11 @@ private[projection] object R2dbcOffsetStore {
   final case class RecordWithProjectionKey(record: Record, projectionKey: String)
 
   object State {
-    val empty: State = State(Map.empty, Map.empty)
+    val empty: State = State(Map.empty[Pid, Record], Map.empty[Int, TreeSet[Record]])
 
-    def apply(records: immutable.IndexedSeq[Record]): State = {
+    def apply(records: immutable.IndexedSeq[Record], acceptResetAfter: Option[JDuration] = None): State = {
       if (records.isEmpty) empty
-      else empty.add(records)
+      else empty.add(records, acceptResetAfter)
     }
   }
 
@@ -126,13 +126,16 @@ private[projection] object R2dbcOffsetStore {
       }
     }
 
-    def add(records: Iterable[Record]): State = {
+    def add(records: Iterable[Record], acceptResetAfter: Option[JDuration] = None): State = {
       records.foldLeft(this) {
         case (acc, r) =>
           val sorted = acc.bySliceSorted.getOrElse(r.slice, TreeSet.empty[Record])
           acc.byPid.get(r.pid) match {
             case Some(existingRecord) =>
-              if (r.seqNr > existingRecord.seqNr)
+              if ((r.seqNr > existingRecord.seqNr &&
+                  acceptResetAfter.forall(acceptAfter => !Validation.acceptReset(existingRecord, r, acceptAfter))) ||
+                  (r.seqNr <= existingRecord.seqNr &&
+                  acceptResetAfter.exists(acceptAfter => Validation.acceptReset(r, existingRecord, acceptAfter))))
                 acc.copy(
                   byPid = acc.byPid.updated(r.pid, r),
                   bySliceSorted = acc.bySliceSorted.updated(r.slice, sorted - existingRecord + r))
@@ -149,10 +152,12 @@ private[projection] object R2dbcOffsetStore {
     def contains(pid: Pid): Boolean =
       byPid.contains(pid)
 
-    def isDuplicate(record: Record): Boolean = {
+    def isDuplicate(record: Record, acceptResetAfter: Option[JDuration]): Boolean = {
       byPid.get(record.pid) match {
-        case Some(existingRecord) => record.seqNr <= existingRecord.seqNr
-        case None                 => false
+        case Some(existingRecord) =>
+          record.seqNr <= existingRecord.seqNr &&
+          acceptResetAfter.forall(acceptAfter => !Validation.acceptReset(record, existingRecord, acceptAfter))
+        case None => false
       }
     }
 
@@ -218,6 +223,9 @@ private[projection] object R2dbcOffsetStore {
     val FutureDuplicate: Future[Validation] = Future.successful(Duplicate)
     val FutureRejectedSeqNr: Future[Validation] = Future.successful(RejectedSeqNr)
     val FutureRejectedBacktrackingSeqNr: Future[Validation] = Future.successful(RejectedBacktrackingSeqNr)
+
+    def acceptReset(candidate: Record, reference: Record, acceptAfter: JDuration): Boolean =
+      candidate.timestamp.isAfter(reference.timestamp.plus(acceptAfter))
   }
 
   val FutureDone: Future[Done] = Future.successful(Done)
@@ -412,7 +420,7 @@ private[projection] class R2dbcOffsetStore(
       clearLatestSeen()
 
       val newState = {
-        val s = State(recordsWithKey.map(_.record))
+        val s = State(recordsWithKey.map(_.record), settings.acceptSequenceNumberResetAfter)
         (minSlice to maxSlice).foldLeft(s) {
           case (acc, slice) => acc.evict(slice, settings.timeWindow, _ => true)
         }
@@ -513,7 +521,7 @@ private[projection] class R2dbcOffsetStore(
       logger.trace("{} load [{}]", logPrefix, pid)
       dao.readTimestampOffset(slice, pid).flatMap {
         case Some(record) =>
-          val newState = oldState.add(Vector(record))
+          val newState = oldState.add(Vector(record), settings.acceptSequenceNumberResetAfter)
           if (state.compareAndSet(oldState, newState))
             Future.successful(newState)
           else
@@ -535,7 +543,7 @@ private[projection] class R2dbcOffsetStore(
         dao.readTimestampOffset(slice, pid)
       }
       Future.sequence(loadedRecords).flatMap { records =>
-        val newState = oldState.add(records.flatten)
+        val newState = oldState.add(records.flatten, settings.acceptSequenceNumberResetAfter)
         if (state.compareAndSet(oldState, newState))
           Future.successful(newState)
         else
@@ -614,14 +622,15 @@ private[projection] class R2dbcOffsetStore(
     load(records.map(_.pid)).flatMap { oldState =>
       val filteredRecords = {
         if (records.size <= 1)
-          records.filterNot(oldState.isDuplicate)
+          records.filterNot(record => oldState.isDuplicate(record, settings.acceptSequenceNumberResetAfter))
         else {
           // use last record for each pid
           records
             .groupBy(_.pid)
             .valuesIterator
             .collect {
-              case recordsByPid if !oldState.isDuplicate(recordsByPid.last) => recordsByPid.last
+              case recordsByPid if !oldState.isDuplicate(recordsByPid.last, settings.acceptSequenceNumberResetAfter) =>
+                recordsByPid.last
             }
             .toVector
         }
@@ -642,7 +651,7 @@ private[projection] class R2dbcOffsetStore(
           else filteredRecords.iterator.map(_.slice).toSet
 
         def addRecordsAndEvict(old: State): State = {
-          val newState = old.add(filteredRecords)
+          val newState = old.add(filteredRecords, settings.acceptSequenceNumberResetAfter)
 
           val currentInflight = getInflight()
           slices.foldLeft(newState) {
@@ -800,7 +809,7 @@ private[projection] class R2dbcOffsetStore(
     val seqNr = recordWithOffset.record.seqNr
 
     load(pid).flatMap { currentState =>
-      val duplicate = currentState.isDuplicate(recordWithOffset.record)
+      val duplicate = currentState.isDuplicate(recordWithOffset.record, settings.acceptSequenceNumberResetAfter)
 
       if (duplicate) {
         logger.trace("{} Filtering out duplicate sequence number [{}] for pid [{}]", logPrefix, seqNr, pid)
@@ -841,7 +850,13 @@ private[projection] class R2dbcOffsetStore(
         if (prevSeqNr > 0) {
           // expecting seqNr to be +1 of previously known
           val ok = seqNr == prevSeqNr + 1
-          if (ok) {
+          // detect reset of sequence number (for example, if events were deleted and then pid was recreated)
+          val seqNrReset = (seqNr == 1) && currentState.byPid.get(pid).exists { existingRecord =>
+              settings.acceptSequenceNumberResetAfter.exists { acceptAfter =>
+                Validation.acceptReset(recordWithOffset.record, existingRecord, acceptAfter)
+              }
+            }
+          if (ok || seqNrReset) {
             FutureAccepted
           } else if (seqNr <= currentInflight.getOrElse(pid, 0L)) {
             // currentInFlight contains those that have been processed or about to be processed in Flow,

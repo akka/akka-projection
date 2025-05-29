@@ -214,10 +214,101 @@ class R2dbcOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Matchers
             createRecord("p1", 1, t0),
             createRecord("p2", 2, t0.plusMillis(1)),
             createRecord("p3", 3, t0.plusMillis(2))))
-      state.isDuplicate(createRecord("p1", 1, t0)) shouldBe true
-      state.isDuplicate(createRecord("p1", 2, t0.plusMillis(10))) shouldBe false
-      state.isDuplicate(createRecord("p2", 1, t0)) shouldBe true
-      state.isDuplicate(createRecord("p4", 4, t0.plusMillis(10))) shouldBe false
+
+      state.isDuplicate(createRecord("p1", 1, t0), acceptResetAfter = None) shouldBe true
+      state.isDuplicate(createRecord("p1", 2, t0.plusMillis(10)), acceptResetAfter = None) shouldBe false
+      state.isDuplicate(createRecord("p2", 1, t0), acceptResetAfter = None) shouldBe true
+      state.isDuplicate(createRecord("p4", 4, t0.plusMillis(10)), acceptResetAfter = None) shouldBe false
+
+      // check not duplicate if accepted as sequence number reset
+      val acceptResetAfter = Some(JDuration.ofSeconds(10))
+      state.isDuplicate(createRecord("p1", 1, t0.plusSeconds(1)), acceptResetAfter) shouldBe true
+      state.isDuplicate(createRecord("p1", 1, t0.plusSeconds(11)), acceptResetAfter) shouldBe false
+      state.isDuplicate(createRecord("p3", 1, t0.plusSeconds(1)), acceptResetAfter) shouldBe true
+      state.isDuplicate(createRecord("p3", 1, t0.plusSeconds(11)), acceptResetAfter) shouldBe false
+      state.isDuplicate(createRecord("p3", 2, t0.plusSeconds(1)), acceptResetAfter) shouldBe true
+      state.isDuplicate(createRecord("p3", 2, t0.plusSeconds(11)), acceptResetAfter) shouldBe false
+    }
+
+    "handle sequence number resets when adding to state" in {
+      val t0 = TestClock.nowMillis().instant()
+      val t1 = t0.plusMillis(10)
+      val t2 = t1.plusSeconds(1)
+      val t3 = t2.plusSeconds(11)
+
+      val acceptResetAfter = Some(JDuration.ofSeconds(10))
+
+      { // regular add for later event: seq number increase and timestamp increase
+        val state = State.empty
+          .add(Vector(createRecord("p1", 1, t1)))
+          .add(Vector(createRecord("p1", 2, t2)), acceptResetAfter)
+        state.byPid("p1").seqNr shouldBe 2
+        state.latestTimestamp shouldBe t2
+      }
+
+      { // regular add for later event: seq number increase and same timestamp
+        val state = State.empty
+          .add(Vector(createRecord("p1", 1, t1)))
+          .add(Vector(createRecord("p1", 2, t1)), acceptResetAfter)
+        state.byPid("p1").seqNr shouldBe 2
+        state.latestTimestamp shouldBe t1
+      }
+
+      { // regular ignore for earlier event: seq number decrease and timestamp decrease
+        val state = State.empty
+          .add(Vector(createRecord("p1", 2, t2)))
+          .add(Vector(createRecord("p1", 1, t1)), acceptResetAfter)
+        state.byPid("p1").seqNr shouldBe 2
+        state.latestTimestamp shouldBe t2
+      }
+
+      { // regular ignore for earlier event: seq number decrease and same timestamp
+        val state = State.empty
+          .add(Vector(createRecord("p1", 2, t1)))
+          .add(Vector(createRecord("p1", 1, t1)), acceptResetAfter)
+        state.byPid("p1").seqNr shouldBe 2
+        state.latestTimestamp shouldBe t1
+      }
+
+      { // regular add for later event with clock skew: seq number increase and timestamp decrease
+        val state = State.empty
+          .add(Vector(createRecord("p1", 1, t2)))
+          .add(Vector(createRecord("p1", 2, t1)), acceptResetAfter)
+        state.byPid("p1").seqNr shouldBe 2
+        state.latestTimestamp shouldBe t1
+      }
+
+      { // regular ignore for earlier event with clock skew: seq number decrease and timestamp increase
+        val state = State.empty
+          .add(Vector(createRecord("p1", 2, t1)))
+          .add(Vector(createRecord("p1", 1, t2)), acceptResetAfter)
+        state.byPid("p1").seqNr shouldBe 2
+        state.latestTimestamp shouldBe t1
+      }
+
+      { // accept reset for later event: seq number reset and timestamp increase
+        val state = State.empty
+          .add(Vector(createRecord("p1", 7, t1)))
+          .add(Vector(createRecord("p1", 1, t3)), acceptResetAfter)
+        state.byPid("p1").seqNr shouldBe 1
+        state.latestTimestamp shouldBe t3
+      }
+
+      { // ignore reset for later event but not after reset window: seq number reset and timestamp increase
+        val state = State.empty
+          .add(Vector(createRecord("p1", 7, t1)))
+          .add(Vector(createRecord("p1", 1, t2)), acceptResetAfter)
+        state.byPid("p1").seqNr shouldBe 7
+        state.latestTimestamp shouldBe t1
+      }
+
+      { // ignore earlier event after reset: seq number increase and timestamp decrease past reset window
+        val state = State.empty
+          .add(Vector(createRecord("p1", 1, t3)))
+          .add(Vector(createRecord("p1", 7, t1)), acceptResetAfter)
+        state.byPid("p1").seqNr shouldBe 1
+        state.latestTimestamp shouldBe t3
+      }
     }
   }
 }
