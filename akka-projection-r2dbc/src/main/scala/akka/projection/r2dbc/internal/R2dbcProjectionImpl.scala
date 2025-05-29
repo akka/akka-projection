@@ -604,8 +604,10 @@ private[projection] object R2dbcProjectionImpl {
                 if offsetStore.settings.replayOnRejectedSequenceNumbers =>
               val persistenceId = originalEventEnvelope.persistenceId
               offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
-                val fromSeqNr = storedSeqNr + 1
+                // stored seq number can be higher when we've detected a seq number reset by not marking as
+                // duplicate, but it was rejected when seq number != 1 -- trigger replay from 1 in this case
                 val toSeqNr = originalEventEnvelope.sequenceNr - 1 // replay until the rejected envelope for flows
+                val fromSeqNr = if (storedSeqNr > toSeqNr) 1 else storedSeqNr + 1
                 logReplayRejected(logPrefix, originalEventEnvelope, fromSeqNr)
                 provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                   case Some(querySource) =>
@@ -835,8 +837,10 @@ private[projection] object R2dbcProjectionImpl {
               if offsetStore.settings.replayOnRejectedSequenceNumbers =>
             val persistenceId = originalEventEnvelope.persistenceId
             offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
-              val fromSeqNr = storedSeqNr + 1
+              // stored seq number can be higher when we've detected a seq number reset by not marking as
+              // duplicate, but it was rejected when seq number != 1 -- trigger replay from 1 in this case
               val toSeqNr = originalEventEnvelope.sequenceNr
+              val fromSeqNr = if (storedSeqNr >= toSeqNr) 1 else storedSeqNr + 1
               logReplayRejected(logPrefix, originalEventEnvelope, fromSeqNr)
               provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                 case Some(querySource) =>

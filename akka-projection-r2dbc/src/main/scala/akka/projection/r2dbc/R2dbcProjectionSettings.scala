@@ -72,6 +72,12 @@ object R2dbcProjectionSettings {
         case s  => Some(Instant.parse(s))
       }
 
+    val acceptSequenceNumberResetAfter =
+      config.getString("offset-store.accept-sequence-number-reset-after").toLowerCase(Locale.ROOT) match {
+        case "off" | "none" => None
+        case _              => Some(config.getDuration("offset-store.accept-sequence-number-reset-after"))
+      }
+
     new R2dbcProjectionSettings(
       schema = Option(config.getString("offset-store.schema")).filterNot(_.trim.isEmpty),
       offsetTable = config.getString("offset-store.offset-table"),
@@ -92,7 +98,8 @@ object R2dbcProjectionSettings {
       offsetSliceReadParallelism = config.getInt("offset-store.offset-slice-read-parallelism"),
       offsetSliceReadLimit = config.getInt("offset-store.offset-slice-read-limit"),
       replayOnRejectedSequenceNumbers = config.getBoolean("replay-on-rejected-sequence-numbers"),
-      acceptWhenPreviousTimestampBefore)
+      acceptWhenPreviousTimestampBefore,
+      acceptSequenceNumberResetAfter)
   }
 
   /**
@@ -125,7 +132,8 @@ final class R2dbcProjectionSettings private (
     val offsetSliceReadParallelism: Int,
     val offsetSliceReadLimit: Int,
     val replayOnRejectedSequenceNumbers: Boolean,
-    val acceptWhenPreviousTimestampBefore: Option[Instant]) {
+    val acceptWhenPreviousTimestampBefore: Option[Instant],
+    val acceptSequenceNumberResetAfter: Option[JDuration]) {
 
   val offsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + offsetTable
   val timestampOffsetTableWithSchema: String = schema.map(_ + ".").getOrElse("") + timestampOffsetTable
@@ -215,6 +223,12 @@ final class R2dbcProjectionSettings private (
   def withAcceptWhenPreviousTimestampBefore(acceptWhenPreviousTimestampBefore: Instant): R2dbcProjectionSettings =
     copy(acceptWhenPreviousTimestampBefore = Option(acceptWhenPreviousTimestampBefore))
 
+  def withAcceptSequenceNumberResetAfter(acceptSequenceNumberResetAfter: FiniteDuration): R2dbcProjectionSettings =
+    copy(acceptSequenceNumberResetAfter = Some(acceptSequenceNumberResetAfter.toJava))
+
+  def withAcceptSequenceNumberResetAfter(acceptSequenceNumberResetAfter: JDuration): R2dbcProjectionSettings =
+    copy(acceptSequenceNumberResetAfter = Some(acceptSequenceNumberResetAfter))
+
   @nowarn("msg=deprecated")
   private def copy(
       schema: Option[String] = schema,
@@ -234,7 +248,8 @@ final class R2dbcProjectionSettings private (
       offsetSliceReadParallelism: Int = offsetSliceReadParallelism,
       offsetSliceReadLimit: Int = offsetSliceReadLimit,
       replayOnRejectedSequenceNumbers: Boolean = replayOnRejectedSequenceNumbers,
-      acceptWhenPreviousTimestampBefore: Option[Instant] = acceptWhenPreviousTimestampBefore) =
+      acceptWhenPreviousTimestampBefore: Option[Instant] = acceptWhenPreviousTimestampBefore,
+      acceptSequenceNumberResetAfter: Option[JDuration] = acceptSequenceNumberResetAfter) =
     new R2dbcProjectionSettings(
       schema,
       offsetTable,
@@ -255,7 +270,8 @@ final class R2dbcProjectionSettings private (
       offsetSliceReadParallelism,
       offsetSliceReadLimit,
       replayOnRejectedSequenceNumbers,
-      acceptWhenPreviousTimestampBefore)
+      acceptWhenPreviousTimestampBefore,
+      acceptSequenceNumberResetAfter)
 
   override def toString =
     s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow, $offsetBatchSize, $customConnectionFactory, &offsetSliceReadParallelism, $offsetSliceReadLimit, $replayOnRejectedSequenceNumbers, $acceptWhenPreviousTimestampBefore)"
