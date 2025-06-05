@@ -38,18 +38,18 @@ object R2dbcProjectionSettings {
   def apply(config: Config): R2dbcProjectionSettings = {
     val logDbCallsExceeding: FiniteDuration =
       config.getString("log-db-calls-exceeding").toLowerCase(Locale.ROOT) match {
-        case "off" => -1.millis
-        case _     => config.getDuration("log-db-calls-exceeding").toScala
+        case "off" | "none" | "" => -1.millis
+        case _                   => config.getDuration("log-db-calls-exceeding").toScala
       }
 
     val deleteInterval = config.getString("offset-store.delete-interval").toLowerCase(Locale.ROOT) match {
-      case "off" => JDuration.ZERO
-      case _     => config.getDuration("offset-store.delete-interval")
+      case "off" | "none" | "" => JDuration.ZERO
+      case _                   => config.getDuration("offset-store.delete-interval")
     }
 
     val adoptInterval = config.getString("offset-store.adopt-interval").toLowerCase(Locale.ROOT) match {
-      case "off" => JDuration.ZERO
-      case _     => config.getDuration("offset-store.adopt-interval")
+      case "off" | "none" | "" => JDuration.ZERO
+      case _                   => config.getDuration("offset-store.adopt-interval")
     }
 
     val backtrackingWindow = config.getDuration("offset-store.backtracking-window")
@@ -68,14 +68,14 @@ object R2dbcProjectionSettings {
 
     val acceptWhenPreviousTimestampBefore =
       config.getString("offset-store.accept-when-previous-timestamp-before") match {
-        case "" => None
-        case s  => Some(Instant.parse(s))
+        case "off" | "none" | "" => None
+        case s                   => Some(Instant.parse(s))
       }
 
     val acceptSequenceNumberResetAfter =
       config.getString("offset-store.accept-sequence-number-reset-after").toLowerCase(Locale.ROOT) match {
-        case "off" | "none" => None
-        case _              => Some(config.getDuration("offset-store.accept-sequence-number-reset-after"))
+        case "off" | "none" | "" => None
+        case _                   => Some(config.getDuration("offset-store.accept-sequence-number-reset-after"))
       }
 
     new R2dbcProjectionSettings(
