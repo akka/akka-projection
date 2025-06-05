@@ -21,6 +21,7 @@ import scala.collection.immutable
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.Promise
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
 import scala.jdk.DurationConverters._
@@ -64,7 +65,9 @@ import akka.projection.testkit.scaladsl.ProjectionTestKit
 import akka.projection.testkit.scaladsl.TestSourceProvider
 import akka.stream.scaladsl.FlowWithContext
 import akka.stream.scaladsl.Source
+import akka.stream.testkit.TestPublisher
 import akka.stream.testkit.TestSubscriber
+import akka.stream.testkit.scaladsl.TestSource
 import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
@@ -155,11 +158,15 @@ object DynamoDBTimestampOffsetProjectionSpec {
         persistenceId: String,
         fromSequenceNr: Long,
         toSequenceNr: Long): Option[Source[EventEnvelope[String], NotUsed]] = {
-      if (enableCurrentEventsByPersistenceId)
-        Some(Source(envelopes.filter { env =>
+      if (enableCurrentEventsByPersistenceId) {
+        // also handle sequence number resets, which will have duplicate events, by first filtering to the last occurrence
+        val skipEnvelopes = envelopes.lastIndexWhere { env =>
+          env.persistenceId == persistenceId && env.sequenceNr == fromSequenceNr
+        }
+        Some(Source(envelopes.drop(skipEnvelopes).filter { env =>
           env.persistenceId == persistenceId && env.sequenceNr >= fromSequenceNr && env.sequenceNr <= toSequenceNr
         }))
-      else
+      } else
         None
     }
   }
@@ -374,8 +381,29 @@ class DynamoDBTimestampOffsetProjectionSpec
       allEnvelopes: immutable.IndexedSeq[EventEnvelope[String]],
       enableCurrentEventsByPersistenceId: Boolean,
       complete: Boolean = true): TestTimestampSourceProvider = {
+    createTestSourceProvider(Source(envelopes), allEnvelopes, enableCurrentEventsByPersistenceId, complete)
+  }
+
+  def createDynamicSourceProvider(
+      allEnvelopes: immutable.IndexedSeq[EventEnvelope[String]],
+      enableCurrentEventsByPersistenceId: Boolean = false,
+      complete: Boolean = true): (TestTimestampSourceProvider, Future[TestPublisher.Probe[EventEnvelope[String]]]) = {
+    val sourceProbe = Promise[TestPublisher.Probe[EventEnvelope[String]]]()
+    val source = TestSource[EventEnvelope[String]]().mapMaterializedValue { probe =>
+      sourceProbe.success(probe)
+      NotUsed
+    }
+    val sourceProvider = createTestSourceProvider(source, allEnvelopes, enableCurrentEventsByPersistenceId, complete)
+    (sourceProvider, sourceProbe.future)
+  }
+
+  def createTestSourceProvider(
+      envelopesSource: Source[EventEnvelope[String], NotUsed],
+      allEnvelopes: immutable.IndexedSeq[EventEnvelope[String]],
+      enableCurrentEventsByPersistenceId: Boolean,
+      complete: Boolean = true): TestTimestampSourceProvider = {
     val sp =
-      TestSourceProvider[Offset, EventEnvelope[String]](Source(envelopes), _.offset)
+      TestSourceProvider[Offset, EventEnvelope[String]](envelopesSource, _.offset)
         .withStartSourceFrom {
           case (lastProcessedOffsetBySlice: TimestampOffsetBySlice, offset: TimestampOffset) =>
             // FIXME: should have the envelope slice to handle this properly
@@ -1079,6 +1107,106 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       projectionRef ! ProjectionBehavior.Stop
     }
+
+    "accept events after detecting sequence number reset for at-least-once" in {
+      val testSettings = settings.withAcceptSequenceNumberResetAfter(10.seconds)
+
+      val pid1 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val start = tick().instant()
+
+      def createEnvelopesFor(
+          pid: Pid,
+          fromSeqNr: Int,
+          toSeqNr: Int,
+          fromTimestamp: Instant): immutable.IndexedSeq[EventEnvelope[String]] = {
+        (fromSeqNr to toSeqNr).map { n =>
+          createEnvelope(pid, n, fromTimestamp.plusSeconds(n - fromSeqNr), s"e$n")
+        }
+      }
+
+      val envelopes1 = createEnvelopesFor(pid1, 1, 5, start)
+      val envelopes2 = createEnvelopesFor(pid1, 1, 3, start.plusSeconds(30))
+      val allEnvelopes = envelopes1 ++ envelopes2
+
+      val (sourceProvider, sourceProbe) = createDynamicSourceProvider(allEnvelopes)
+
+      implicit val offsetStore: DynamoDBOffsetStore =
+        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+
+      val projectionRef = spawn(ProjectionBehavior(DynamoDBProjection
+        .atLeastOnce(projectionId, Some(testSettings), sourceProvider, handler = () => new ConcatHandler(repository))))
+
+      val source = sourceProbe.futureValue
+
+      envelopes1.foreach(source.sendNext)
+
+      eventually {
+        projectedValueShouldBe("e1|e2|e3|e4|e5")(pid1)
+        latestOffsetShouldBe(envelopes1.last.offset)
+      }
+
+      envelopes2.foreach(source.sendNext)
+
+      eventually {
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e1|e2|e3")(pid1)
+        latestOffsetShouldBe(envelopes2.last.offset)
+      }
+
+      projectionRef ! ProjectionBehavior.Stop
+    }
+
+    "replay rejected sequence numbers after detecting reset for at-least-once" in {
+      val testSettings = settings.withAcceptSequenceNumberResetAfter(10.seconds)
+
+      val pid1 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val start = tick().instant()
+
+      def createEnvelopesFor(
+          pid: Pid,
+          fromSeqNr: Int,
+          toSeqNr: Int,
+          fromTimestamp: Instant): immutable.IndexedSeq[EventEnvelope[String]] = {
+        (fromSeqNr to toSeqNr).map { n =>
+          createEnvelope(pid, n, fromTimestamp.plusSeconds(n - fromSeqNr), s"e$n")
+        }
+      }
+
+      val envelopes1 = createEnvelopesFor(pid1, 1, 5, start)
+      val envelopes2 = createEnvelopesFor(pid1, 1, 5, start.plusSeconds(30))
+      val allEnvelopes = envelopes1 ++ envelopes2
+
+      val (sourceProvider, sourceProbe) =
+        createDynamicSourceProvider(allEnvelopes, enableCurrentEventsByPersistenceId = true)
+
+      implicit val offsetStore: DynamoDBOffsetStore =
+        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+
+      val projectionRef = spawn(ProjectionBehavior(DynamoDBProjection
+        .atLeastOnce(projectionId, Some(testSettings), sourceProvider, handler = () => new ConcatHandler(repository))))
+
+      val source = sourceProbe.futureValue
+
+      envelopes1.foreach(source.sendNext)
+
+      eventually {
+        projectedValueShouldBe("e1|e2|e3|e4|e5")(pid1)
+        latestOffsetShouldBe(envelopes1.last.offset)
+      }
+
+      // start from seq nr 3 after reset
+      envelopes2.drop(2).foreach(source.sendNext)
+
+      eventually {
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e1|e2|e3|e4|e5")(pid1)
+        latestOffsetShouldBe(envelopes2.last.offset)
+      }
+
+      projectionRef ! ProjectionBehavior.Stop
+    }
   }
 
   "A DynamoDB exactly-once projection with TimestampOffset" must {
@@ -1435,6 +1563,95 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       projectionRef ! ProjectionBehavior.Stop
     }
+
+    "accept events after detecting sequence number reset for exactly-once" in {
+      val testSettings = settings.withAcceptSequenceNumberResetAfter(10.seconds)
+
+      val pid1 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val start = tick().instant()
+
+      def createEnvelopesFor(
+          pid: Pid,
+          fromSeqNr: Int,
+          toSeqNr: Int,
+          fromTimestamp: Instant): immutable.IndexedSeq[EventEnvelope[String]] = {
+        (fromSeqNr to toSeqNr).map { n =>
+          createEnvelope(pid, n, fromTimestamp.plusSeconds(n - fromSeqNr), s"e$n")
+        }
+      }
+
+      val envelopes =
+        createEnvelopesFor(pid1, 1, 5, start) ++
+        createEnvelopesFor(pid1, 1, 3, start.plusSeconds(30))
+
+      val sourceProvider = createSourceProvider(envelopes)
+
+      implicit val offsetStore: DynamoDBOffsetStore =
+        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+
+      val projectionRef = spawn(
+        ProjectionBehavior(DynamoDBProjection
+          .exactlyOnce(projectionId, Some(testSettings), sourceProvider, handler = () => new TransactConcatHandler)))
+
+      eventually {
+        projectedTestValueShouldBe("e1|e2|e3|e4|e5|e1|e2|e3")(pid1)
+      }
+
+      eventually {
+        latestOffsetShouldBe(envelopes.last.offset)
+      }
+
+      projectionRef ! ProjectionBehavior.Stop
+    }
+
+    "replay rejected sequence numbers after detecting reset for exactly-once" in {
+      val testSettings = settings.withAcceptSequenceNumberResetAfter(10.seconds)
+
+      val pid1 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val start = tick().instant()
+
+      def createEnvelopesFor(
+          pid: Pid,
+          fromSeqNr: Int,
+          toSeqNr: Int,
+          fromTimestamp: Instant): immutable.IndexedSeq[EventEnvelope[String]] = {
+        (fromSeqNr to toSeqNr).map { n =>
+          createEnvelope(pid, n, fromTimestamp.plusSeconds(n - fromSeqNr), s"e$n")
+        }
+      }
+
+      val envelopes1 = createEnvelopesFor(pid1, 1, 5, start)
+
+      val envelopes2 = createEnvelopesFor(pid1, 1, 5, start.plusSeconds(30))
+
+      val allEnvelopes = envelopes1 ++ envelopes2
+
+      val envelopes = envelopes1 ++ envelopes2.drop(2) // start from seq nr 3 after reset
+
+      val sourceProvider =
+        createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
+
+      implicit val offsetStore: DynamoDBOffsetStore =
+        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+
+      val projectionRef = spawn(
+        ProjectionBehavior(DynamoDBProjection
+          .exactlyOnce(projectionId, Some(testSettings), sourceProvider, handler = () => new TransactConcatHandler)))
+
+      eventually {
+        projectedTestValueShouldBe("e1|e2|e3|e4|e5|e1|e2|e3|e4|e5")(pid1)
+      }
+
+      eventually {
+        latestOffsetShouldBe(envelopes.last.offset)
+      }
+
+      projectionRef ! ProjectionBehavior.Stop
+    }
   }
 
   "A DynamoDB grouped projection with TimestampOffset" must {
@@ -1679,6 +1896,124 @@ class DynamoDBTimestampOffsetProjectionSpec
       eventually {
         latestOffsetShouldBe(allEnvelopes.last.offset)
       }
+      projectionRef ! ProjectionBehavior.Stop
+    }
+
+    "accept events after detecting sequence number reset for exactly-once grouped" in {
+      val testSettings = settings.withAcceptSequenceNumberResetAfter(10.seconds)
+
+      val pid1 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val start = tick().instant()
+
+      def createEnvelopesFor(
+          pid: Pid,
+          fromSeqNr: Int,
+          toSeqNr: Int,
+          fromTimestamp: Instant): immutable.IndexedSeq[EventEnvelope[String]] = {
+        (fromSeqNr to toSeqNr).map { n =>
+          createEnvelope(pid, n, fromTimestamp.plusSeconds(n - fromSeqNr), s"e$n")
+        }
+      }
+
+      val envelopes1 = createEnvelopesFor(pid1, 1, 5, start)
+      val envelopes2 = createEnvelopesFor(pid1, 1, 3, start.plusSeconds(30))
+      val allEnvelopes = envelopes1 ++ envelopes2
+
+      val (sourceProvider, sourceProbe) = createDynamicSourceProvider(allEnvelopes)
+
+      implicit val offsetStore: DynamoDBOffsetStore =
+        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+
+      val handlerProbe = createTestProbe[String]("calls-to-handler")
+
+      val projectionRef = spawn(
+        ProjectionBehavior(
+          DynamoDBProjection
+            .exactlyOnceGroupedWithin(
+              projectionId,
+              Some(testSettings),
+              sourceProvider,
+              handler = () => new TransactGroupedConcatHandler(handlerProbe.ref))
+            .withGroup(8, 3.seconds)))
+
+      val source = sourceProbe.futureValue
+
+      envelopes1.foreach(source.sendNext)
+
+      eventually {
+        projectedTestValueShouldBe("e1|e2|e3|e4|e5")(pid1)
+        latestOffsetShouldBe(envelopes1.last.offset)
+      }
+
+      envelopes2.foreach(source.sendNext)
+
+      eventually {
+        projectedTestValueShouldBe("e1|e2|e3|e4|e5|e1|e2|e3")(pid1)
+        latestOffsetShouldBe(envelopes2.last.offset)
+      }
+
+      projectionRef ! ProjectionBehavior.Stop
+    }
+
+    "replay rejected sequence numbers after detecting reset for exactly-once grouped" in {
+      val testSettings = settings.withAcceptSequenceNumberResetAfter(10.seconds)
+
+      val pid1 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val start = tick().instant()
+
+      def createEnvelopesFor(
+          pid: Pid,
+          fromSeqNr: Int,
+          toSeqNr: Int,
+          fromTimestamp: Instant): immutable.IndexedSeq[EventEnvelope[String]] = {
+        (fromSeqNr to toSeqNr).map { n =>
+          createEnvelope(pid, n, fromTimestamp.plusSeconds(n - fromSeqNr), s"e$n")
+        }
+      }
+
+      val envelopes1 = createEnvelopesFor(pid1, 1, 5, start)
+      val envelopes2 = createEnvelopesFor(pid1, 1, 5, start.plusSeconds(30))
+      val allEnvelopes = envelopes1 ++ envelopes2
+
+      val (sourceProvider, sourceProbe) =
+        createDynamicSourceProvider(allEnvelopes, enableCurrentEventsByPersistenceId = true)
+
+      implicit val offsetStore: DynamoDBOffsetStore =
+        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+
+      val handlerProbe = createTestProbe[String]("calls-to-handler")
+
+      val projectionRef = spawn(
+        ProjectionBehavior(
+          DynamoDBProjection
+            .exactlyOnceGroupedWithin(
+              projectionId,
+              Some(testSettings),
+              sourceProvider,
+              handler = () => new TransactGroupedConcatHandler(handlerProbe.ref))
+            .withGroup(8, 3.seconds)))
+
+      val source = sourceProbe.futureValue
+
+      envelopes1.foreach(source.sendNext)
+
+      eventually {
+        projectedTestValueShouldBe("e1|e2|e3|e4|e5")(pid1)
+        latestOffsetShouldBe(envelopes1.last.offset)
+      }
+
+      // start from seq nr 3 after reset
+      envelopes2.drop(2).foreach(source.sendNext)
+
+      eventually {
+        projectedTestValueShouldBe("e1|e2|e3|e4|e5|e1|e2|e3|e4|e5")(pid1)
+        latestOffsetShouldBe(envelopes2.last.offset)
+      }
+
       projectionRef ! ProjectionBehavior.Stop
     }
 
@@ -2100,6 +2435,136 @@ class DynamoDBTimestampOffsetProjectionSpec
         latestOffsetShouldBe(allEnvelopes.last.offset)
       }
     }
+
+    "accept events after detecting sequence number reset for at-least-once grouped" in {
+      val testSettings = settings.withAcceptSequenceNumberResetAfter(10.seconds)
+
+      val pid1 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val start = tick().instant()
+
+      def createEnvelopesFor(
+          pid: Pid,
+          fromSeqNr: Int,
+          toSeqNr: Int,
+          fromTimestamp: Instant): immutable.IndexedSeq[EventEnvelope[String]] = {
+        (fromSeqNr to toSeqNr).map { n =>
+          createEnvelope(pid, n, fromTimestamp.plusSeconds(n - fromSeqNr), s"e$n")
+        }
+      }
+
+      val envelopes1 = createEnvelopesFor(pid1, 1, 5, start)
+      val envelopes2 = createEnvelopesFor(pid1, 1, 3, start.plusSeconds(30))
+      val allEnvelopes = envelopes1 ++ envelopes2
+
+      val (sourceProvider, sourceProbe) = createDynamicSourceProvider(allEnvelopes)
+
+      implicit val offsetStore: DynamoDBOffsetStore =
+        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+
+      val results = new ConcurrentHashMap[String, String]()
+
+      val handler: Handler[Seq[EventEnvelope[String]]] =
+        (envelopes: Seq[EventEnvelope[String]]) => {
+          Future {
+            envelopes.foreach { envelope =>
+              results.putIfAbsent(envelope.persistenceId, "|")
+              results.computeIfPresent(envelope.persistenceId, (_, value) => value + envelope.event + "|")
+            }
+          }.map(_ => Done)
+        }
+
+      val projectionRef = spawn(
+        ProjectionBehavior(
+          DynamoDBProjection
+            .atLeastOnceGroupedWithin(projectionId, Some(testSettings), sourceProvider, handler = () => handler)
+            .withGroup(2, 3.seconds)))
+
+      val source = sourceProbe.futureValue
+
+      envelopes1.foreach(source.sendNext)
+
+      eventually {
+        results.get(pid1) shouldBe "|e1|e2|e3|e4|e5|"
+        latestOffsetShouldBe(envelopes1.last.offset)
+      }
+
+      envelopes2.foreach(source.sendNext)
+
+      eventually {
+        results.get(pid1) shouldBe "|e1|e2|e3|e4|e5|e1|e2|e3|"
+        latestOffsetShouldBe(envelopes2.last.offset)
+      }
+
+      projectionRef ! ProjectionBehavior.Stop
+    }
+
+    "replay rejected sequence numbers after detecting reset for at-least-once grouped" in {
+      val testSettings = settings.withAcceptSequenceNumberResetAfter(10.seconds)
+
+      val pid1 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val start = tick().instant()
+
+      def createEnvelopesFor(
+          pid: Pid,
+          fromSeqNr: Int,
+          toSeqNr: Int,
+          fromTimestamp: Instant): immutable.IndexedSeq[EventEnvelope[String]] = {
+        (fromSeqNr to toSeqNr).map { n =>
+          createEnvelope(pid, n, fromTimestamp.plusSeconds(n - fromSeqNr), s"e$n")
+        }
+      }
+
+      val envelopes1 = createEnvelopesFor(pid1, 1, 5, start)
+      val envelopes2 = createEnvelopesFor(pid1, 1, 5, start.plusSeconds(30))
+      val allEnvelopes = envelopes1 ++ envelopes2
+
+      val (sourceProvider, sourceProbe) =
+        createDynamicSourceProvider(allEnvelopes, enableCurrentEventsByPersistenceId = true)
+
+      implicit val offsetStore: DynamoDBOffsetStore =
+        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+
+      val results = new ConcurrentHashMap[String, String]()
+
+      val handler: Handler[Seq[EventEnvelope[String]]] =
+        (envelopes: Seq[EventEnvelope[String]]) => {
+          Future {
+            envelopes.foreach { envelope =>
+              results.putIfAbsent(envelope.persistenceId, "|")
+              results.computeIfPresent(envelope.persistenceId, (_, value) => value + envelope.event + "|")
+            }
+          }.map(_ => Done)
+        }
+
+      val projectionRef = spawn(
+        ProjectionBehavior(
+          DynamoDBProjection
+            .atLeastOnceGroupedWithin(projectionId, Some(testSettings), sourceProvider, handler = () => handler)
+            .withGroup(2, 3.seconds)))
+
+      val source = sourceProbe.futureValue
+
+      envelopes1.foreach(source.sendNext)
+
+      eventually {
+        results.get(pid1) shouldBe "|e1|e2|e3|e4|e5|"
+        latestOffsetShouldBe(envelopes1.last.offset)
+      }
+
+      // start from seq nr 3 after reset
+      envelopes2.drop(2).foreach(source.sendNext)
+
+      eventually {
+        results.get(pid1) shouldBe "|e1|e2|e3|e4|e5|e1|e2|e3|e4|e5|"
+        latestOffsetShouldBe(envelopes2.last.offset)
+      }
+
+      projectionRef ! ProjectionBehavior.Stop
+    }
   }
 
   "A DynamoDB flow projection with TimestampOffset" must {
@@ -2359,6 +2824,124 @@ class DynamoDBTimestampOffsetProjectionSpec
       eventually {
         latestOffsetShouldBe(allEnvelopes.last.offset)
       }
+    }
+
+    "accept events after detecting sequence number reset for flow projection" in {
+      val testSettings = settings.withAcceptSequenceNumberResetAfter(10.seconds)
+
+      val pid1 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val start = tick().instant()
+
+      def createEnvelopesFor(
+          pid: Pid,
+          fromSeqNr: Int,
+          toSeqNr: Int,
+          fromTimestamp: Instant): immutable.IndexedSeq[EventEnvelope[String]] = {
+        (fromSeqNr to toSeqNr).map { n =>
+          createEnvelope(pid, n, fromTimestamp.plusSeconds(n - fromSeqNr), s"e$n")
+        }
+      }
+
+      val envelopes1 = createEnvelopesFor(pid1, 1, 5, start)
+      val envelopes2 = createEnvelopesFor(pid1, 1, 3, start.plusSeconds(30))
+      val allEnvelopes = envelopes1 ++ envelopes2
+
+      val (sourceProvider, sourceProbe) = createDynamicSourceProvider(allEnvelopes)
+
+      implicit val offsetStore: DynamoDBOffsetStore =
+        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+
+      val flowHandler =
+        FlowWithContext[EventEnvelope[String], ProjectionContext]
+          .mapAsync(1) { env =>
+            repository.concatToText(env.persistenceId, env.event)
+          }
+
+      val projectionRef = spawn(
+        ProjectionBehavior(
+          DynamoDBProjection
+            .atLeastOnceFlow(projectionId, Some(testSettings), sourceProvider, handler = flowHandler)
+            .withSaveOffset(1, 1.minute)))
+
+      val source = sourceProbe.futureValue
+
+      envelopes1.foreach(source.sendNext)
+
+      eventually {
+        projectedValueShouldBe("e1|e2|e3|e4|e5")(pid1)
+        latestOffsetShouldBe(envelopes1.last.offset)
+      }
+
+      envelopes2.foreach(source.sendNext)
+
+      eventually {
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e1|e2|e3")(pid1)
+        latestOffsetShouldBe(envelopes2.last.offset)
+      }
+
+      projectionRef ! ProjectionBehavior.Stop
+    }
+
+    "replay rejected sequence numbers after detecting reset for flow projection" in {
+      val testSettings = settings.withAcceptSequenceNumberResetAfter(10.seconds)
+
+      val pid1 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      val start = tick().instant()
+
+      def createEnvelopesFor(
+          pid: Pid,
+          fromSeqNr: Int,
+          toSeqNr: Int,
+          fromTimestamp: Instant): immutable.IndexedSeq[EventEnvelope[String]] = {
+        (fromSeqNr to toSeqNr).map { n =>
+          createEnvelope(pid, n, fromTimestamp.plusSeconds(n - fromSeqNr), s"e$n")
+        }
+      }
+
+      val envelopes1 = createEnvelopesFor(pid1, 1, 5, start)
+      val envelopes2 = createEnvelopesFor(pid1, 1, 5, start.plusSeconds(30))
+      val allEnvelopes = envelopes1 ++ envelopes2
+
+      val (sourceProvider, sourceProbe) =
+        createDynamicSourceProvider(allEnvelopes, enableCurrentEventsByPersistenceId = true)
+
+      implicit val offsetStore: DynamoDBOffsetStore =
+        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+
+      val flowHandler =
+        FlowWithContext[EventEnvelope[String], ProjectionContext]
+          .mapAsync(1) { env =>
+            repository.concatToText(env.persistenceId, env.event)
+          }
+
+      val projectionRef = spawn(
+        ProjectionBehavior(
+          DynamoDBProjection
+            .atLeastOnceFlow(projectionId, Some(testSettings), sourceProvider, handler = flowHandler)
+            .withSaveOffset(1, 1.minute)))
+
+      val source = sourceProbe.futureValue
+
+      envelopes1.foreach(source.sendNext)
+
+      eventually {
+        projectedValueShouldBe("e1|e2|e3|e4|e5")(pid1)
+        latestOffsetShouldBe(envelopes1.last.offset)
+      }
+
+      // start from seq nr 3 after reset
+      envelopes2.drop(2).foreach(source.sendNext)
+
+      eventually {
+        projectedValueShouldBe("e1|e2|e3|e4|e5|e1|e2|e3|e4|e5")(pid1)
+        latestOffsetShouldBe(envelopes2.last.offset)
+      }
+
+      projectionRef ! ProjectionBehavior.Stop
     }
   }
 

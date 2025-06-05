@@ -274,5 +274,5 @@ final class R2dbcProjectionSettings private (
       acceptSequenceNumberResetAfter)
 
   override def toString =
-    s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow, $offsetBatchSize, $customConnectionFactory, &offsetSliceReadParallelism, $offsetSliceReadLimit, $replayOnRejectedSequenceNumbers, $acceptWhenPreviousTimestampBefore)"
+    s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow, $offsetBatchSize, $customConnectionFactory, &offsetSliceReadParallelism, $offsetSliceReadLimit, $replayOnRejectedSequenceNumbers, $acceptWhenPreviousTimestampBefore, $acceptSequenceNumberResetAfter)"
 }
