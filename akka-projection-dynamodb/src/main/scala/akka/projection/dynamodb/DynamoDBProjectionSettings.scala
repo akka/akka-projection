@@ -5,6 +5,7 @@
 package akka.projection.dynamodb
 
 import java.time.{ Duration => JDuration }
+import java.util.Locale
 
 import scala.annotation.nowarn
 import scala.concurrent.duration._
@@ -37,6 +38,12 @@ object DynamoDBProjectionSettings {
    * Scala API: From custom configuration corresponding to `akka.projection.dynamodb`.
    */
   def apply(config: Config): DynamoDBProjectionSettings = {
+    val acceptSequenceNumberResetAfter =
+      config.getString("offset-store.accept-sequence-number-reset-after").toLowerCase(Locale.ROOT) match {
+        case "off" | "none" | "" => None
+        case _                   => Some(config.getDuration("offset-store.accept-sequence-number-reset-after"))
+      }
+
     new DynamoDBProjectionSettings(
       timestampOffsetTable = config.getString("offset-store.timestamp-offset-table"),
       useClient = config.getString("use-client"),
@@ -49,7 +56,8 @@ object DynamoDBProjectionSettings {
       offsetSliceReadParallelism = config.getInt("offset-store.offset-slice-read-parallelism"),
       timeToLiveSettings = TimeToLiveSettings(config.getConfig("time-to-live")),
       retrySettings = RetrySettings(config.getConfig("offset-store.retries")),
-      replayOnRejectedSequenceNumbers = config.getBoolean("replay-on-rejected-sequence-numbers"))
+      replayOnRejectedSequenceNumbers = config.getBoolean("replay-on-rejected-sequence-numbers"),
+      acceptSequenceNumberResetAfter = acceptSequenceNumberResetAfter)
   }
 
   /**
@@ -74,7 +82,8 @@ final class DynamoDBProjectionSettings private (
     val offsetSliceReadParallelism: Int,
     val timeToLiveSettings: TimeToLiveSettings,
     val retrySettings: RetrySettings,
-    val replayOnRejectedSequenceNumbers: Boolean) {
+    val replayOnRejectedSequenceNumbers: Boolean,
+    val acceptSequenceNumberResetAfter: Option[JDuration]) {
 
   // 25 is a hard limit of batch writes in DynamoDB
   require(offsetBatchSize <= 25, s"offset-batch-size must be <= 25, was [$offsetBatchSize]")
@@ -127,6 +136,12 @@ final class DynamoDBProjectionSettings private (
   def withReplayOnRejectedSequenceNumbers(replayOnRejectedSequenceNumbers: Boolean): DynamoDBProjectionSettings =
     copy(replayOnRejectedSequenceNumbers = replayOnRejectedSequenceNumbers)
 
+  def withAcceptSequenceNumberResetAfter(acceptSequenceNumberResetAfter: FiniteDuration): DynamoDBProjectionSettings =
+    copy(acceptSequenceNumberResetAfter = Some(acceptSequenceNumberResetAfter.toJava))
+
+  def withAcceptSequenceNumberResetAfter(acceptSequenceNumberResetAfter: JDuration): DynamoDBProjectionSettings =
+    copy(acceptSequenceNumberResetAfter = Some(acceptSequenceNumberResetAfter))
+
   @nowarn("msg=deprecated")
   private def copy(
       timestampOffsetTable: String = timestampOffsetTable,
@@ -138,7 +153,8 @@ final class DynamoDBProjectionSettings private (
       offsetSliceReadParallelism: Int = offsetSliceReadParallelism,
       timeToLiveSettings: TimeToLiveSettings = timeToLiveSettings,
       retrySettings: RetrySettings = retrySettings,
-      replayOnRejectedSequenceNumbers: Boolean = replayOnRejectedSequenceNumbers) =
+      replayOnRejectedSequenceNumbers: Boolean = replayOnRejectedSequenceNumbers,
+      acceptSequenceNumberResetAfter: Option[JDuration] = acceptSequenceNumberResetAfter) =
     new DynamoDBProjectionSettings(
       timestampOffsetTable,
       useClient,
@@ -151,7 +167,8 @@ final class DynamoDBProjectionSettings private (
       offsetSliceReadParallelism,
       timeToLiveSettings,
       retrySettings,
-      replayOnRejectedSequenceNumbers)
+      replayOnRejectedSequenceNumbers,
+      acceptSequenceNumberResetAfter)
 
   @nowarn("msg=deprecated")
   override def toString: String =
@@ -167,7 +184,8 @@ final class DynamoDBProjectionSettings private (
     s"offsetSliceReadParallelism=$offsetSliceReadParallelism, " +
     s"timeToLiveSettings=$timeToLiveSettings, " +
     s"retrySettings=$retrySettings, " +
-    s"replayOnRejectedSequenceNumbers=$replayOnRejectedSequenceNumbers)"
+    s"replayOnRejectedSequenceNumbers=$replayOnRejectedSequenceNumbers, " +
+    s"acceptSequenceNumberResetAfter=$acceptSequenceNumberResetAfter)"
 }
 
 object TimeToLiveSettings {

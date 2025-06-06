@@ -747,6 +747,85 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
 
     }
 
+    "accept after detected sequence number reset" in {
+      val projectionId = genRandomProjectionId()
+
+      val offsetStore =
+        createOffsetStore(projectionId, customSettings = settings.withAcceptSequenceNumberResetAfter(10.seconds))
+
+      val startTime = TestClock.nowMicros().instant()
+
+      val t0 = startTime
+      val offset0 = TimestampOffset(t0, Map("p1" -> 42L))
+      offsetStore.saveOffset(OffsetPidSeqNr(offset0, "p1", 42L)).futureValue
+      val record0 = offsetStore.getState().byPid("p1")
+      record0.seqNr shouldBe 42L
+      record0.timestamp shouldBe t0
+
+      // still considered duplicate if before accept time (of 10s)
+      val t1 = startTime.plusSeconds(5)
+      val offset1 = TimestampOffset(t1, Map("p1" -> 1L))
+      val env1 = createEnvelope("p1", 1L, offset1.timestamp, "reset-1")
+      offsetStore.validate(env1).futureValue shouldBe Duplicate
+      offsetStore.validate(backtrackingEnvelope(env1)).futureValue shouldBe Duplicate
+
+      // reset to seq number 1, after accept time (of 10s)
+      val t2 = startTime.plusSeconds(20)
+      val offset2 = TimestampOffset(t2, Map("p1" -> 1L))
+      val env2 = createEnvelope("p1", 1L, offset2.timestamp, "reset-1")
+      offsetStore.validate(env2).futureValue shouldBe Accepted
+      offsetStore.validate(backtrackingEnvelope(env2)).futureValue shouldBe Accepted
+      offsetStore.saveOffset(OffsetPidSeqNr(offset2, "p1", 1L)).futureValue
+      val record2 = offsetStore.getState().byPid("p1")
+      record2.seqNr shouldBe 1L
+      record2.timestamp shouldBe t2
+      val sortedRecord2 = offsetStore.getState().bySliceSorted(slice("p1")).head
+      sortedRecord2.pid shouldBe "p1"
+      sortedRecord2.seqNr shouldBe 1L
+      sortedRecord2.timestamp shouldBe t2
+
+      // check reloaded state
+      offsetStore.readOffset().futureValue
+      offsetStore.load("p1").futureValue
+      val record3 = offsetStore.getState().byPid("p1")
+      record3.seqNr shouldBe 1L
+      record3.timestamp shouldBe t2
+      val sortedRecord3 = offsetStore.getState().bySliceSorted(slice("p1")).head
+      sortedRecord3.pid shouldBe "p1"
+      sortedRecord3.seqNr shouldBe 1L
+      sortedRecord3.timestamp shouldBe t2
+    }
+
+    "reject detected reset with higher sequence number (to trigger replay)" in {
+      val projectionId = genRandomProjectionId()
+
+      val offsetStore =
+        createOffsetStore(projectionId, customSettings = settings.withAcceptSequenceNumberResetAfter(10.seconds))
+
+      val startTime = TestClock.nowMicros().instant()
+
+      val t0 = startTime
+      val offset0 = TimestampOffset(t0, Map("p1" -> 42L))
+      offsetStore.saveOffset(OffsetPidSeqNr(offset0, "p1", 42L)).futureValue
+      val record0 = offsetStore.getState().byPid("p1")
+      record0.seqNr shouldBe 42L
+      record0.timestamp shouldBe t0
+
+      // still considered duplicate if before accept time (of 10s)
+      val t1 = startTime.plusSeconds(5)
+      val offset1 = TimestampOffset(t1, Map("p1" -> 1L))
+      val env1 = createEnvelope("p1", 1L, offset1.timestamp, "reset-1")
+      offsetStore.validate(env1).futureValue shouldBe Duplicate
+      offsetStore.validate(backtrackingEnvelope(env1)).futureValue shouldBe Duplicate
+
+      // seq number > 1, after accept time (of 10s)
+      val t2 = startTime.plusSeconds(20)
+      val offset2 = TimestampOffset(t2, Map("p1" -> 10L))
+      val env2 = createEnvelope("p1", 10L, offset2.timestamp, "reset-1")
+      offsetStore.validate(env2).futureValue shouldBe RejectedSeqNr
+      offsetStore.validate(backtrackingEnvelope(env2)).futureValue shouldBe RejectedBacktrackingSeqNr
+    }
+
     "accept new revisions for durable state" in {
       val projectionId = genRandomProjectionId()
       val offsetStore = createOffsetStore(projectionId)
