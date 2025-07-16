@@ -23,7 +23,7 @@ pub async fn task(socket: UdpSocket, temperature_commands: mpsc::Sender<Message<
         if let Ok(event) =
             postcard::from_bytes::<TemperatureUpdated>(&recv_buf[..len.min(MAX_DATAGRAM_SIZE)])
         {
-            debug!("Posting : {:?}", event);
+            debug!("Posting : {event:?}");
 
             let _ = temperature_commands
                 .send(Message::new(
