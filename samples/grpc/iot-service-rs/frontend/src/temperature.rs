@@ -38,7 +38,7 @@ pub async fn task(
                                             let _ = events.send((event_entity_id, event));
                                         }
                                         Err(e) => {
-                                            error!("Failed to parse event: {}", e);
+                                            error!("Failed to parse event: {e}");
                                         }
                                     };
                                 } else {
