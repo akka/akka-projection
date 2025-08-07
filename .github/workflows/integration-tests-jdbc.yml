@@ -2,6 +2,7 @@ name: Integration Tests for JDBC
 
 on:
   pull_request:
+  workflow_dispatch:
   push:
     branches:
       - main

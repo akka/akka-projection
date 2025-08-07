@@ -2,6 +2,7 @@ name: Integration Tests for gRPC
 
 on:
   pull_request:
+  workflow_dispatch:
   push:
     branches:
       - main

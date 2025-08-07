@@ -2,6 +2,7 @@ name: Integration Tests for R2DBC MS SQLServer
 
 # separate job only on merge to main since SQL server tests are so unstable
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
