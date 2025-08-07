@@ -19,8 +19,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { jdkVersion: "1.11.0", jvmName: "temurin:1.11.0", extraOpts: '-J-XX:+UnlockExperimentalVMOptions -J-XX:+UseJVMCICompiler' }
-          - { jdkVersion: "1.17.0", jvmName: "temurin:1.17.0", extraOpts: '' }
+          - { jdkVersion: "1.24.0", jvmName: "temurin:1.24", extraOpts: '' }
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
