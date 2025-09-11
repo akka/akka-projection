@@ -14,10 +14,7 @@ ThisBuild / resolvers ++=
 lazy val core =
   Project(id = "akka-projection-core", base = file("akka-projection-core"))
     .settings(Dependencies.core)
-    .settings(
-      name := "akka-projection-core",
-      Compile / packageBin / packageOptions += Package.ManifestAttributes(
-          "Automatic-Module-Name" -> "akka.projection.core"))
+    .settings(name := "akka-projection-core", AutomaticModuleName.settings("akka.projection.core"))
     .settings(Protobuf.settings)
     .disablePlugins(CiReleasePlugin)
 
@@ -32,6 +29,7 @@ lazy val coreTest =
 lazy val testkit =
   Project(id = "akka-projection-testkit", base = file("akka-projection-testkit"))
     .settings(Dependencies.testKit)
+    .settings(AutomaticModuleName.settings("akka.projection.testkit"))
     .dependsOn(core)
     .disablePlugins(CiReleasePlugin)
 
@@ -40,6 +38,7 @@ lazy val jdbc =
   Project(id = "akka-projection-jdbc", base = file("akka-projection-jdbc"))
     .settings(Dependencies.jdbc)
     .settings(
+      AutomaticModuleName.settings("akka.projection.jdbc"),
       // needed because slick pulls in 2.2.0
       dependencyOverrides += Dependencies.Compile.slf4j)
     .dependsOn(core)
@@ -61,6 +60,7 @@ lazy val slick =
   Project(id = "akka-projection-slick", base = file("akka-projection-slick"))
     .settings(Dependencies.slick)
     .settings(
+      AutomaticModuleName.settings("akka.projection.slick"),
       // needed because slick pulls in 2.2.0
       dependencyOverrides += Dependencies.Compile.slf4j)
     .dependsOn(jdbc, core)
@@ -82,6 +82,7 @@ lazy val slickIntegration =
 lazy val cassandra =
   Project(id = "akka-projection-cassandra", base = file("akka-projection-cassandra"))
     .settings(Dependencies.cassandra)
+    .settings(AutomaticModuleName.settings("akka.projection.cassandra"))
     .dependsOn(core)
     .disablePlugins(CiReleasePlugin)
 
@@ -96,6 +97,7 @@ lazy val cassandraIntegration =
 lazy val eventsourced =
   Project(id = "akka-projection-eventsourced", base = file("akka-projection-eventsourced"))
     .settings(Dependencies.eventsourced)
+    .settings(AutomaticModuleName.settings("akka.projection.eventsourced"))
     .dependsOn(core)
     .dependsOn(testkit % Test)
     .disablePlugins(CiReleasePlugin)
@@ -104,6 +106,7 @@ lazy val eventsourced =
 lazy val kafka =
   Project(id = "akka-projection-kafka", base = file("akka-projection-kafka"))
     .settings(Dependencies.kafka)
+    .settings(AutomaticModuleName.settings("akka.projection.kafka"))
     .dependsOn(testkit % Test)
     .dependsOn(core)
     .disablePlugins(CiReleasePlugin)
@@ -124,6 +127,7 @@ lazy val kafkaIntegration =
 lazy val `durable-state` =
   Project(id = "akka-projection-durable-state", base = file("akka-projection-durable-state"))
     .settings(Dependencies.state)
+    .settings(AutomaticModuleName.settings("akka.projection.durable-state"))
     .dependsOn(core)
     .dependsOn(testkit % Test)
     .disablePlugins(CiReleasePlugin)
@@ -131,7 +135,9 @@ lazy val `durable-state` =
 lazy val grpc =
   Project(id = "akka-projection-grpc", base = file("akka-projection-grpc"))
     .settings(Dependencies.grpc)
-    .settings(akkaGrpcCodeGeneratorSettings += "server_power_apis")
+    .settings(
+      akkaGrpcCodeGeneratorSettings += "server_power_apis",
+      AutomaticModuleName.settings("akka.projection.grpc"))
     .dependsOn(core)
     .dependsOn(eventsourced)
     .enablePlugins(AkkaGrpcPlugin)
@@ -164,6 +170,7 @@ lazy val grpcIntegration =
 lazy val r2dbc =
   Project(id = "akka-projection-r2dbc", base = file("akka-projection-r2dbc"))
     .settings(Dependencies.r2dbc)
+    .settings(AutomaticModuleName.settings("akka.projection.r2dbc"))
     .dependsOn(core, grpc, eventsourced, `durable-state`)
     .disablePlugins(CiReleasePlugin)
 
@@ -178,6 +185,7 @@ lazy val r2dbcIntegration =
 lazy val dynamodb =
   Project(id = "akka-projection-dynamodb", base = file("akka-projection-dynamodb"))
     .settings(Dependencies.dynamodb)
+    .settings(AutomaticModuleName.settings("akka.projection.dynamodb"))
     .dependsOn(core, eventsourced)
     .disablePlugins(CiReleasePlugin)
 
