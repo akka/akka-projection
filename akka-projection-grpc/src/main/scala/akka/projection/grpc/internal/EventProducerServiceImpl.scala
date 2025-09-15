@@ -42,8 +42,10 @@ import scala.concurrent.Future
 
 import akka.persistence.FilteredPayload
 import akka.persistence.query.typed.scaladsl.LatestEventTimestampQuery
+import akka.projection.grpc.internal.proto.CurrentEventsByPersistenceIdRequest
 import akka.projection.grpc.internal.proto.LatestEventTimestampRequest
 import akka.projection.grpc.internal.proto.LatestEventTimestampResponse
+import akka.projection.grpc.internal.proto.ReplicaInfo
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 
 /**
@@ -152,18 +154,6 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
         },
         init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
 
-      val transformMetadata: Flow[EventEnvelope[Any], EventEnvelope[Any], NotUsed] = {
-        if (producerSource.hasReplicatedEventMetadataTransformation)
-          Flow[EventEnvelope[Any]].map { env =>
-            producerSource.replicatedEventMetadataTransformation(env) match {
-              case None           => env
-              case Some(metadata) => env.withMetadata(metadata)
-            }
-          }
-        else
-          Flow[EventEnvelope[Any]]
-      }
-
       val events: Source[EventEnvelope[Any], NotUsed] =
         (eventsBySlicesPerStreamId.get(init.streamId) match {
           case Some(query) =>
@@ -182,34 +172,12 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
                 Source.failed(
                   new IllegalArgumentException(s"No events by slices query defined for stream id [${init.streamId}]"))
             }
-        }).via(transformMetadata)
+        }).via(transformMetadata(producerSource))
 
-      val currentEventsByPersistenceId: (String, Long) => Source[EventEnvelope[Any], NotUsed] =
-        currentEventsByPersistenceIdPerStreamId.get(init.streamId) match {
-          case Some(query) =>
-            (pid, seqNr) =>
-              query
-                .currentEventsByPersistenceIdTyped[Any](pid, seqNr, Long.MaxValue)
-                .via(transformMetadata)
-          case None =>
-            currentEventsByPersistenceIdStartingFromSnapshotPerStreamId.get(init.streamId) match {
-              case Some(query) =>
-                val transformSnapshot = streamIdToSourceMap(init.streamId).transformSnapshot.get
-                (pid, seqNr) =>
-                  query
-                    .currentEventsByPersistenceIdStartingFromSnapshot[Any, Any](
-                      pid,
-                      seqNr,
-                      Long.MaxValue,
-                      transformSnapshot)
-                    .via(transformMetadata)
-              case None =>
-                (_, _) =>
-                  Source.failed(
-                    new IllegalArgumentException(
-                      s"No currentEventsByPersistenceId query defined for stream id [${init.streamId}]"))
-            }
-        }
+      val currentEventsByPersistenceId: (String, Long) => Source[EventEnvelope[Any], NotUsed] = { (pid, seqNr) =>
+        currentEventsByPersistenceIdSource(init.streamId, pid, seqNr, Long.MaxValue)
+          .via(transformMetadata(producerSource))
+      }
 
       val eventOriginFilter: EventEnvelope[_] => Boolean =
         producerSource.replicatedEventOriginFilter
@@ -231,63 +199,101 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
               replayParallelism = producerSource.settings.replayParallelism))
           .join(Flow.fromSinkAndSource(Sink.ignore, events))
 
-      val eventsStreamOut: Flow[StreamIn, StreamOut, NotUsed] =
-        eventsFlow.mapAsync(producerSource.settings.transformationParallelism) { env =>
-          env.eventOption match {
-            case Some(FilteredPayload) =>
-              if (log.isTraceEnabled)
-                log.trace(
-                  "Filtered event, due to origin, from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
+      eventsFlow.via(transformEnvelopeToStreamOut(producerSource, init.replicaInfo))
+    }
+    Flow.futureFlow(futureFlow).mapMaterializedValue(_ => NotUsed)
+  }
+
+  private def transformMetadata(
+      producerSource: EventProducer.EventProducerSource): Flow[EventEnvelope[Any], EventEnvelope[Any], NotUsed] = {
+    if (producerSource.hasReplicatedEventMetadataTransformation)
+      Flow[EventEnvelope[Any]].map { env =>
+        producerSource.replicatedEventMetadataTransformation(env) match {
+          case None           => env
+          case Some(metadata) => env.withMetadata(metadata)
+        }
+      }
+    else
+      Flow[EventEnvelope[Any]]
+  }
+
+  private def currentEventsByPersistenceIdSource(
+      streamId: String,
+      pid: String,
+      fromSeqNr: Long,
+      toSeqNr: Long): Source[EventEnvelope[Any], NotUsed] = {
+    currentEventsByPersistenceIdPerStreamId.get(streamId) match {
+      case Some(query) =>
+        query
+          .currentEventsByPersistenceIdTyped[Any](pid, fromSeqNr, toSeqNr)
+      case None =>
+        currentEventsByPersistenceIdStartingFromSnapshotPerStreamId.get(streamId) match {
+          case Some(query) =>
+            val transformSnapshot = streamIdToSourceMap(streamId).transformSnapshot.get
+            query
+              .currentEventsByPersistenceIdStartingFromSnapshot[Any, Any](pid, fromSeqNr, toSeqNr, transformSnapshot)
+          case None =>
+            Source.failed(
+              new IllegalArgumentException(s"No currentEventsByPersistenceId query defined for stream id [$streamId]"))
+        }
+    }
+  }
+
+  private def transformEnvelopeToStreamOut(
+      producerSource: EventProducer.EventProducerSource,
+      replicaInfo: Option[ReplicaInfo]): Flow[EventEnvelope[Any], StreamOut, NotUsed] = {
+    Flow[EventEnvelope[Any]].mapAsync(producerSource.settings.transformationParallelism) { env =>
+      env.eventOption match {
+        case Some(FilteredPayload) =>
+          if (log.isTraceEnabled)
+            log.trace(
+              "Filtered event, due to origin, from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
+              env.persistenceId,
+              env.sequenceNr,
+              env.offset,
+              env.source,
+              replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
+          Future.successful(
+            StreamOut(
+              StreamOut.Message.FilteredEvent(
+                FilteredEvent(
                   env.persistenceId,
                   env.sequenceNr,
-                  env.offset,
-                  env.source,
-                  init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
-              Future.successful(
+                  env.slice,
+                  ProtobufProtocolConversions.offsetToProtoOffset(env.offset)))))
+        case _ =>
+          import system.executionContext
+          transformAndEncodeEvent(producerSource.transformation, env, wireSerialization(producerSource))
+            .map {
+              case Some(event) =>
+                if (log.isTraceEnabled)
+                  log.trace(
+                    "Emitting event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
+                    env.persistenceId,
+                    env.sequenceNr,
+                    env.offset,
+                    event.source,
+                    replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
+                StreamOut(StreamOut.Message.Event(event))
+              case None =>
+                if (log.isTraceEnabled)
+                  log.trace(
+                    "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
+                    env.persistenceId,
+                    env.sequenceNr,
+                    env.offset,
+                    env.source,
+                    replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
                 StreamOut(
                   StreamOut.Message.FilteredEvent(
                     FilteredEvent(
                       env.persistenceId,
                       env.sequenceNr,
                       env.slice,
-                      ProtobufProtocolConversions.offsetToProtoOffset(env.offset)))))
-            case _ =>
-              import system.executionContext
-              transformAndEncodeEvent(producerSource.transformation, env, wireSerialization(producerSource))
-                .map {
-                  case Some(event) =>
-                    if (log.isTraceEnabled)
-                      log.trace(
-                        "Emitting event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
-                        env.persistenceId,
-                        env.sequenceNr,
-                        env.offset,
-                        event.source,
-                        init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
-                    StreamOut(StreamOut.Message.Event(event))
-                  case None =>
-                    if (log.isTraceEnabled)
-                      log.trace(
-                        "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
-                        env.persistenceId,
-                        env.sequenceNr,
-                        env.offset,
-                        env.source,
-                        init.replicaInfo.fold("")(ri => s", remote replica [${ri.replicaId}]"))
-                    StreamOut(
-                      StreamOut.Message.FilteredEvent(
-                        FilteredEvent(
-                          env.persistenceId,
-                          env.sequenceNr,
-                          env.slice,
-                          ProtobufProtocolConversions.offsetToProtoOffset(env.offset))))
-                }
-          }
-        }
-
-      eventsStreamOut
+                      ProtobufProtocolConversions.offsetToProtoOffset(env.offset))))
+            }
+      }
     }
-    Flow.futureFlow(futureFlow).mapMaterializedValue(_ => NotUsed)
   }
 
   override def eventTimestamp(req: EventTimestampRequest, metadata: Metadata): Future[EventTimestampResponse] = {
@@ -405,5 +411,24 @@ import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
             new UnsupportedOperationException(s"latestEventTimestamp not supported by [${other.getClass.getName}]"))
       }
     }
+  }
+
+  override def currentEventsByPersistenceId(
+      req: CurrentEventsByPersistenceIdRequest,
+      metadata: Metadata): Source[StreamOut, NotUsed] = {
+    val futureSource =
+      intercept(req.streamId, metadata).map { _ =>
+        val producerSource = eventProducerSourceFor(req.streamId)
+        val entityTypeFromPid = PersistenceId.extractEntityType(req.persistenceId)
+        if (entityTypeFromPid != producerSource.entityType)
+          throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(
+            s"Persistence id is for a type of entity that is not available for consumption (expected type " +
+            s" in persistence id for stream id [${req.streamId}] is [${producerSource.entityType}] but was [$entityTypeFromPid])"))
+        currentEventsByPersistenceIdSource(req.streamId, req.persistenceId, req.fromSeqNr, req.toSeqNr)
+          .via(transformMetadata(producerSource))
+          .via(transformEnvelopeToStreamOut(producerSource, replicaInfo = None))
+      }
+
+    Source.futureSource(futureSource).mapMaterializedValue(_ => NotUsed)
   }
 }

@@ -13,14 +13,16 @@ import akka.projection.BySlicesSourceProvider
 import akka.projection.javadsl
 import akka.projection.scaladsl
 import akka.stream.scaladsl.Source
-
 import java.time.Instant
 import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
+
 import scala.jdk.FutureConverters._
 import scala.jdk.OptionConverters._
 import scala.concurrent.{ ExecutionContext, Future }
+
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 
 @InternalApi private[projection] object JavaToScalaBySliceSourceProviderAdapter {
   def apply[Offset, Envelope](
@@ -67,7 +69,8 @@ private[projection] class JavaToScalaSourceProviderAdapter[Offset, Envelope](
     with BySlicesSourceProvider
     with BacklogStatusSourceProvider
     with EventTimestampQuery
-    with LoadEventQuery {
+    with LoadEventQuery
+    with CurrentEventsByPersistenceIdTypedQuery {
 
   def source(offset: () => Future[Option[Offset]]): Future[Source[Envelope, NotUsed]] = {
     // the parasitic context is used to convert the Optional to Option and a java streams Source to a scala Source,
@@ -124,6 +127,21 @@ private[projection] class JavaToScalaSourceProviderAdapter[Offset, Envelope](
         sourceProvider.latestEventTimestamp()
       case _ => Future.successful(None)
     }
+
+  override def currentEventsByPersistenceIdTyped[Event](
+      persistenceId: String,
+      fromSequenceNr: Long,
+      toSequenceNr: Long): Source[EventEnvelope[Event], NotUsed] =
+    delegate match {
+      case eventsQuery: akka.persistence.query.typed.javadsl.CurrentEventsByPersistenceIdTypedQuery =>
+        eventsQuery.currentEventsByPersistenceIdTyped[Event](persistenceId, fromSequenceNr, toSequenceNr).asScala
+      case _ =>
+        Source.failed(
+          new IllegalArgumentException(
+            s"Expected SourceProvider [${delegate.getClass.getName}] to implement " +
+            s"CurrentEventsByPersistenceIdTypedQuery when currentEventsByPersistenceIdTyped is used."))
+    }
+
 }
 
 /**

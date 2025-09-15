@@ -24,6 +24,7 @@ import akka.japi.Pair
 import akka.persistence.query.Offset
 import akka.persistence.query.javadsl.ReadJournal
 import akka.persistence.query.typed.EventEnvelope
+import akka.persistence.query.typed.javadsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.javadsl.EventTimestampQuery
 import akka.persistence.query.typed.javadsl.EventsBySliceQuery
 import akka.persistence.query.typed.javadsl.LatestEventTimestampQuery
@@ -92,7 +93,8 @@ final class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
     with EventTimestampQuery
     with LoadEventQuery
     with CanTriggerReplay
-    with LatestEventTimestampQuery {
+    with LatestEventTimestampQuery
+    with CurrentEventsByPersistenceIdTypedQuery {
 
   /**
    * The identifier of the stream to consume, which is exposed by the producing/publishing side.
@@ -151,6 +153,12 @@ final class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
       .map(_.toJava)(ExecutionContext.parasitic)
       .asJava
 
+  override def currentEventsByPersistenceIdTyped[Event](
+      persistenceId: String,
+      fromSequenceNr: Long,
+      toSequenceNr: Long): Source[EventEnvelope[Event], NotUsed] =
+    delegate.currentEventsByPersistenceIdTyped(persistenceId, fromSequenceNr, toSequenceNr).asJava
+
   /**
    * Close the gRPC client. It will be automatically closed when the `ActorSystem` is terminated,
    * so invoking this is only needed when there is a need to close the resource before that.
@@ -158,4 +166,5 @@ final class GrpcReadJournal(delegate: scaladsl.GrpcReadJournal)
    */
   def close(): CompletionStage[Done] =
     delegate.close().asJava
+
 }

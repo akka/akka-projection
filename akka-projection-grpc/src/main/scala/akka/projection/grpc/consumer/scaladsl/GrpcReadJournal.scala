@@ -61,7 +61,9 @@ import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
+import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.LatestEventTimestampQuery
+import akka.projection.grpc.internal.proto.CurrentEventsByPersistenceIdRequest
 import akka.projection.grpc.internal.proto.LatestEventTimestampRequest
 import akka.projection.grpc.internal.proto.ReplayPersistenceId
 import akka.projection.grpc.internal.proto.ReplicaInfo
@@ -168,7 +170,8 @@ final class GrpcReadJournal private (
     with EventTimestampQuery
     with LoadEventQuery
     with CanTriggerReplay
-    with LatestEventTimestampQuery {
+    with LatestEventTimestampQuery
+    with CurrentEventsByPersistenceIdTypedQuery {
   import GrpcReadJournal.log
   import ProtobufProtocolConversions._
 
@@ -493,6 +496,42 @@ final class GrpcReadJournal private (
     addRequestHeaders(client.latestEventTimestamp())
       .invoke(LatestEventTimestampRequest(streamId, minSlice, maxSlice))
       .map(_.timestamp.map(_.asJavaInstant))
+  }
+
+  // CurrentEventsByPersistenceIdTypedQuery
+  override def currentEventsByPersistenceIdTyped[Evt](
+      persistenceId: String,
+      fromSequenceNr: Long,
+      toSequenceNr: Long): Source[EventEnvelope[Evt], NotUsed] = {
+
+    addRequestHeaders(client.currentEventsByPersistenceId())
+      .invoke(CurrentEventsByPersistenceIdRequest(settings.streamId, persistenceId, fromSequenceNr, toSequenceNr))
+      .map {
+        case StreamOut(StreamOut.Message.Event(event), _) =>
+          if (log.isTraceEnabled)
+            log.trace(
+              "currentEventsByPersistenceId event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]",
+              clientSettings.serviceName,
+              event.persistenceId,
+              event.seqNr,
+              timestampOffset(event.offset.head).timestamp)
+
+          eventToEnvelope(event, streamId)
+
+        case StreamOut(StreamOut.Message.FilteredEvent(filteredEvent), _) =>
+          if (log.isTraceEnabled)
+            log.trace(
+              "currentEventsByPersistenceId filtered event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]",
+              clientSettings.serviceName,
+              filteredEvent.persistenceId,
+              filteredEvent.seqNr,
+              timestampOffset(filteredEvent.offset.head).timestamp)
+
+          filteredEventToEnvelope(filteredEvent, streamId)
+
+        case other =>
+          throw new IllegalArgumentException(s"Unexpected StreamOut [${other.message.getClass.getName}]")
+      }
   }
 
   /**

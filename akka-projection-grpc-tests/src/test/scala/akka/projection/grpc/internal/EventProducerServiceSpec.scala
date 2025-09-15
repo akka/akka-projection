@@ -32,6 +32,7 @@ import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.internal.ReplicatedEventMetadata
 import akka.persistence.typed.internal.VersionVector
+import akka.projection.grpc.internal.proto.CurrentEventsByPersistenceIdRequest
 import akka.projection.grpc.internal.proto.EventTimestampRequest
 import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.grpc.internal.proto.LoadEventRequest
@@ -438,6 +439,14 @@ class EventProducerServiceSpec
         .failed
         .futureValue
       assertGrpcStatusDenied(timestampFailure, "nono-async")
+
+      val currentEventsFailure =
+        interceptedProducerService
+          .currentEventsByPersistenceId(CurrentEventsByPersistenceIdRequest("nono-async"), MetadataBuilder.empty)
+          .runWith(Sink.head)
+          .failed
+          .futureValue
+      assertGrpcStatusDenied(currentEventsFailure, "nono-async")
     }
 
     "replay events" in {
@@ -622,6 +631,20 @@ class EventProducerServiceSpec
         originSequenceNr = env2.sequenceNr,
         version = VersionVector(ReplicaId.empty.id, env2.sequenceNr),
         concurrent = false)
+    }
+
+    "request events for persistenceId" in {
+      val persistenceId = nextPid(entityType3)
+
+      val events =
+        eventProducerService
+          .currentEventsByPersistenceId(
+            CurrentEventsByPersistenceIdRequest(streamId3, persistenceId.id, 1, 3),
+            MetadataBuilder.empty)
+          .runWith(Sink.seq)
+          .futureValue
+      events.size shouldBe 3
+      events.map(_.getEvent.persistenceId).toSet shouldBe Set(persistenceId.id)
     }
 
   }

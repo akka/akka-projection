@@ -39,6 +39,9 @@ service EventProducerService {
 
   // Retrieve the latest timestamp for a stream id and slice range.
   rpc LatestEventTimestamp(LatestEventTimestampRequest) returns (LatestEventTimestampResponse);
+
+  // Replay events for a given persistence id
+  rpc CurrentEventsByPersistenceId(CurrentEventsByPersistenceIdRequest) returns (stream StreamOut);
 }
 
 message StreamIn {
@@ -318,3 +321,12 @@ message LatestEventTimestampRequest {
 message LatestEventTimestampResponse {
   google.protobuf.Timestamp timestamp = 1;
 }
+
+message CurrentEventsByPersistenceIdRequest {
+  string stream_id = 1;
+  string persistence_id = 2;
+  int64 from_seq_nr = 3;
+  int64 to_seq_nr = 4;
+}
+
+
