@@ -22,7 +22,6 @@ import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
 import akka.grpc.GrpcClientSettings
 import akka.http.scaladsl.Http
-import akka.persistence.r2dbc.R2dbcSettings
 import akka.persistence.typed.ReplicaId
 import akka.persistence.typed.scaladsl.Effect
 import akka.persistence.typed.scaladsl.EventSourcedBehavior
@@ -156,8 +155,6 @@ class ControlledReplicationIntegrationSpec(testContainerConf: TestContainerConf)
 
   private val logger = LoggerFactory.getLogger(classOf[ControlledReplicationIntegrationSpec])
   override def typedSystem: ActorSystem[_] = testKit.system
-
-  private lazy val r2dbcSettings = R2dbcSettings(system.settings.config.getConfig("akka.persistence.r2dbc"))
 
   private val systems = Seq[ActorSystem[_]](
     typedSystem,
