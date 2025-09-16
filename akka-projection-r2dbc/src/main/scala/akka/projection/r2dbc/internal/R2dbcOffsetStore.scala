@@ -641,6 +641,9 @@ private[projection] class R2dbcOffsetStore(
           else records.maxBy(_.timestamp).timestamp
         updateLatestSeen(latestTimestamp)
       }
+
+      logger.debug("saveTimestampOffsets [{}] => [{}]", records, filteredRecords) // FIXME remove
+
       if (filteredRecords.isEmpty) {
         FutureDone
       } else {
