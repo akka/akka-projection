@@ -659,11 +659,13 @@ private[projection] object R2dbcProjectionImpl {
                 }
               }
 
-            case _ =>
+            case _ if offsetStore.settings.replayOnRejectedSequenceNumbers =>
               triggerReplayIfPossible(sourceProvider, offsetStore, originalEnvelope).map {
                 case true  => ReplayTriggered
                 case false => NotReplayed
               }(ExecutionContext.parasitic)
+            case _ =>
+              FutureNotReplayed
           }
         case _ =>
           FutureNotReplayed // no replay support for non typed envelopes
@@ -885,8 +887,10 @@ private[projection] object R2dbcProjectionImpl {
               }
             }
 
-          case _ =>
+          case _ if offsetStore.settings.replayOnRejectedSequenceNumbers =>
             triggerReplayIfPossible(sourceProvider, offsetStore, originalEnvelope)
+          case _ =>
+            FutureFalse
         }
       case _ =>
         FutureFalse // no replay support for non typed envelopes
