@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration._
+import scala.util.Random
 
 import akka.Done
 import akka.actor.testkit.typed.TestException
@@ -55,6 +56,15 @@ object CatchupSpec {
     akka.projection.grpc {
       producer {
         query-plugin-id = "akka.persistence.r2dbc.query"
+      }
+    }
+    akka.projection.r2dbc.replay-on-rejected-sequence-numbers=off
+    akka.projection.r2dbc.offset-store.delete-after=3m
+    akka.projection.r2dbc.offset-store.delete-interval=5s
+    akka.projection {
+      restart-backoff {
+        min-backoff = 20 ms
+        max-backoff = 2 s
       }
     }
     akka.actor.testkit.typed.filter-leeway = 10s
@@ -182,7 +192,8 @@ class CatchupSpec(testContainerConf: TestContainerConf)
   }
 
   "A gRPC Projection" must {
-    "catchup old events" in {
+    "catchup old events without using replay" in {
+      // note config replay-on-rejected-sequence-numbers=off
       val t0 = InstantFactory.now()
       val t1 = t0.minus(10, ChronoUnit.DAYS)
 
@@ -225,13 +236,11 @@ class CatchupSpec(testContainerConf: TestContainerConf)
 
       writeEvent(slice2, pid2.id, 4, t2.plusMillis(1), "b4")
       writeEvent(slice2, pid2.id, 5, t2.plusMillis(2), "b5")
-      // for some reason those old were not seen previously, maybe because of scaling
-      writeEvent(slice3, pid3.id, 1, t1.plusMillis(3), "c1")
-      writeEvent(slice3, pid3.id, 2, t1.plusMillis(4), "c2")
-      // this will be rejected and replay pid3
+      writeEvent(slice3, pid3.id, 1, t2.plusMillis(3), "c1")
+      writeEvent(slice3, pid3.id, 2, t2.plusMillis(4), "c2")
       writeEvent(slice3, pid3.id, 3, t3, "c3")
       writeEvent(slice2, pid2.id, 6, t3.plusMillis(2), "b6") // this will fail once
-      failEvents.put("b6", 1)
+      failEvents.put("B6", 1)
       writeEvent(slice3, pid3.id, 4, t4, "c4")
 
       val projection3 = spawnAtLeastOnceProjection(handler)
@@ -240,7 +249,7 @@ class CatchupSpec(testContainerConf: TestContainerConf)
       processedProbe.receiveMessage().envelope.event shouldBe "C1"
       processedProbe.receiveMessage().envelope.event shouldBe "C2"
       processedProbe.receiveMessage().envelope.event shouldBe "C3"
-      processedProbe.receiveMessage().envelope.event shouldBe "B6"
+      processedProbe.receiveMessage(5.seconds).envelope.event shouldBe "B6"
       processedProbe.receiveMessage().envelope.event shouldBe "C4"
       projection3 ! ProjectionBehavior.Stop
       createTestProbe().expectTerminated(projection3)
@@ -255,6 +264,61 @@ class CatchupSpec(testContainerConf: TestContainerConf)
       processedProbe.receiveMessage().envelope.event shouldBe "A3"
       projection4 ! ProjectionBehavior.Stop
       createTestProbe().expectTerminated(projection4)
+
+      log.info("End phase 4 ----------------------")
+
+      val seed = System.currentTimeMillis()
+      val rnd = new Random(seed)
+      log.info("Random seed [{}]", seed)
+      var t = t4.plusSeconds(20)
+      var seq1 = 3L
+      var seq2 = 6L
+      var seq3 = 4L
+      val numEvents = 50000
+      (1 to numEvents).foreach { _ =>
+
+        val failEvent = rnd.nextDouble() < 0.01
+
+        if (rnd.nextDouble() < 0.01)
+          t = t.plus(moreThanBacktrackingWindow)
+        else
+          t = t.plusMillis(rnd.nextInt(100))
+
+        rnd.nextInt(3) match {
+          case 0 =>
+            seq1 += 1
+            val event = s"a$seq1"
+            writeEvent(slice1, pid1.id, seq1, t, event)
+            if (failEvent)
+              failEvents.put(event.toUpperCase, 1)
+          case 1 =>
+            seq2 += 1
+            val event = s"b$seq2"
+            writeEvent(slice2, pid2.id, seq2, t, event)
+            if (failEvent)
+              failEvents.put(event.toUpperCase, 1)
+          case 2 =>
+            seq3 += 1
+            val event = s"c$seq3"
+            writeEvent(slice3, pid3.id, seq3, t, event)
+        }
+
+      }
+
+      val projection5 = spawnAtLeastOnceProjection(handler)
+      val processed = processedProbe.receiveMessages(numEvents, 30.seconds)
+      val byPid = processed.groupBy(_.envelope.persistenceId)
+      byPid.foreach {
+        case (_, processedByPid) =>
+          // all events of a pid must be processed by the same projection instance
+          processedByPid.map(_.projectionId).toSet.size shouldBe 1
+          // processed events in right order
+          val seqNrs = processedByPid.map(_.envelope.sequenceNr).toVector
+          (seqNrs.last - seqNrs.head + 1) shouldBe processedByPid.size
+          seqNrs shouldBe (seqNrs.head to seqNrs.last).toVector
+      }
+      projection5 ! ProjectionBehavior.Stop
+      createTestProbe().expectTerminated(projection5)
 
     }
 
