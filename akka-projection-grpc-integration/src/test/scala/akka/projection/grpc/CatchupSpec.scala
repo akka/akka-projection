@@ -114,6 +114,8 @@ class CatchupSpec(testContainerConf: TestContainerConf)
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
 
+  private val log = LoggerFactory.getLogger(getClass)
+
   private val entityType = nextEntityType()
   private def streamId = entityType
   private val sliceRange = 0 to 1023
@@ -183,9 +185,14 @@ class CatchupSpec(testContainerConf: TestContainerConf)
     "catchup old events" in {
       val t0 = InstantFactory.now()
       val t1 = t0.minus(10, ChronoUnit.DAYS)
-      val t2 = t1.plus(r2dbcProjectionSettings.backtrackingWindow).plusSeconds(10)
-      val t3 = t2.plus(r2dbcProjectionSettings.backtrackingWindow).plusSeconds(10)
-      val t4 = t3.plus(r2dbcProjectionSettings.backtrackingWindow).plusSeconds(10)
+
+      // corresponds to first backtracking window, and some more
+      val moreThanBacktrackingWindow = r2dbcProjectionSettings.backtrackingWindow
+        .plusMillis(r2dbcSettings.querySettings.backtrackingBehindCurrentTime.toMillis)
+        .plusSeconds(10)
+      val t2 = t1.plus(moreThanBacktrackingWindow)
+      val t3 = t2.plus(moreThanBacktrackingWindow)
+      val t4 = t3.plus(moreThanBacktrackingWindow)
 
       val processedEvents = new ConcurrentHashMap[String, java.lang.Boolean]
       val failEvents = new ConcurrentHashMap[String, Int]
@@ -194,12 +201,14 @@ class CatchupSpec(testContainerConf: TestContainerConf)
 
       writeEvent(slice1, pid1.id, 1L, t1, "a1")
 
-      // first, just process the oldest event to set a starting offset, otherwise it will consume all
+      // first, just process the oldest event to set a starting offset; otherwise it will consume all
       // without any replay
       val projection1 = spawnAtLeastOnceProjection(handler)
       processedProbe.receiveMessage().envelope.event shouldBe "A1"
       projection1 ! ProjectionBehavior.Stop
       createTestProbe().expectTerminated(projection1)
+
+      log.info("End phase 1 ----------------------")
 
       writeEvent(slice2, pid2.id, 1, t1.plusMillis(1), "b1")
       writeEvent(slice2, pid2.id, 2, t1.plusMillis(2), "b2")
@@ -211,6 +220,8 @@ class CatchupSpec(testContainerConf: TestContainerConf)
       processedProbe.receiveMessage().envelope.event shouldBe "B3"
       projection2 ! ProjectionBehavior.Stop
       createTestProbe().expectTerminated(projection2)
+
+      log.info("End phase 2 ----------------------")
 
       writeEvent(slice2, pid2.id, 4, t2.plusMillis(1), "b4")
       writeEvent(slice2, pid2.id, 5, t2.plusMillis(2), "b5")
@@ -234,6 +245,8 @@ class CatchupSpec(testContainerConf: TestContainerConf)
       projection3 ! ProjectionBehavior.Stop
       createTestProbe().expectTerminated(projection3)
 
+      log.info("End phase 3 ----------------------")
+
       writeEvent(slice1, pid1.id, 2L, t4.plusMillis(1), "a2")
       writeEvent(slice1, pid1.id, 3L, t4.plusMillis(2), "a3")
 
@@ -244,6 +257,7 @@ class CatchupSpec(testContainerConf: TestContainerConf)
       createTestProbe().expectTerminated(projection4)
 
     }
+
   }
 
 }
