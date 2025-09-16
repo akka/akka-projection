@@ -59,8 +59,8 @@ object CatchupSpec {
       }
     }
     akka.projection.r2dbc.replay-on-rejected-sequence-numbers=off
-    akka.projection.r2dbc.offset-store.delete-after=3m
-    akka.projection.r2dbc.offset-store.delete-interval=5s
+//    akka.projection.r2dbc.offset-store.delete-after=3m
+//    akka.projection.r2dbc.offset-store.delete-interval=5s
     akka.projection {
       restart-backoff {
         min-backoff = 20 ms
@@ -68,7 +68,11 @@ object CatchupSpec {
       }
     }
     akka.actor.testkit.typed.filter-leeway = 10s
+
+    akka.persistence.r2dbc.connection-factory = $${akka.persistence.r2dbc.postgres}
     """)
+    .withFallback(ConfigFactory.load("persistence.conf"))
+    .resolve()
 
   final case class Processed(projectionId: ProjectionId, envelope: EventEnvelope[String])
 
@@ -110,16 +114,14 @@ object CatchupSpec {
 
 }
 
-class CatchupSpec(testContainerConf: TestContainerConf)
-    extends ScalaTestWithActorTestKit(CatchupSpec.config.withFallback(testContainerConf.config))
+class CatchupSpec
+    extends ScalaTestWithActorTestKit(CatchupSpec.config)
     with AnyWordSpecLike
     with TestDbLifecycle
     with TestData
     with BeforeAndAfterAll
     with LogCapturing {
   import CatchupSpec._
-
-  def this() = this(new TestContainerConf)
 
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
@@ -188,7 +190,6 @@ class CatchupSpec(testContainerConf: TestContainerConf)
 
   protected override def afterAll(): Unit = {
     super.afterAll()
-    testContainerConf.stop()
   }
 
   "A gRPC Projection" must {
@@ -267,7 +268,7 @@ class CatchupSpec(testContainerConf: TestContainerConf)
 
       log.info("End phase 4 ----------------------")
 
-      val seed = System.currentTimeMillis()
+      val seed = System.currentTimeMillis() // FIXME 1758012335852L
       val rnd = new Random(seed)
       log.info("Random seed [{}]", seed)
       var t = t4.plusSeconds(20)
