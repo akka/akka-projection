@@ -641,7 +641,6 @@ private[projection] class R2dbcOffsetStore(
           else records.maxBy(_.timestamp).timestamp
         updateLatestSeen(latestTimestamp)
       }
-
       if (filteredRecords.isEmpty) {
         FutureDone
       } else {
@@ -994,6 +993,15 @@ private[projection] class R2dbcOffsetStore(
   @tailrec final def addInflight[Envelope](envelope: Envelope): Unit = {
     createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) =>
+        if (logger.isTraceEnabled)
+          logger.trace(
+            "{} Envelope in flight, about to be processed. slice [{}], pid [{}], seqNr [{}], timestamp [{}]",
+            logPrefix,
+            recordWithOffset.record.slice,
+            recordWithOffset.record.pid,
+            recordWithOffset.record.seqNr,
+            recordWithOffset.record.timestamp)
+
         val pid = recordWithOffset.record.pid
         val seqNr = recordWithOffset.record.seqNr
         val currentInflight = getInflight()

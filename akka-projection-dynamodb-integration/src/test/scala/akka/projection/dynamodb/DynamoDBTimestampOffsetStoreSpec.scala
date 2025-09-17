@@ -717,6 +717,55 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       offsetStore.getInflight() shouldBe empty
     }
 
+    "async update of inflight" in {
+      val projectionId = genRandomProjectionId()
+      val offsetStore = createOffsetStore(projectionId)
+
+      val startTime = TestClock.nowMicros().instant()
+
+      val envelope1 = createEnvelope("p1", 1L, startTime.plusMillis(1), "e1-1")
+      val envelope2 = createEnvelope("p1", 2L, startTime.plusMillis(2), "e1-2")
+      val envelope3 = createEnvelope("p1", 3L, startTime.plusMillis(2), "e1-2")
+
+      offsetStore.addInflight(envelope1)
+      offsetStore.isInflight(envelope1) shouldBe true
+      offsetStore.addInflight(envelope2)
+      offsetStore.isInflight(envelope2) shouldBe true
+      offsetStore.isInflight(envelope3) shouldBe false
+      offsetStore.addInflight(envelope3)
+      offsetStore.isInflight(envelope3) shouldBe true
+
+      // an async saveOffset might save earlier offset (not collected latest envelope3 yet)
+      offsetStore.isInflight(envelope1) shouldBe true
+      offsetStore.isInflight(envelope2) shouldBe true
+      offsetStore
+        .saveOffsets(
+          Vector(
+            OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(1), Map("p1" -> 1L)), "p1", 1L),
+            OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(2), Map("p1" -> 2L)), "p1", 2L)))
+        .futureValue
+      // envelope3 still in flight
+      offsetStore.getInflight() shouldBe Map("p1" -> 3L)
+
+      // and can be saved later
+      offsetStore.isInflight(envelope3) shouldBe true
+      offsetStore
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(startTime.plusMillis(2), Map("p1" -> 3L)), "p1", 3L))
+        .futureValue
+      offsetStore.getInflight() shouldBe empty
+      offsetStore.isInflight(envelope3) shouldBe false
+
+      // offer seqNr 3  once more
+      offsetStore.addInflight(envelope3)
+      offsetStore.getInflight() shouldBe Map("p1" -> 3L)
+      offsetStore.isInflight(envelope3) shouldBe true
+
+      // probably not possible, but if earlier is added it still keeps latest seqNr
+      offsetStore.addInflight(envelope2)
+      offsetStore.getInflight() shouldBe Map("p1" -> 3L)
+      offsetStore.isInflight(envelope2) shouldBe true
+    }
+
     "mapIsAccepted" in {
       val projectionId = genRandomProjectionId()
       val startTime = TestClock.nowMicros().instant()
