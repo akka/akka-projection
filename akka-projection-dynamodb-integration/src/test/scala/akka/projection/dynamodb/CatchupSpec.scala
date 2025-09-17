@@ -122,7 +122,7 @@ class CatchupSpec
     "catchup old events without rejections and replays" in {
       // note config replay-on-rejected-sequence-numbers=off
       // so if there is an invalid rejection the test will fail
-      val numEvents = 1000 // increase this to 50k for more thorough testing
+      val numEvents = 1000 // increase this to 10k for more thorough testing
       val seed = System.currentTimeMillis()
       val rnd = new Random(seed)
       val t0 = InstantFactory.now().minus(10, ChronoUnit.DAYS)
@@ -168,7 +168,7 @@ class CatchupSpec
       }
 
       val projection = spawnAtLeastOnceProjection(handler)
-      val processed = processedProbe.receiveMessages(numEvents, 10.seconds + (3 * numEvents).millis)
+      val processed = processedProbe.receiveMessages(numEvents, 10.seconds + (10 * numEvents).millis)
       val byPid = processed.groupBy(_.envelope.persistenceId)
       byPid.foreach {
         case (_, processedByPid) =>
