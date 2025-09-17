@@ -137,8 +137,14 @@ class CatchupSpec
       val handler = new FailingTestHandler(projectionId, processedProbe.ref, processedEvents, failEvents)
 
       var t = t0
-      val numPids = 2 + rnd.nextInt(5)
-      val pids = (1 to numPids).map(_ => nextPersistenceId(entityType))
+      // for DynamoDB it's more interesting if there are more than one pid with same slice
+      val numPidsForPerSlice = 3
+      val numPids = (2 + rnd.nextInt(5) * numPidsForPerSlice)
+      val pids = (1 to numPids / numPidsForPerSlice).flatMap { _ =>
+        val p1 = nextPersistenceId(entityType)
+        val additional = (2 to numPidsForPerSlice).map(_ => randomPersistenceIdForSlice(entityType, slice(p1)))
+        p1 +: additional
+      }
       var seqNrs = pids.map(_ -> 0L).toMap
 
       log.info("Random seed [{}], using [{}] pids and [{}] events", seed, pids.size, numEvents)
@@ -162,7 +168,7 @@ class CatchupSpec
       }
 
       val projection = spawnAtLeastOnceProjection(handler)
-      val processed = processedProbe.receiveMessages(numEvents, (3 * numEvents).millis)
+      val processed = processedProbe.receiveMessages(numEvents, 10.seconds + (3 * numEvents).millis)
       val byPid = processed.groupBy(_.envelope.persistenceId)
       byPid.foreach {
         case (_, processedByPid) =>
