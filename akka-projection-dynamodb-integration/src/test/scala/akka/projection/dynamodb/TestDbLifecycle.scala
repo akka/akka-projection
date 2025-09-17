@@ -101,7 +101,13 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
 
     import akka.persistence.dynamodb.internal.JournalAttributes._
 
-    log.debug("Write test event [{}] [{}] [{}] at time [{}]", persistenceId, seqNr, event, timestamp)
+    log.debug(
+      "Write test event [{}] [{}] [{}] at time [{}], slice [{}]",
+      persistenceId.id,
+      seqNr,
+      event,
+      timestamp,
+      slice)
 
     val stringSerializer = SerializationExtension(typedSystem).serializerFor(classOf[String])
 

@@ -120,8 +120,8 @@ class CatchupSpec
 
   "A Projection" must {
     "catchup old events without rejections and replays" in {
-      pending // FIXME there are rejections
-
+      pending // FIXME rejected when same timestamp
+      
       // note config replay-on-rejected-sequence-numbers=off
       // so if there is an invalid rejection the test will fail
       val numEvents = 5000 // increase this to 50k for more thorough testing
@@ -157,7 +157,7 @@ class CatchupSpec
         val pid = pids(rnd.nextInt(pids.size))
         val seqNr = seqNrs(pid) + 1
         seqNrs = seqNrs.updated(pid, seqNr)
-        val event = s"$pid-$seqNr"
+        val event = s"${pid.id}-$seqNr"
         writeEvent(slice(pid), pid, seqNr, t, event)
         if (failEvent)
           failEvents.put(event, 1)
