@@ -168,7 +168,7 @@ class CatchupSpec
       }
 
       val projection = spawnAtLeastOnceProjection(handler)
-      val processed = processedProbe.receiveMessages(10.seconds + numEvents, (3 * numEvents).millis)
+      val processed = processedProbe.receiveMessages(numEvents, 10.seconds + (3 * numEvents).millis)
       val byPid = processed.groupBy(_.envelope.persistenceId)
       byPid.foreach {
         case (_, processedByPid) =>

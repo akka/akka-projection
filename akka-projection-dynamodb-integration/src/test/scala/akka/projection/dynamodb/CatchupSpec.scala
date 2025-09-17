@@ -121,7 +121,7 @@ class CatchupSpec
   "A Projection" must {
     "catchup old events without rejections and replays" in {
       pending // FIXME rejected when same timestamp
-      
+
       // note config replay-on-rejected-sequence-numbers=off
       // so if there is an invalid rejection the test will fail
       val numEvents = 5000 // increase this to 50k for more thorough testing
