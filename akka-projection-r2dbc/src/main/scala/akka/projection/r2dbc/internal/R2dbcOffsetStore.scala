@@ -996,23 +996,24 @@ private[projection] class R2dbcOffsetStore(
   @tailrec final def addInflight[Envelope](envelope: Envelope): Unit = {
     createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) =>
+        val pid = recordWithOffset.record.pid
+        val seqNr = recordWithOffset.record.seqNr
         val currentInflight = getInflight()
-        val newInflight = currentInflight.updated(recordWithOffset.record.pid, recordWithOffset.record.seqNr)
-        if (!inflight.compareAndSet(currentInflight, newInflight))
-          addInflight(envelope) // CAS retry, concurrent update of inflight
+        val updateNeeded =
+          currentInflight.get(pid) match {
+            case Some(currentInFlightSeqNr) =>
+              currentInFlightSeqNr < seqNr
+            case None =>
+              true
+          }
+        if (updateNeeded) {
+          val newInflight = currentInflight.updated(pid, seqNr)
+          if (!inflight.compareAndSet(currentInflight, newInflight)) {
+            addInflight(envelope) // CAS retry, concurrent update of inflight
+          }
+        }
       case None =>
     }
-  }
-
-  @tailrec final def addInflights[Envelope](envelopes: immutable.Seq[Envelope]): Unit = {
-    val currentInflight = getInflight()
-    val entries = envelopes.iterator.map(createRecordWithOffset).collect {
-      case Some(r) =>
-        r.record.pid -> r.record.seqNr
-    }
-    val newInflight = currentInflight ++ entries
-    if (!inflight.compareAndSet(currentInflight, newInflight))
-      addInflights(envelopes) // CAS retry, concurrent update of inflight
   }
 
   def isInflight[Envelope](envelope: Envelope): Boolean = {
@@ -1021,8 +1022,10 @@ private[projection] class R2dbcOffsetStore(
         val pid = recordWithOffset.record.pid
         val seqNr = recordWithOffset.record.seqNr
         getInflight().get(pid) match {
-          case Some(`seqNr`) => true
-          case _             => false
+          case Some(currentInFlightSeqNr) =>
+            seqNr <= currentInFlightSeqNr
+          case None =>
+            false
         }
       case None => true
     }
