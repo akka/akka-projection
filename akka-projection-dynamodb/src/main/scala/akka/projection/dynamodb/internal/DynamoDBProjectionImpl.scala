@@ -569,8 +569,20 @@ private[projection] object DynamoDBProjectionImpl {
                         .run()
                         .map(_ => ReplayedOnRejection: ReplayResult)(ExecutionContext.parasitic)
                         .recoverWith { exc =>
-                          logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
-                          Future.failed(exc)
+                          if (exc.getMessage.contains("UNIMPLEMENTED") && exc.getMessage.contains(
+                                "CurrentEventsByPersistenceId")) {
+                            logReplayUnimplementedException(logPrefix, originalEventEnvelope, fromSeqNr)
+                            Future.successful(
+                              triggerReplayIfPossible(
+                                sourceProvider,
+                                persistenceId,
+                                fromSeqNr,
+                                originalEventEnvelope.sequenceNr))
+                            FutureReplayTriggered
+                          } else {
+                            logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
+                            Future.failed(exc)
+                          }
                         }
                     case None =>
                       if (triggerReplayIfPossible(
@@ -704,6 +716,22 @@ private[projection] object DynamoDBProjectionImpl {
       exc)
   }
 
+  private def logReplayUnimplementedException(
+      logPrefix: String,
+      originalEventEnvelope: EventEnvelope[Any],
+      fromSeqNr: Long): Unit = {
+    log.warn(
+      "{} CurrentEventsByPersistenceId not implemented by producer service. " +
+      "Please update to latest akka-projection-grpc in the producer service. " +
+      "Falling back to old replay mechanism. " +
+      "Replay due to rejected envelope from {} failed. PersistenceId [{}] from seqNr [{}] to [{}].",
+      logPrefix,
+      envelopeSourceName(originalEventEnvelope),
+      originalEventEnvelope.persistenceId,
+      fromSeqNr,
+      originalEventEnvelope.sequenceNr)
+  }
+
   /**
    * This replay mechanism is used by GrpcReadJournal
    */
@@ -804,8 +832,19 @@ private[projection] object DynamoDBProjectionImpl {
                         }
                       }
                       .recoverWith { exc =>
-                        logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
-                        Future.failed(exc)
+                        if (exc.getMessage.contains("UNIMPLEMENTED") && exc.getMessage.contains(
+                              "CurrentEventsByPersistenceId")) {
+                          logReplayUnimplementedException(logPrefix, originalEventEnvelope, fromSeqNr)
+                          Future.successful(
+                            triggerReplayIfPossible(
+                              sourceProvider,
+                              persistenceId,
+                              fromSeqNr,
+                              originalEventEnvelope.sequenceNr))
+                        } else {
+                          logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
+                          Future.failed(exc)
+                        }
                       }
                   case None =>
                     Future.successful(
