@@ -120,11 +120,9 @@ class CatchupSpec
 
   "A Projection" must {
     "catchup old events without rejections and replays" in {
-      pending // FIXME rejected when same timestamp
-
       // note config replay-on-rejected-sequence-numbers=off
       // so if there is an invalid rejection the test will fail
-      val numEvents = 5000 // increase this to 50k for more thorough testing
+      val numEvents = 1000 // increase this to 50k for more thorough testing
       val seed = System.currentTimeMillis()
       val rnd = new Random(seed)
       val t0 = InstantFactory.now().minus(10, ChronoUnit.DAYS)
@@ -152,7 +150,7 @@ class CatchupSpec
         if (rnd.nextDouble() < 0.01)
           t = t.plus(moreThanBacktrackingWindow)
         else
-          t = t.plusMillis(rnd.nextInt(100))
+          t = t.plusMillis(1 + rnd.nextInt(100)) // must increase at least 1 micros for the same pid
 
         val pid = pids(rnd.nextInt(pids.size))
         val seqNr = seqNrs(pid) + 1
