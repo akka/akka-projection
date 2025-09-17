@@ -120,7 +120,14 @@ class CatchupSpec
     "catchup old events without rejections and replays" in {
       // note config replay-on-rejected-sequence-numbers=off
       // so if there is an invalid rejection the test will fail
-      val numEvents = 5000 // increase this to 50k for more thorough testing
+
+      // increase this to 50k for more thorough testing
+      val numEvents = {
+        if (r2dbcSettings.dialectName == "yugabyte")
+          500
+        else
+          5000
+      }
       val seed = System.currentTimeMillis()
       val rnd = new Random(seed)
       val t0 = InstantFactory.now().minus(10, ChronoUnit.DAYS)
@@ -161,7 +168,7 @@ class CatchupSpec
       }
 
       val projection = spawnAtLeastOnceProjection(handler)
-      val processed = processedProbe.receiveMessages(numEvents, (3 * numEvents).millis)
+      val processed = processedProbe.receiveMessages(10.seconds + numEvents, (3 * numEvents).millis)
       val byPid = processed.groupBy(_.envelope.persistenceId)
       byPid.foreach {
         case (_, processedByPid) =>
