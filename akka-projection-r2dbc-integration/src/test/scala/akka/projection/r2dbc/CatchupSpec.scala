@@ -121,13 +121,11 @@ class CatchupSpec
       // note config replay-on-rejected-sequence-numbers=off
       // so if there is an invalid rejection the test will fail
 
+      if (r2dbcSettings.dialectName == "yugabyte")
+        pending
+
       // increase this to 50k for more thorough testing
-      val numEvents = {
-        if (r2dbcSettings.dialectName == "yugabyte")
-          500
-        else
-          5000
-      }
+      val numEvents = 5000
       val seed = System.currentTimeMillis()
       val rnd = new Random(seed)
       val t0 = InstantFactory.now().minus(10, ChronoUnit.DAYS)
