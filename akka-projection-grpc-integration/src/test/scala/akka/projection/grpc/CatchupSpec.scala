@@ -64,11 +64,7 @@ object CatchupSpec {
         max-backoff = 2 s
       }
     }
-
-    akka.persistence.r2dbc.connection-factory = $${akka.persistence.r2dbc.postgres}
     """)
-    .withFallback(ConfigFactory.load("persistence.conf"))
-    .resolve()
 
   final case class Processed(projectionId: ProjectionId, envelope: EventEnvelope[String])
 
@@ -113,14 +109,16 @@ object CatchupSpec {
 /**
  * Reproducer of https://github.com/akka/akka-projection/pull/1363
  */
-class CatchupSpec
-    extends ScalaTestWithActorTestKit(CatchupSpec.config)
+class CatchupSpec(testContainerConf: TestContainerConf)
+    extends ScalaTestWithActorTestKit(CatchupSpec.config.withFallback(testContainerConf.config))
     with AnyWordSpecLike
     with TestDbLifecycle
     with TestData
     with BeforeAndAfterAll
     with LogCapturing {
   import CatchupSpec._
+
+  def this() = this(new TestContainerConf)
 
   override def typedSystem: ActorSystem[_] = system
   private implicit val ec: ExecutionContext = system.executionContext
@@ -176,6 +174,7 @@ class CatchupSpec
 
   protected override def afterAll(): Unit = {
     super.afterAll()
+    testContainerConf.stop()
   }
 
   "A gRPC Projection" must {
