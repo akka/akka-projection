@@ -63,20 +63,22 @@ object CatchupSpec {
       if (failCount > 0) {
         failEvents.put(envelope.event, failCount - 1)
         log.debug(
-          "{} Fail event [{}], pid [{}], seqNr [{}]",
+          "{} Fail event [{}], pid [{}], seqNr [{}], slice [{}]",
           projectionId.key,
           envelope.event,
           envelope.persistenceId,
-          envelope.sequenceNr)
+          envelope.sequenceNr,
+          envelope.slice)
         throw TestException(s"Fail event [${envelope.event}]")
       } else {
         log.debug(
-          "{} Processed {} [{}], pid [{}], seqNr [{}]",
+          "{} Processed {} [{}], pid [{}], seqNr [{}], slice [{}]",
           projectionId.key,
           if (processedEvents.containsKey(envelope.event)) "duplicate event" else "event",
           envelope.event,
           envelope.persistenceId,
-          envelope.sequenceNr)
+          envelope.sequenceNr,
+          envelope.slice)
         val wasAbsent = processedEvents.putIfAbsent(envelope.event, true) == null
         // duplicates are ok but not reported to probe
         if (wasAbsent)
@@ -102,7 +104,7 @@ class CatchupSpec
   private val log = LoggerFactory.getLogger(getClass)
 
   private val entityType = nextEntityType()
-  private val sliceRange = 0 to 1023
+  private val sliceRange = 0 to 7
   private val projectionId = genRandomProjectionId()
 
   private def slice(pid: PersistenceId): Int = Persistence(system).sliceForPersistenceId(pid.id)
@@ -138,13 +140,13 @@ class CatchupSpec
 
       var t = t0
       // for DynamoDB it's more interesting if there are more than one pid with same slice
-      val numPidsForPerSlice = 3
-      val numPids = (2 + rnd.nextInt(5) * numPidsForPerSlice)
-      val pids = (1 to numPids / numPidsForPerSlice).flatMap { _ =>
-        val p1 = nextPersistenceId(entityType)
-        val additional = (2 to numPidsForPerSlice).map(_ => randomPersistenceIdForSlice(entityType, slice(p1)))
-        p1 +: additional
-      }
+      val numSlices = 1 + rnd.nextInt(sliceRange.max + 1)
+      val pids =
+        for {
+          s <- 0 until numSlices
+          numPidsPerPerSlice = 1 + rnd.nextInt(2)
+          p <- (0 until numPidsPerPerSlice).map(_ => randomPersistenceIdForSlice(entityType, s))
+        } yield p
       var seqNrs = pids.map(_ -> 0L).toMap
 
       log.info("Random seed [{}], using [{}] pids and [{}] events", seed, pids.size, numEvents)
