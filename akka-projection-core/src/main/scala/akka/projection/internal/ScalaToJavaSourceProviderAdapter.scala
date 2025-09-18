@@ -9,21 +9,26 @@ import akka.annotation.InternalApi
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.javadsl.EventTimestampQuery
 import akka.persistence.query.typed.javadsl.LoadEventQuery
+import akka.persistence.query.typed.scaladsl.{
+  CurrentEventsByPersistenceIdTypedQuery => ScalaCurrentEventsByPersistenceIdTypedQuery
+}
 import akka.persistence.query.typed.scaladsl.{ EventTimestampQuery => ScalaEventTimestampQuery }
 import akka.persistence.query.typed.scaladsl.{ LoadEventQuery => ScalaLoadEventQuery }
 import akka.projection.BySlicesSourceProvider
 import akka.projection.javadsl
 import akka.projection.scaladsl
 import akka.stream.javadsl.{ Source => JSource }
-
 import java.time.Instant
 import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
+
 import scala.jdk.FutureConverters._
 import scala.jdk.OptionConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+
+import akka.persistence.query.typed.javadsl.CurrentEventsByPersistenceIdTypedQuery
 
 /**
  * INTERNAL API: Adapter from scaladsl.SourceProvider with BySlicesSourceProvider to javadsl.SourceProvider with BySlicesSourceProvider
@@ -51,7 +56,8 @@ private[projection] sealed class ScalaToJavaBySlicesSourceProviderAdapter[Offset
     with BySlicesSourceProvider
     with BacklogStatusSourceProvider
     with EventTimestampQuery
-    with LoadEventQuery {
+    with LoadEventQuery
+    with CurrentEventsByPersistenceIdTypedQuery {
   override def source(
       offset: Supplier[CompletionStage[Optional[Offset]]]): CompletionStage[JSource[Envelope, NotUsed]] =
     delegate
@@ -100,6 +106,17 @@ private[projection] sealed class ScalaToJavaBySlicesSourceProviderAdapter[Offset
     }
   }
 
+  override def currentEventsByPersistenceIdTyped[Event](
+      persistenceId: String,
+      fromSequenceNr: Long,
+      toSequenceNr: Long): JSource[EventEnvelope[Event], NotUsed] =
+    delegate match {
+      case q: ScalaCurrentEventsByPersistenceIdTypedQuery =>
+        q.currentEventsByPersistenceIdTyped[Event](persistenceId, fromSequenceNr, toSequenceNr).asJava
+      case _ =>
+        throw new IllegalStateException(
+          s"currentEventsByPersistenceIdTyped was called but delegate of type [${delegate.getClass}] does not implement akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery")
+    }
 }
 
 /**

@@ -765,31 +765,25 @@ private[projection] class DynamoDBOffsetStore(
             recordWithOffset.record.pid,
             recordWithOffset.record.seqNr,
             recordWithOffset.record.timestamp)
+
+        val pid = recordWithOffset.record.pid
+        val seqNr = recordWithOffset.record.seqNr
         val currentInflight = getInflight()
-        val newInflight = currentInflight.updated(recordWithOffset.record.pid, recordWithOffset.record.seqNr)
-        if (!inflight.compareAndSet(currentInflight, newInflight))
-          addInflight(envelope) // CAS retry, concurrent update of inflight
+        val updateNeeded =
+          currentInflight.get(pid) match {
+            case Some(currentInFlightSeqNr) =>
+              currentInFlightSeqNr < seqNr
+            case None =>
+              true
+          }
+        if (updateNeeded) {
+          val newInflight = currentInflight.updated(pid, seqNr)
+          if (!inflight.compareAndSet(currentInflight, newInflight)) {
+            addInflight(envelope) // CAS retry, concurrent update of inflight
+          }
+        }
       case None =>
     }
-  }
-
-  @tailrec final def addInflights[Envelope](envelopes: Seq[Envelope]): Unit = {
-    val currentInflight = getInflight()
-    val entries = envelopes.iterator.map(createRecordWithOffset).collect {
-      case Some(r) =>
-        if (logger.isTraceEnabled)
-          logger.trace(
-            "{} Envelope in flight, about to be processed. slice [{}], pid [{}], seqNr [{}], timestamp [{}]",
-            logPrefix,
-            r.record.slice,
-            r.record.pid,
-            r.record.seqNr,
-            r.record.timestamp)
-        r.record.pid -> r.record.seqNr
-    }
-    val newInflight = currentInflight ++ entries
-    if (!inflight.compareAndSet(currentInflight, newInflight))
-      addInflights(envelopes) // CAS retry, concurrent update of inflight
   }
 
   def isInflight[Envelope](envelope: Envelope): Boolean = {
@@ -798,8 +792,10 @@ private[projection] class DynamoDBOffsetStore(
         val pid = recordWithOffset.record.pid
         val seqNr = recordWithOffset.record.seqNr
         getInflight().get(pid) match {
-          case Some(`seqNr`) => true
-          case _             => false
+          case Some(currentInFlightSeqNr) =>
+            seqNr <= currentInFlightSeqNr
+          case None =>
+            false
         }
       case None => true
     }

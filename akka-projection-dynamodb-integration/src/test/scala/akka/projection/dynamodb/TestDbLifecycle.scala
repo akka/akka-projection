@@ -4,6 +4,8 @@
 
 package akka.projection.dynamodb
 
+import java.time.Instant
+
 import scala.concurrent.Await
 import scala.concurrent.duration._
 import scala.jdk.CollectionConverters._
@@ -13,16 +15,23 @@ import scala.util.control.NonFatal
 import akka.actor.typed.ActorSystem
 import akka.persistence.Persistence
 import akka.persistence.dynamodb.DynamoDBSettings
+import akka.persistence.dynamodb.internal.InstantFactory
 import akka.persistence.dynamodb.util.ClientProvider
+import akka.persistence.typed.PersistenceId
 import akka.projection.ProjectionId
 import akka.projection.dynamodb.scaladsl.CreateTables
+import akka.serialization.SerializationExtension
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.Suite
+import org.slf4j.LoggerFactory
+import software.amazon.awssdk.core.SdkBytes
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient
 import software.amazon.awssdk.services.dynamodb.model.AttributeValue
+import software.amazon.awssdk.services.dynamodb.model.PutItemRequest
 import software.amazon.awssdk.services.dynamodb.model.QueryRequest
 
 trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
+  private val log = LoggerFactory.getLogger(getClass)
 
   def typedSystem: ActorSystem[_]
 
@@ -84,6 +93,41 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
       .build()
 
     Await.result(client.query(request).asScala, 10.seconds).items.asScala.headOption.map(_.asScala.toMap)
+  }
+
+  // to be able to store events with specific timestamps
+  def writeEvent(slice: Int, persistenceId: PersistenceId, seqNr: Long, timestamp: Instant, event: String): Unit = {
+    import java.util.{ HashMap => JHashMap }
+
+    import akka.persistence.dynamodb.internal.JournalAttributes._
+
+    log.debug(
+      "Write test event [{}] [{}] [{}] at time [{}], slice [{}]",
+      persistenceId.id,
+      seqNr,
+      event,
+      timestamp,
+      slice)
+
+    val stringSerializer = SerializationExtension(typedSystem).serializerFor(classOf[String])
+
+    val attributes = new JHashMap[String, AttributeValue]
+    attributes.put(Pid, AttributeValue.fromS(persistenceId.id))
+    attributes.put(SeqNr, AttributeValue.fromN(seqNr.toString))
+    attributes.put(EntityTypeSlice, AttributeValue.fromS(s"${persistenceId.entityTypeHint}-$slice"))
+    val timestampMicros = InstantFactory.toEpochMicros(timestamp)
+    attributes.put(Timestamp, AttributeValue.fromN(timestampMicros.toString))
+    attributes.put(EventSerId, AttributeValue.fromN(stringSerializer.identifier.toString))
+    attributes.put(EventSerManifest, AttributeValue.fromS(""))
+    attributes.put(EventPayload, AttributeValue.fromB(SdkBytes.fromByteArray(stringSerializer.toBinary(event))))
+    attributes.put(Writer, AttributeValue.fromS(""))
+
+    val req = PutItemRequest
+      .builder()
+      .tableName(dynamoDBSettings.journalTable)
+      .item(attributes)
+      .build()
+    Await.result(client.putItem(req).asScala, 10.seconds)
   }
 
 }
