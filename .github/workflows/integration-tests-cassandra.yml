@@ -14,7 +14,7 @@ permissions:
 jobs:
   test:
     name: Build and Test Integration for Cassandra
-    runs-on: ubuntu-22.04
+    runs-on: Akka-Default
     strategy:
       fail-fast: false
       matrix:

@@ -5,10 +5,10 @@ import akka.projections.IntegrationTests
 ThisBuild / dynverSeparator := "-"
 // append -SNAPSHOT to version when isSnapshot
 ThisBuild / dynverSonatypeSnapshots := true
-ThisBuild / resolvers += "Akka library repository".at("https://repo.akka.io/maven")
+ThisBuild / resolvers += "Akka library repository".at("https://repo.akka.io/maven/github_actions")
 ThisBuild / resolvers ++=
   (if (Dependencies.Versions.Akka.endsWith("-SNAPSHOT"))
-     Seq("Akka library snapshot repository".at("https://repo.akka.io/snapshots"))
+     Seq("Akka library snapshot repository".at("https://repo.akka.io/snapshots/github_actions"))
    else Seq.empty)
 
 lazy val core =
