@@ -11,7 +11,7 @@ on:
 jobs:
   test-dynamodb:
     name: Run DynamoDB tests
-    runs-on: ubuntu-22.04
+    runs-on: Akka-Default
     if: github.repository == 'akka/akka-projection'
     strategy:
       fail-fast: false
