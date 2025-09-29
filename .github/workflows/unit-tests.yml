@@ -22,6 +22,7 @@ jobs:
           - { jdkVersion: "1.11.0", jvmName: "temurin:1.11.0", extraOpts: '-J-XX:+UnlockExperimentalVMOptions -J-XX:+UseJVMCICompiler' }
           - { jdkVersion: "1.17.0", jvmName: "temurin:1.17.0", extraOpts: '' }
           - { jdkVersion: "1.21.0", jvmName: "temurin:1.21", extraOpts: '' }
+          - { jdkVersion: "1.25.0", jvmName: "temurin:1.25", extraOpts: '' }
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
