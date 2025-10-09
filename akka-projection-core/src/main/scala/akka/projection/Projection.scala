@@ -7,7 +7,6 @@ package akka.projection
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NoStackTrace
-
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
