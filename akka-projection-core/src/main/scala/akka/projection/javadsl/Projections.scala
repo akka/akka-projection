@@ -10,6 +10,7 @@ import akka.projection.Projection
 import akka.projection.StatusObserver
 import akka.projection.StrictRecoveryStrategy
 import akka.projection.internal.InternalProjection
+import akka.stream.RestartSettings
 
 @DoNotInherit
 trait ExactlyOnceProjection[Offset, Envelope] extends Projection[Envelope] {
@@ -25,6 +26,8 @@ trait ExactlyOnceProjection[Offset, Envelope] extends Projection[Envelope] {
       maxBackoff: java.time.Duration,
       randomFactor: Double,
       maxRestarts: Int): ExactlyOnceProjection[Offset, Envelope]
+
+  def withRestartBackoffSettings(restartBackoff: RestartSettings): ExactlyOnceProjection[Offset, Envelope]
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): ExactlyOnceProjection[Offset, Envelope]
 
@@ -45,6 +48,8 @@ trait AtLeastOnceFlowProjection[Offset, Envelope] extends Projection[Envelope] {
       maxBackoff: java.time.Duration,
       randomFactor: Double,
       maxRestarts: Int): AtLeastOnceFlowProjection[Offset, Envelope]
+
+  def withRestartBackoffSettings(restartBackoff: RestartSettings): AtLeastOnceFlowProjection[Offset, Envelope]
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceFlowProjection[Offset, Envelope]
 
@@ -68,6 +73,8 @@ trait AtLeastOnceProjection[Offset, Envelope] extends Projection[Envelope] {
       randomFactor: Double,
       maxRestarts: Int): AtLeastOnceProjection[Offset, Envelope]
 
+  def withRestartBackoffSettings(restartBackoff: RestartSettings): AtLeastOnceFlowProjection[Offset, Envelope]
+
   override def withStatusObserver(observer: StatusObserver[Envelope]): AtLeastOnceProjection[Offset, Envelope]
 
   def withSaveOffset(afterEnvelopes: Int, afterDuration: java.time.Duration): AtLeastOnceProjection[Offset, Envelope]
@@ -90,6 +97,8 @@ trait AtMostOnceProjection[Offset, Envelope] extends Projection[Envelope] {
       randomFactor: Double,
       maxRestarts: Int): AtMostOnceProjection[Offset, Envelope]
 
+  def withRestartBackoffSettings(restartBackoff: RestartSettings): AtMostOnceProjection[Offset, Envelope]
+
   override def withStatusObserver(observer: StatusObserver[Envelope]): AtMostOnceProjection[Offset, Envelope]
 
   def withRecoveryStrategy(recoveryStrategy: StrictRecoveryStrategy): AtMostOnceProjection[Offset, Envelope]
@@ -109,6 +118,8 @@ trait GroupedProjection[Offset, Envelope] extends Projection[Envelope] {
       maxBackoff: java.time.Duration,
       randomFactor: Double,
       maxRestarts: Int): GroupedProjection[Offset, Envelope]
+
+  def withRestartBackoffSettings(restartBackoff: RestartSettings): GroupedProjection[Offset, Envelope]
 
   override def withStatusObserver(observer: StatusObserver[Envelope]): GroupedProjection[Offset, Envelope]
 

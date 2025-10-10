@@ -93,7 +93,7 @@ private object RecoveryStrategyConfig {
   def withRestartBackoffSettings(restartBackoff: RestartSettings): ProjectionImpl
 
   def withRestartBackoff(minBackoff: FiniteDuration, maxBackoff: FiniteDuration, randomFactor: Double): ProjectionImpl =
-    withRestartBackoffSettings(RestartSettings(minBackoff, maxBackoff, randomFactor))
+    withRestartBackoffSettings(RestartSettings(minBackoff, maxBackoff, randomFactor)).asInstanceOf[ProjectionImpl]
 
   def withRestartBackoff(
       minBackoff: FiniteDuration,
@@ -102,12 +102,14 @@ private object RecoveryStrategyConfig {
       maxRestarts: Int): ProjectionImpl =
     withRestartBackoffSettings(
       RestartSettings(minBackoff, maxBackoff, randomFactor).withMaxRestarts(maxRestarts, minBackoff))
+      .asInstanceOf[ProjectionImpl]
 
   def withRestartBackoff(
       minBackoff: java.time.Duration,
       maxBackoff: java.time.Duration,
       randomFactor: Double): ProjectionImpl =
     withRestartBackoffSettings(RestartSettings(minBackoff.toScala, maxBackoff.toScala, randomFactor))
+      .asInstanceOf[ProjectionImpl]
 
   def withRestartBackoff(
       minBackoff: java.time.Duration,
@@ -116,6 +118,7 @@ private object RecoveryStrategyConfig {
       maxRestarts: Int): ProjectionImpl =
     withRestartBackoffSettings(
       RestartSettings(minBackoff.toScala, maxBackoff.toScala, randomFactor).withMaxRestarts(maxRestarts, minBackoff))
+      .asInstanceOf[ProjectionImpl]
 
   def withSaveOffset(afterEnvelopes: Int, afterDuration: FiniteDuration): ProjectionImpl
 

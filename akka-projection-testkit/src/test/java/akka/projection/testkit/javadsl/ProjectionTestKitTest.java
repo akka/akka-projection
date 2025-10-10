@@ -18,6 +18,7 @@ import akka.projection.StatusObserver;
 import akka.projection.internal.NoopStatusObserver;
 import akka.stream.DelayOverflowStrategy;
 import akka.stream.KillSwitches;
+import akka.stream.RestartSettings;
 import akka.stream.SharedKillSwitch;
 import akka.stream.javadsl.DelayStrategy;
 import akka.stream.javadsl.Sink;

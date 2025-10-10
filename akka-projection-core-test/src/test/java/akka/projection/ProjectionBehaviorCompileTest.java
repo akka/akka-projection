@@ -12,6 +12,7 @@ import akka.actor.typed.ActorSystem;
 import akka.projection.internal.ActorHandlerInit;
 import akka.projection.internal.NoopStatusObserver;
 import akka.projection.internal.ProjectionSettings;
+import akka.stream.RestartSettings;
 import akka.stream.scaladsl.Source;
 import scala.Option;
 import scala.concurrent.Future;
