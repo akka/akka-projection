@@ -8,8 +8,6 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
-import scala.annotation.nowarn
-
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
@@ -55,7 +53,6 @@ object DurableStateSourceProvider {
    * INTERNAL API
    */
   @InternalApi
-  @nowarn("msg=never used") // system
   private class DurableStateStoreQuerySourceProvider[A](
       durableStateStoreQuery: DurableStateStoreQuery[A],
       tag: String,
@@ -122,7 +119,6 @@ object DurableStateSourceProvider {
    * INTERNAL API
    */
   @InternalApi
-  @nowarn("msg=never used") // system
   private class DurableStateBySlicesSourceProvider[A](
       durableStateStoreQuery: DurableStateStoreBySliceQuery[A],
       entityType: String,

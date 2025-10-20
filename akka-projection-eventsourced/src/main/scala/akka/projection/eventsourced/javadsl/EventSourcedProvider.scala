@@ -11,7 +11,6 @@ import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 import java.util.function.{ Function => JFunction }
 
-import scala.annotation.nowarn
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.jdk.FutureConverters._
@@ -63,7 +62,6 @@ object EventSourcedProvider {
    * INTERNAL API
    */
   @InternalApi
-  @nowarn("msg=never used") // system
   private class EventsByTagSourceProvider[Event](
       system: ActorSystem[_],
       eventsByTagQuery: EventsByTagQuery,
@@ -276,7 +274,6 @@ object EventSourcedProvider {
    * INTERNAL API
    */
   @InternalApi
-  @nowarn("msg=never used") // system
   private class EventsBySlicesSourceProvider[Event](
       system: ActorSystem[_],
       eventsBySlicesQuery: EventsBySliceQuery,
@@ -347,7 +344,6 @@ object EventSourcedProvider {
    * INTERNAL API
    */
   @InternalApi
-  @nowarn("msg=never used") // system
   private class EventsBySlicesStartingFromSnapshotsSourceProvider[Snapshot, Event](
       system: ActorSystem[_],
       eventsBySlicesQuery: EventsBySliceStartingFromSnapshotsQuery,
