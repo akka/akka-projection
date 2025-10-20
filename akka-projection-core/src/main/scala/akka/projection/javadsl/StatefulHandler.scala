@@ -57,6 +57,7 @@ abstract class StatefulHandler[State, Envelope] extends Handler[Envelope] {
           "Otherwise, please report issue at " +
           "https://github.com/akka/akka-projection/issues")
 
+    // FIXME these two either execute on the thread calling process, or the common Java FJP
     state = newState.thenCompose(s => process(s, envelope))
     state.thenApply(_ => Done)
   }

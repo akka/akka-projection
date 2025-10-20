@@ -64,9 +64,11 @@ object DurableStateSourceProvider {
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[DurableStateChange[A], NotUsed]] = {
-      offsetAsync.get().thenApply { storedOffset =>
-        durableStateStoreQuery.changes(tag, storedOffset.orElse(NoOffset))
-      }
+      offsetAsync
+        .get()
+        .thenApplyAsync({ storedOffset =>
+          durableStateStoreQuery.changes(tag, storedOffset.orElse(NoOffset))
+        }, system.executionContext)
     }
 
     override def extractOffset(stateChange: DurableStateChange[A]): Offset = stateChange.offset
@@ -133,9 +135,11 @@ object DurableStateSourceProvider {
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[DurableStateChange[A], NotUsed]] = {
-      offsetAsync.get().thenApply { storedOffset =>
-        durableStateStoreQuery.changesBySlices(entityType, minSlice, maxSlice, storedOffset.orElse(NoOffset))
-      }
+      offsetAsync
+        .get()
+        .thenApplyAsync({ storedOffset =>
+          durableStateStoreQuery.changesBySlices(entityType, minSlice, maxSlice, storedOffset.orElse(NoOffset))
+        }, system.executionContext)
     }
 
     override def extractOffset(stateChange: DurableStateChange[A]): Offset = stateChange.offset

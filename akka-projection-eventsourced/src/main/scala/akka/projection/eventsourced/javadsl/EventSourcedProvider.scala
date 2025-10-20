@@ -72,11 +72,13 @@ object EventSourcedProvider {
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[EventEnvelope[Event], NotUsed]] = {
-      offsetAsync.get().thenApply { storedOffset =>
-        eventsByTagQuery
-          .eventsByTag(tag, storedOffset.orElse(NoOffset))
-          .map(env => EventEnvelope(env))
-      }
+      offsetAsync
+        .get()
+        .thenApplyAsync({ storedOffset =>
+          eventsByTagQuery
+            .eventsByTag(tag, storedOffset.orElse(NoOffset))
+            .map(env => EventEnvelope(env))
+        }, system.executionContext)
     }
 
     override def extractOffset(envelope: EventEnvelope[Event]): Offset = envelope.offset
@@ -293,12 +295,16 @@ object EventSourcedProvider {
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
-      offsetAsync.get().thenCompose { storedOffset =>
-        adjustStartOffset(storedOffset).thenApply { startOffset =>
-          eventsBySlicesQuery
-            .eventsBySlices(entityType, minSlice, maxSlice, startOffset.orElse(NoOffset))
-        }
-      }
+      offsetAsync
+        .get()
+        .thenComposeAsync(
+          { storedOffset =>
+            adjustStartOffset(storedOffset).thenApplyAsync({ startOffset =>
+              eventsBySlicesQuery
+                .eventsBySlices(entityType, minSlice, maxSlice, startOffset.orElse(NoOffset))
+            }, system.executionContext)
+          },
+          system.executionContext)
     }
 
     override def extractOffset(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Offset = envelope.offset
@@ -362,15 +368,17 @@ object EventSourcedProvider {
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
       offsetAsync.get().thenCompose { storedOffset =>
-        adjustStartOffset(storedOffset).thenApply { startOffset =>
-          eventsBySlicesQuery
-            .eventsBySlicesStartingFromSnapshots(
-              entityType,
-              minSlice,
-              maxSlice,
-              startOffset.orElse(NoOffset),
-              transformSnapshot)
-        }
+        adjustStartOffset(storedOffset).thenApplyAsync(
+          { startOffset =>
+            eventsBySlicesQuery
+              .eventsBySlicesStartingFromSnapshots(
+                entityType,
+                minSlice,
+                maxSlice,
+                startOffset.orElse(NoOffset),
+                transformSnapshot)
+          },
+          system.executionContext)
       }
     }
 

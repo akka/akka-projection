@@ -40,6 +40,7 @@ import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.util.Success
+import scala.util.Try
 
 /**
  * INTERNAL API
