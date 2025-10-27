@@ -363,19 +363,23 @@ object EventSourcedProvider {
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
-      offsetAsync.get().thenCompose { storedOffset =>
-        adjustStartOffset(storedOffset).thenApplyAsync(
-          { startOffset =>
-            eventsBySlicesQuery
-              .eventsBySlicesStartingFromSnapshots(
-                entityType,
-                minSlice,
-                maxSlice,
-                startOffset.orElse(NoOffset),
-                transformSnapshot)
+      offsetAsync
+        .get()
+        .thenComposeAsync(
+          { storedOffset =>
+            adjustStartOffset(storedOffset).thenApplyAsync(
+              { startOffset =>
+                eventsBySlicesQuery
+                  .eventsBySlicesStartingFromSnapshots(
+                    entityType,
+                    minSlice,
+                    maxSlice,
+                    startOffset.orElse(NoOffset),
+                    transformSnapshot)
+              },
+              system.executionContext)
           },
           system.executionContext)
-      }
     }
 
     override def extractOffset(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Offset = envelope.offset
