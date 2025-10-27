@@ -6,7 +6,7 @@ licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")
 
 resolvers += "Akka library repository".at("https://repo.akka.io/maven/github_actions")
 
-scalaVersion := "2.13.16"
+scalaVersion := "2.13.17"
 
 Compile / scalacOptions ++= Seq(
   "-release",
