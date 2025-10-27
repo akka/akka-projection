@@ -11,7 +11,6 @@ import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 import java.util.function.{ Function => JFunction }
 
-import scala.annotation.nowarn
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.jdk.FutureConverters._
@@ -63,7 +62,6 @@ object EventSourcedProvider {
    * INTERNAL API
    */
   @InternalApi
-  @nowarn("msg=never used") // system
   private class EventsByTagSourceProvider[Event](
       system: ActorSystem[_],
       eventsByTagQuery: EventsByTagQuery,
@@ -72,11 +70,13 @@ object EventSourcedProvider {
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[EventEnvelope[Event], NotUsed]] = {
-      offsetAsync.get().thenApply { storedOffset =>
-        eventsByTagQuery
-          .eventsByTag(tag, storedOffset.orElse(NoOffset))
-          .map(env => EventEnvelope(env))
-      }
+      offsetAsync
+        .get()
+        .thenApplyAsync({ storedOffset =>
+          eventsByTagQuery
+            .eventsByTag(tag, storedOffset.orElse(NoOffset))
+            .map(env => EventEnvelope(env))
+        }, system.executionContext)
     }
 
     override def extractOffset(envelope: EventEnvelope[Event]): Offset = envelope.offset
@@ -274,7 +274,6 @@ object EventSourcedProvider {
    * INTERNAL API
    */
   @InternalApi
-  @nowarn("msg=never used") // system
   private class EventsBySlicesSourceProvider[Event](
       system: ActorSystem[_],
       eventsBySlicesQuery: EventsBySliceQuery,
@@ -293,12 +292,16 @@ object EventSourcedProvider {
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
-      offsetAsync.get().thenCompose { storedOffset =>
-        adjustStartOffset(storedOffset).thenApply { startOffset =>
-          eventsBySlicesQuery
-            .eventsBySlices(entityType, minSlice, maxSlice, startOffset.orElse(NoOffset))
-        }
-      }
+      offsetAsync
+        .get()
+        .thenComposeAsync(
+          { storedOffset =>
+            adjustStartOffset(storedOffset).thenApplyAsync({ startOffset =>
+              eventsBySlicesQuery
+                .eventsBySlices(entityType, minSlice, maxSlice, startOffset.orElse(NoOffset))
+            }, system.executionContext)
+          },
+          system.executionContext)
     }
 
     override def extractOffset(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Offset = envelope.offset
@@ -341,7 +344,6 @@ object EventSourcedProvider {
    * INTERNAL API
    */
   @InternalApi
-  @nowarn("msg=never used") // system
   private class EventsBySlicesStartingFromSnapshotsSourceProvider[Snapshot, Event](
       system: ActorSystem[_],
       eventsBySlicesQuery: EventsBySliceStartingFromSnapshotsQuery,
@@ -361,17 +363,23 @@ object EventSourcedProvider {
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
-      offsetAsync.get().thenCompose { storedOffset =>
-        adjustStartOffset(storedOffset).thenApply { startOffset =>
-          eventsBySlicesQuery
-            .eventsBySlicesStartingFromSnapshots(
-              entityType,
-              minSlice,
-              maxSlice,
-              startOffset.orElse(NoOffset),
-              transformSnapshot)
-        }
-      }
+      offsetAsync
+        .get()
+        .thenComposeAsync(
+          { storedOffset =>
+            adjustStartOffset(storedOffset).thenApplyAsync(
+              { startOffset =>
+                eventsBySlicesQuery
+                  .eventsBySlicesStartingFromSnapshots(
+                    entityType,
+                    minSlice,
+                    maxSlice,
+                    startOffset.orElse(NoOffset),
+                    transformSnapshot)
+              },
+              system.executionContext)
+          },
+          system.executionContext)
     }
 
     override def extractOffset(envelope: akka.persistence.query.typed.EventEnvelope[Event]): Offset = envelope.offset

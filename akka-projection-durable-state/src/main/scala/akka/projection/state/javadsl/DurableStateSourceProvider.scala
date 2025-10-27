@@ -8,8 +8,6 @@ import java.util.Optional
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 
-import scala.annotation.nowarn
-
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
@@ -55,7 +53,6 @@ object DurableStateSourceProvider {
    * INTERNAL API
    */
   @InternalApi
-  @nowarn("msg=never used") // system
   private class DurableStateStoreQuerySourceProvider[A](
       durableStateStoreQuery: DurableStateStoreQuery[A],
       tag: String,
@@ -64,9 +61,11 @@ object DurableStateSourceProvider {
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[DurableStateChange[A], NotUsed]] = {
-      offsetAsync.get().thenApply { storedOffset =>
-        durableStateStoreQuery.changes(tag, storedOffset.orElse(NoOffset))
-      }
+      offsetAsync
+        .get()
+        .thenApplyAsync({ storedOffset =>
+          durableStateStoreQuery.changes(tag, storedOffset.orElse(NoOffset))
+        }, system.executionContext)
     }
 
     override def extractOffset(stateChange: DurableStateChange[A]): Offset = stateChange.offset
@@ -120,7 +119,6 @@ object DurableStateSourceProvider {
    * INTERNAL API
    */
   @InternalApi
-  @nowarn("msg=never used") // system
   private class DurableStateBySlicesSourceProvider[A](
       durableStateStoreQuery: DurableStateStoreBySliceQuery[A],
       entityType: String,
@@ -133,9 +131,11 @@ object DurableStateSourceProvider {
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[DurableStateChange[A], NotUsed]] = {
-      offsetAsync.get().thenApply { storedOffset =>
-        durableStateStoreQuery.changesBySlices(entityType, minSlice, maxSlice, storedOffset.orElse(NoOffset))
-      }
+      offsetAsync
+        .get()
+        .thenApplyAsync({ storedOffset =>
+          durableStateStoreQuery.changesBySlices(entityType, minSlice, maxSlice, storedOffset.orElse(NoOffset))
+        }, system.executionContext)
     }
 
     override def extractOffset(stateChange: DurableStateChange[A]): Offset = stateChange.offset
