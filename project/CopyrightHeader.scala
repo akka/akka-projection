@@ -25,7 +25,7 @@ object CopyrightHeader extends AutoPlugin {
   val CopyrightHeaderPattern = s"(?s).*${CopyrightPattern}.*".r
 
   def headerFor(year: String): String =
-    s"Copyright (C) $year Lightbend Inc. <https://www.lightbend.com>"
+    s"Copyright (C) $year Lightbend Inc. <https://akka.io>"
 
   private def lightbendCommentCreator(commentCreator: CommentCreator) = new CommentCreator() {
 
