@@ -4,8 +4,6 @@
 
 package jdocs.eventsourced;
 
-import java.util.List;
-
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.javadsl.Behaviors;
 // #eventsBySlicesSourceProvider
@@ -14,6 +12,7 @@ import akka.persistence.query.Offset;
 import akka.persistence.query.typed.EventEnvelope;
 import akka.projection.eventsourced.javadsl.EventSourcedProvider;
 import akka.projection.javadsl.SourceProvider;
+import java.util.List;
 
 // #eventsBySlicesSourceProvider
 

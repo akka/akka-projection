@@ -29,10 +29,10 @@ run / javaOptions ++= sys.props
   .fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
 Global / cancelable := false // ctrl-c
 
-val AkkaVersion = sys.props.getOrElse("akka.version", "2.10.5")
-val AkkaHttpVersion = "10.7.1"
-val AkkaManagementVersion = "1.6.2"
-val AkkaPersistenceR2dbcVersion = "1.3.7"
+val AkkaVersion = sys.props.getOrElse("akka.version", "2.10.11")
+val AkkaHttpVersion = "10.7.3"
+val AkkaManagementVersion = "1.6.4"
+val AkkaPersistenceR2dbcVersion = "1.3.8"
 val AkkaProjectionVersion =
   sys.props.getOrElse("akka-projection.version", "1.6.15")
 val AkkaDiagnosticsVersion = "2.2.1"

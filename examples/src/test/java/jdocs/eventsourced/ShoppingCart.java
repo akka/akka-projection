@@ -20,7 +20,6 @@ import akka.persistence.typed.javadsl.ReplyEffect;
 import akka.persistence.typed.javadsl.RetentionCriteria;
 import akka.serialization.jackson.CborSerializable;
 import com.fasterxml.jackson.annotation.JsonCreator;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
@@ -309,6 +308,7 @@ public class ShoppingCart
   public static final List<String> tags =
       Collections.unmodifiableList(
           Arrays.asList("carts-0", "carts-1", "carts-2", "carts-3", "carts-4"));
+
   // #slicingTags
 
   // #tagging
@@ -318,6 +318,7 @@ public class ShoppingCart
     String selectedTag = tags.get(n);
     return Collections.singleton(selectedTag);
   }
+
   // #tagging
 
   @Override

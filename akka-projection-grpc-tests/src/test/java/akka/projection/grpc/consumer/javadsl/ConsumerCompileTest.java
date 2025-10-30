@@ -4,14 +4,7 @@
 
 package akka.projection.grpc.consumer.javadsl;
 
-import java.time.Instant;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
+import static akka.Done.done;
 
 import akka.Done;
 import akka.actor.typed.ActorSystem;
@@ -31,10 +24,16 @@ import akka.projection.javadsl.Handler;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.r2dbc.javadsl.R2dbcProjection;
 import com.example.shoppingcart.ShoppingcartApiProto;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import static akka.Done.done;
 
 public class ConsumerCompileTest {
   static class EventHandler extends Handler<EventEnvelope<String>> {
@@ -54,13 +53,14 @@ public class ConsumerCompileTest {
         Persistence.get(system).getSliceRanges(numberOfProjectionInstances);
     String streamId = "ShoppingCart";
 
-    GrpcReadJournal eventsBySlicesQuery = GrpcReadJournal.create(
-        system,
-        GrpcQuerySettings.create(streamId),
-        GrpcClientSettings.fromConfig(
-            system.settings().config()
-                .getConfig("akka.projection.grpc.consumer.client"), system),
-        Collections.singletonList(ShoppingcartApiProto.javaDescriptor()));
+    GrpcReadJournal eventsBySlicesQuery =
+        GrpcReadJournal.create(
+            system,
+            GrpcQuerySettings.create(streamId),
+            GrpcClientSettings.fromConfig(
+                system.settings().config().getConfig("akka.projection.grpc.consumer.client"),
+                system),
+            Collections.singletonList(ShoppingcartApiProto.javaDescriptor()));
 
     ShardedDaemonProcess.get(system)
         .init(
@@ -70,10 +70,12 @@ public class ConsumerCompileTest {
             idx -> {
               Pair<Integer, Integer> sliceRange = sliceRanges.get(idx);
               String projectionKey =
-                  eventsBySlicesQuery.streamId() + "-" + sliceRange.first() + "-" + sliceRange.second();
+                  eventsBySlicesQuery.streamId()
+                      + "-"
+                      + sliceRange.first()
+                      + "-"
+                      + sliceRange.second();
               ProjectionId projectionId = ProjectionId.of(projectionName, projectionKey);
-
-
 
               SourceProvider<Offset, EventEnvelope<String>> sourceProvider =
                   EventSourcedProvider.eventsBySlices(
@@ -91,15 +93,14 @@ public class ConsumerCompileTest {
   }
 
   static void updateConsumerFilter(
-      ActorSystem<?> system,
-      Set<String> excludeTags,
-      Set<String> includeTags) {
-    String streamId = system.settings().config()
-        .getString("akka.projection.grpc.consumer.stream-id");
+      ActorSystem<?> system, Set<String> excludeTags, Set<String> includeTags) {
+    String streamId =
+        system.settings().config().getString("akka.projection.grpc.consumer.stream-id");
 
-    List<ConsumerFilter.FilterCriteria> criteria = Arrays.asList(
-        new ConsumerFilter.ExcludeTags(excludeTags),
-        new ConsumerFilter.IncludeTags(includeTags));
+    List<ConsumerFilter.FilterCriteria> criteria =
+        Arrays.asList(
+            new ConsumerFilter.ExcludeTags(excludeTags),
+            new ConsumerFilter.IncludeTags(includeTags));
 
     ConsumerFilter.get(system).ref().tell(new ConsumerFilter.UpdateFilter(streamId, criteria));
   }
@@ -112,13 +113,13 @@ public class ConsumerCompileTest {
     String streamId = "ShoppingCart";
     int idx = 0;
 
-    GrpcReadJournal eventsBySlicesQuery = GrpcReadJournal.create(
-        system,
-        Collections.singletonList(ShoppingcartApiProto.javaDescriptor()));
+    GrpcReadJournal eventsBySlicesQuery =
+        GrpcReadJournal.create(
+            system, Collections.singletonList(ShoppingcartApiProto.javaDescriptor()));
 
     Pair<Integer, Integer> sliceRange = sliceRanges.get(idx);
 
-    //#adjustStartOffset
+    // #adjustStartOffset
     SourceProvider<Offset, EventEnvelope<String>> sourceProvider =
         EventSourcedProvider.eventsBySlices(
             system,
@@ -127,11 +128,10 @@ public class ConsumerCompileTest {
             sliceRange.first(),
             sliceRange.second(),
             (Optional<Offset> storedOffset) -> {
-                TimestampOffset startOffset = Offset.timestamp(Instant.now().minusSeconds(3600));
-                return CompletableFuture.completedFuture(Optional.of(startOffset));
-              }
-            );
-    //#adjustStartOffset
+              TimestampOffset startOffset = Offset.timestamp(Instant.now().minusSeconds(3600));
+              return CompletableFuture.completedFuture(Optional.of(startOffset));
+            });
+    // #adjustStartOffset
 
   }
 }

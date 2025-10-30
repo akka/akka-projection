@@ -4,6 +4,8 @@
 
 package jdocs.jdbc;
 
+import static org.junit.Assert.assertEquals;
+
 import akka.NotUsed;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
@@ -14,11 +16,16 @@ import akka.projection.jdbc.internal.JdbcOffsetStore;
 import akka.projection.jdbc.internal.JdbcSettings;
 import akka.projection.jdbc.javadsl.JdbcHandler;
 import akka.projection.jdbc.javadsl.JdbcProjection;
-import akka.projection.testkit.javadsl.TestSourceProvider;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
+import akka.projection.testkit.javadsl.TestSourceProvider;
 import akka.stream.javadsl.Source;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import org.junit.BeforeClass;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -27,14 +34,6 @@ import org.scalatestplus.junit.JUnitSuite;
 import scala.Option;
 import scala.concurrent.Await;
 import scala.concurrent.Future;
-
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-
-import static org.junit.Assert.assertEquals;
 
 public class JdbcHibernateTest extends JUnitSuite {
   private static final Map<String, Object> configuration = new HashMap<>();
