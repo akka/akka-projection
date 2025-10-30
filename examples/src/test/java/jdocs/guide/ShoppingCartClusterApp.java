@@ -8,19 +8,19 @@ package jdocs.guide;
 import akka.actor.typed.ActorSystem;
 import akka.actor.typed.javadsl.Behaviors;
 import akka.cluster.sharding.typed.javadsl.ShardedDaemonProcess;
-import akka.projection.ProjectionBehavior;
-import akka.projection.eventsourced.EventEnvelope;
-import com.typesafe.config.Config;
-import com.typesafe.config.ConfigFactory;
 import akka.persistence.cassandra.query.javadsl.CassandraReadJournal;
 import akka.persistence.query.Offset;
-import akka.projection.eventsourced.javadsl.EventSourcedProvider;
-import akka.projection.javadsl.SourceProvider;
+import akka.projection.ProjectionBehavior;
 import akka.projection.ProjectionId;
 import akka.projection.cassandra.javadsl.CassandraProjection;
+import akka.projection.eventsourced.EventEnvelope;
+import akka.projection.eventsourced.javadsl.EventSourcedProvider;
 import akka.projection.javadsl.AtLeastOnceProjection;
+import akka.projection.javadsl.SourceProvider;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSession;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSessionRegistry;
+import com.typesafe.config.Config;
+import com.typesafe.config.ConfigFactory;
 
 public class ShoppingCartClusterApp {
   public static void main(String[] args) throws Exception {

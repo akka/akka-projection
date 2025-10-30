@@ -26,25 +26,21 @@ import akka.projection.grpc.producer.EventProducerSettings;
 import akka.projection.grpc.producer.javadsl.EventProducer;
 import akka.projection.grpc.producer.javadsl.EventProducerSource;
 import akka.projection.grpc.replication.javadsl.*;
+import akka.projection.javadsl.AtLeastOnceFlowProjection;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.r2dbc.R2dbcProjectionSettings;
 import akka.projection.r2dbc.javadsl.R2dbcProjection;
-import akka.projection.javadsl.AtLeastOnceFlowProjection;
 import akka.stream.javadsl.FlowWithContext;
-
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
 
 public class ReplicationCompileTest {
-  interface MyCommand {
-  }
+  interface MyCommand {}
 
   static class MyReplicatedBehavior {
-
 
     static Behavior<MyCommand> create(
         ReplicatedBehaviors<MyCommand, Void, Void> replicatedBehaviors) {
@@ -56,55 +52,73 @@ public class ReplicationCompileTest {
   }
 
   public static void start(ActorSystem<?> system) {
-   Set<Replica> otherReplicas = new HashSet<>();
-   otherReplicas.add(Replica.create(
-       new ReplicaId("DCB"),
-       2,
-       GrpcClientSettings.connectToServiceAt("b.example.com", 443, system).withTls(true)
-       ));
-   otherReplicas.add(Replica.create(
-       new ReplicaId("DCC"),
-       2,
-       GrpcClientSettings.connectToServiceAt("c.example.com", 443, system).withTls(true)
-   ));
+    Set<Replica> otherReplicas = new HashSet<>();
+    otherReplicas.add(
+        Replica.create(
+            new ReplicaId("DCB"),
+            2,
+            GrpcClientSettings.connectToServiceAt("b.example.com", 443, system).withTls(true)));
+    otherReplicas.add(
+        Replica.create(
+            new ReplicaId("DCC"),
+            2,
+            GrpcClientSettings.connectToServiceAt("c.example.com", 443, system).withTls(true)));
 
-   ReplicationProjectionProvider projectionProvider = new ReplicationProjectionProvider() {
+    ReplicationProjectionProvider projectionProvider =
+        new ReplicationProjectionProvider() {
 
-    @Override
-    public AtLeastOnceFlowProjection<Offset, EventEnvelope<Object>> create(ProjectionId projectionId, SourceProvider<Offset, EventEnvelope<Object>> sourceProvider, FlowWithContext<EventEnvelope<Object>, ProjectionContext, Done, ProjectionContext, NotUsed> replicationFlow, ActorSystem<?> system) {
-     return  R2dbcProjection.atLeastOnceFlow(projectionId, Optional.<R2dbcProjectionSettings>empty(), sourceProvider, replicationFlow, system);
-    }
-   };
+          @Override
+          public AtLeastOnceFlowProjection<Offset, EventEnvelope<Object>> create(
+              ProjectionId projectionId,
+              SourceProvider<Offset, EventEnvelope<Object>> sourceProvider,
+              FlowWithContext<
+                      EventEnvelope<Object>, ProjectionContext, Done, ProjectionContext, NotUsed>
+                  replicationFlow,
+              ActorSystem<?> system) {
+            return R2dbcProjection.atLeastOnceFlow(
+                projectionId,
+                Optional.<R2dbcProjectionSettings>empty(),
+                sourceProvider,
+                replicationFlow,
+                system);
+          }
+        };
 
-   // SAM so this is possible
-   ReplicationProjectionProvider projectionProvider2 = (projectionId, sourceProvider, flow, s) ->
-           R2dbcProjection.atLeastOnceFlow(projectionId, Optional.empty(), sourceProvider, flow, s);
+    // SAM so this is possible
+    ReplicationProjectionProvider projectionProvider2 =
+        (projectionId, sourceProvider, flow, s) ->
+            R2dbcProjection.atLeastOnceFlow(
+                projectionId, Optional.empty(), sourceProvider, flow, s);
 
-   ReplicationSettings<MyCommand> settings = ReplicationSettings.<MyCommand>create(
-       MyCommand.class,
-       "my-entity",
-       ReplicaId.apply("DCA"),
-       EventProducerSettings.create(system),
-       otherReplicas,
-       Duration.ofSeconds(10),
-       // parallel updates
-       8,
-       projectionProvider).configureEntity(entity -> entity.withRole("entities"));
+    ReplicationSettings<MyCommand> settings =
+        ReplicationSettings.<MyCommand>create(
+                MyCommand.class,
+                "my-entity",
+                ReplicaId.apply("DCA"),
+                EventProducerSettings.create(system),
+                otherReplicas,
+                Duration.ofSeconds(10),
+                // parallel updates
+                8,
+                projectionProvider)
+            .configureEntity(entity -> entity.withRole("entities"));
 
-   Replication<MyCommand> replication = Replication.grpcReplication(settings, MyReplicatedBehavior::create, system);
+    Replication<MyCommand> replication =
+        Replication.grpcReplication(settings, MyReplicatedBehavior::create, system);
 
-   // bind a single handler endpoint
-   Function<HttpRequest, CompletionStage<HttpResponse>> handler = replication.createSingleServiceHandler();
+    // bind a single handler endpoint
+    Function<HttpRequest, CompletionStage<HttpResponse>> handler =
+        replication.createSingleServiceHandler();
 
-   @SuppressWarnings("unchecked")
-   Function<HttpRequest, CompletionStage<HttpResponse>> service =
-       ServiceHandler.concatOrNotFound(handler);
+    @SuppressWarnings("unchecked")
+    Function<HttpRequest, CompletionStage<HttpResponse>> service =
+        ServiceHandler.concatOrNotFound(handler);
 
-   CompletionStage<ServerBinding> bound =
-       Http.get(system).newServerAt("127.0.0.1", 8080).bind(service);
+    CompletionStage<ServerBinding> bound =
+        Http.get(system).newServerAt("127.0.0.1", 8080).bind(service);
 
-
-    EdgeReplication<MyCommand> edgeReplication = Replication.grpcEdgeReplication(settings, MyReplicatedBehavior::create, system);
+    EdgeReplication<MyCommand> edgeReplication =
+        Replication.grpcEdgeReplication(settings, MyReplicatedBehavior::create, system);
     EntityRef<MyCommand> entity = edgeReplication.entityRefFactory().apply("res-id");
   }
 
@@ -115,7 +129,8 @@ public class ReplicationCompileTest {
   }
 
   @SuppressWarnings("deprecation")
-  public static void multiEventProducers(ActorSystem<?> system, ReplicationSettings<MyCommand> settings, String host, int port) {
+  public static void multiEventProducers(
+      ActorSystem<?> system, ReplicationSettings<MyCommand> settings, String host, int port) {
 
     Replication<Void> otherReplication = null;
 
@@ -143,8 +158,6 @@ public class ReplicationCompileTest {
     // ... .add other destinations ...
     EventProducerPushDestination.grpcServiceHandler(destinations, system);
 
-    CompletionStage<ServerBinding> bound =
-        Http.get(system).newServerAt(host, port).bind(handler);
-
+    CompletionStage<ServerBinding> bound = Http.get(system).newServerAt(host, port).bind(handler);
   }
 }

@@ -4,6 +4,8 @@
 
 package akka.projection.cassandra;
 
+import static org.junit.Assert.assertEquals;
+
 import akka.Done;
 import akka.NotUsed;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
@@ -24,17 +26,11 @@ import akka.projection.cassandra.javadsl.CassandraProjection;
 import akka.projection.javadsl.ActorHandler;
 import akka.projection.javadsl.Handler;
 import akka.projection.javadsl.SourceProvider;
-import akka.projection.testkit.javadsl.TestSourceProvider;
 import akka.projection.testkit.javadsl.ProjectionTestKit;
+import akka.projection.testkit.javadsl.TestSourceProvider;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSession;
 import akka.stream.alpakka.cassandra.javadsl.CassandraSessionRegistry;
 import akka.stream.javadsl.Source;
-import org.junit.*;
-import org.scalatestplus.junit.JUnitSuite;
-
-import scala.concurrent.Await;
-import scala.jdk.javaapi.FutureConverters;
-
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -42,8 +38,10 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.TimeUnit;
-
-import static org.junit.Assert.assertEquals;
+import org.junit.*;
+import org.scalatestplus.junit.JUnitSuite;
+import scala.concurrent.Await;
+import scala.jdk.javaapi.FutureConverters;
 
 public class CassandraProjectionTest extends JUnitSuite {
   @ClassRule public static final TestKitJunitResource testKit = new TestKitJunitResource();
@@ -101,16 +99,20 @@ public class CassandraProjectionTest extends JUnitSuite {
   }
 
   public static SourceProvider<Long, Envelope> sourceProvider(String entityId) {
-    Source<Envelope, NotUsed> envelopes = Source.from(Arrays.asList(
-      new Envelope(entityId, 1, "abc"),
-      new Envelope(entityId, 2, "def"),
-      new Envelope(entityId, 3, "ghi"),
-      new Envelope(entityId, 4, "jkl"),
-      new Envelope(entityId, 5, "mno"),
-      new Envelope(entityId, 6, "pqr")));
+    Source<Envelope, NotUsed> envelopes =
+        Source.from(
+            Arrays.asList(
+                new Envelope(entityId, 1, "abc"),
+                new Envelope(entityId, 2, "def"),
+                new Envelope(entityId, 3, "ghi"),
+                new Envelope(entityId, 4, "jkl"),
+                new Envelope(entityId, 5, "mno"),
+                new Envelope(entityId, 6, "pqr")));
 
-    TestSourceProvider<Long, Envelope> sourceProvider = TestSourceProvider.create(envelopes, env -> env.offset)
-      .withStartSourceFrom((Long lastProcessedOffset, Long offset) -> offset <= lastProcessedOffset);
+    TestSourceProvider<Long, Envelope> sourceProvider =
+        TestSourceProvider.create(envelopes, env -> env.offset)
+            .withStartSourceFrom(
+                (Long lastProcessedOffset, Long offset) -> offset <= lastProcessedOffset);
 
     return sourceProvider;
   }

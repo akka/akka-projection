@@ -17,13 +17,13 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <akka.version>2.10.5</akka.version>
+        <akka.version>2.10.11</akka.version>
         <akka-projection.version>1.6.15</akka-projection.version>
-        <akka-persistence-r2dbc.version>1.3.7</akka-persistence-r2dbc.version>
-        <akka-management.version>1.6.2</akka-management.version>
+        <akka-persistence-r2dbc.version>1.3.8</akka-persistence-r2dbc.version>
+        <akka-management.version>1.6.4</akka-management.version>
         <akka-diagnostics.version>2.2.1</akka-diagnostics.version>
-        <akka-grpc.version>2.5.5</akka-grpc.version>
-        <akka-grpc-maven-plugin.version>2.5.5</akka-grpc-maven-plugin.version>
+        <akka-grpc.version>2.5.8</akka-grpc.version>
+        <akka-grpc-maven-plugin.version>2.5.8</akka-grpc-maven-plugin.version>
         <logback.version>1.5.18</logback.version>
         <junit.version>4.13.2</junit.version>
         <scala.binary.version>2.13</scala.binary.version>

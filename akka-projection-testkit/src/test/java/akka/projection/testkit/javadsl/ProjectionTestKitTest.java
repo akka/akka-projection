@@ -4,6 +4,8 @@
 
 package akka.projection.testkit.javadsl;
 
+import static org.junit.Assert.assertEquals;
+
 import akka.Done;
 import akka.NotUsed;
 import akka.actor.testkit.typed.javadsl.TestKitJunitResource;
@@ -11,28 +13,16 @@ import akka.actor.typed.ActorSystem;
 import akka.japi.function.Function;
 import akka.projection.Projection;
 import akka.projection.ProjectionId;
-import akka.projection.internal.ActorHandlerInit;
-import akka.projection.internal.ProjectionSettings;
 import akka.projection.RunningProjection;
 import akka.projection.StatusObserver;
+import akka.projection.internal.ActorHandlerInit;
 import akka.projection.internal.NoopStatusObserver;
 import akka.stream.DelayOverflowStrategy;
 import akka.stream.KillSwitches;
-import akka.stream.RestartSettings;
 import akka.stream.SharedKillSwitch;
 import akka.stream.javadsl.DelayStrategy;
 import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
-import org.junit.Assert;
-import org.junit.ClassRule;
-import org.junit.ComparisonFailure;
-import org.junit.Test;
-import org.scalatestplus.junit.JUnitSuite;
-import scala.Option;
-import scala.jdk.javaapi.FutureConverters;
-import scala.concurrent.Future;
-import scala.concurrent.duration.FiniteDuration;
-
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -40,8 +30,15 @@ import java.util.concurrent.CompletionStage;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
-import static org.junit.Assert.assertEquals;
+import org.junit.Assert;
+import org.junit.ClassRule;
+import org.junit.ComparisonFailure;
+import org.junit.Test;
+import org.scalatestplus.junit.JUnitSuite;
+import scala.Option;
+import scala.concurrent.Future;
+import scala.concurrent.duration.FiniteDuration;
+import scala.jdk.javaapi.FutureConverters;
 
 public class ProjectionTestKitTest extends JUnitSuite {
 

@@ -9,11 +9,10 @@ import akka.Done;
 import akka.actor.typed.ActorSystem;
 import akka.projection.eventsourced.EventEnvelope;
 import akka.projection.javadsl.Handler;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ItemPopularityProjectionHandler
     extends Handler<EventEnvelope<ShoppingCartEvents.Event>> {

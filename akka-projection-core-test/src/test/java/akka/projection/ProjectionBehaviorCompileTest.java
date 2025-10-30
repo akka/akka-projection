@@ -5,20 +5,16 @@
 package akka.projection;
 
 import akka.Done;
-import akka.NotUsed;
 import akka.actor.testkit.typed.javadsl.ActorTestKit;
 import akka.actor.typed.ActorRef;
 import akka.actor.typed.ActorSystem;
 import akka.projection.internal.ActorHandlerInit;
 import akka.projection.internal.NoopStatusObserver;
-import akka.projection.internal.ProjectionSettings;
-import akka.stream.RestartSettings;
 import akka.stream.scaladsl.Source;
+import java.time.Duration;
 import scala.Option;
 import scala.concurrent.Future;
 import scala.concurrent.duration.FiniteDuration;
-
-import java.time.Duration;
 
 /** Compile test: this class serves only for exercising the Java API. */
 public class ProjectionBehaviorCompileTest {

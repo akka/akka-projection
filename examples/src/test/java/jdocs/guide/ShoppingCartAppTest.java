@@ -5,6 +5,8 @@
 // #testKitSpec
 package jdocs.guide;
 
+import static org.junit.Assert.assertEquals;
+
 import akka.Done;
 import akka.NotUsed;
 import akka.actor.testkit.typed.javadsl.LoggingTestKit;
@@ -20,9 +22,6 @@ import akka.projection.testkit.javadsl.TestProjection;
 import akka.projection.testkit.javadsl.TestSourceProvider;
 // #testKitImports
 import akka.stream.javadsl.Source;
-import org.junit.ClassRule;
-import org.junit.Test;
-
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -31,8 +30,8 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.stream.IntStream;
-
-import static org.junit.Assert.assertEquals;
+import org.junit.ClassRule;
+import org.junit.Test;
 
 public class ShoppingCartAppTest {
   @ClassRule public static final TestKitJunitResource testKit = new TestKitJunitResource();

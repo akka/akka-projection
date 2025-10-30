@@ -21,15 +21,14 @@ import akka.stream.javadsl.Sink;
 import akka.stream.javadsl.Source;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Generate a shopping cart every 1 second and check it out. Each cart will contain a variety of
@@ -175,8 +174,8 @@ class Guardian {
   /**
    * An Actor that persists shopping cart events for a particular persistence id (cart id) and tag.
    * This is not how real Event Sourced actors should be be implemented. Please look at
-   * https://doc.akka.io/libraries/akka-core/current/typed/persistence.html for more information about
-   * `EventSourcedBehavior`.
+   * https://doc.akka.io/libraries/akka-core/current/typed/persistence.html for more information
+   * about `EventSourcedBehavior`.
    */
   static class CartPersistentBehavior
       extends EventSourcedBehavior<

@@ -4,6 +4,8 @@
 
 package akka.projection.jdbc;
 
+import static org.junit.Assert.assertEquals;
+
 import akka.Done;
 import akka.NotUsed;
 import akka.actor.testkit.typed.javadsl.LogCapturing;
@@ -26,16 +28,6 @@ import akka.stream.javadsl.Source;
 import akka.stream.testkit.TestSubscriber;
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
-import org.junit.BeforeClass;
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.junit.Test;
-import org.scalatestplus.junit.JUnitSuite;
-import scala.Option;
-import scala.PartialFunction;
-import scala.concurrent.Await;
-import scala.concurrent.Future;
-
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
@@ -48,8 +40,15 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-
-import static org.junit.Assert.assertEquals;
+import org.junit.BeforeClass;
+import org.junit.ClassRule;
+import org.junit.Rule;
+import org.junit.Test;
+import org.scalatestplus.junit.JUnitSuite;
+import scala.Option;
+import scala.PartialFunction;
+import scala.concurrent.Await;
+import scala.concurrent.Future;
 
 public class JdbcProjectionTest extends JUnitSuite {
 
@@ -78,7 +77,9 @@ public class JdbcProjectionTest extends JUnitSuite {
     public PureJdbcSession() {
       try {
         Class.forName("org.h2.Driver");
-        Connection c = DriverManager.getConnection("jdbc:h2:mem:test-java;DB_CLOSE_DELAY=-1;OPTIMIZE_REUSE_RESULTS=FALSE");
+        Connection c =
+            DriverManager.getConnection(
+                "jdbc:h2:mem:test-java;DB_CLOSE_DELAY=-1;OPTIMIZE_REUSE_RESULTS=FALSE");
         c.setAutoCommit(false);
         this.connection = c;
       } catch (ClassNotFoundException | SQLException e) {
@@ -332,10 +333,13 @@ public class JdbcProjectionTest extends JUnitSuite {
         projection,
         (probe) -> {
           probe.request(3);
-          testKit.createTestProbe().awaitAssert(() -> {
-            assertEquals("abc|def|ghi|", str.toString());
-            return null;
-          });
+          testKit
+              .createTestProbe()
+              .awaitAssert(
+                  () -> {
+                    assertEquals("abc|def|ghi|", str.toString());
+                    return null;
+                  });
         });
 
     assertStoredOffset(projectionId, 3L);
