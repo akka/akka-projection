@@ -76,14 +76,11 @@ jobs:
       - name: Compile all code with fatal warnings for Java 11, Scala 2.13 and Scala 3
         run: sbt "clean ; +compile; +Test/compile; +akka-projection-integration/Test/compile"
 
-  check-samples:
-    name: Check Sample Projects
+  setup-samples:
+    name: Setup Sample Projects
     runs-on: Akka-Default
     env:
-      RUSTFLAGS: -Dwarnings
-      CARGO_TERM_COLOR: always
       PROTOC_VERSION: 3.23.4
-      SCALA3_VERSION: 3.3.7
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
@@ -110,21 +107,12 @@ jobs:
         with:
           jvm: temurin:1.11
 
-      - name: Update Rust
-        run: |
-          rustup update
-
       - name: Install protoc
         # https://github.com/taiki-e/install-action/releases
         # v2.20.3
         uses: taiki-e/install-action@47d27149ff6b3422864ec504071d5cc7873d642e
         with:
           tool: protoc@${{ env.PROTOC_VERSION }}
-
-      - name: Cache Rust
-        # https://github.com/Swatinem/rust-cache/releases
-        # v2.7.0
-        uses: Swatinem/rust-cache@a95ba195448af2da9b00fb742d14ffaaf3c21f43
 
       - name: Gather version
         # some cleanup of the sbt output to get the version sbt will use when publishing below
@@ -137,108 +125,204 @@ jobs:
         run: |-
           sbt "+publishLocal; publishM2"
 
-      - name: Test Scala Projection gRPC sample Shopping Cart
-        run: |-
-          cd samples/grpc/shopping-cart-service-scala
-          sbt test -Dakka-projection.version=`cat ~/.version`
-          sbt "clean; ++${SCALA3_VERSION}!; test;" -Dakka-projection.version=`cat ~/.version`
+      - name: Cache published artifacts
+        # https://github.com/actions/cache/releases
+        # v4.0.0
+        uses: actions/cache/save@13aacd865c20de90d75de3b17ebe84f7a17d57d2
+        with:
+          path: |
+            ~/.ivy2/local
+            ~/.m2/repository
+          key: published-artifacts-${{ github.run_id }}-${{ github.run_attempt }}
 
-      - name: Compile Scala Projection gRPC sample Analytics
-        run: |-
-          cd samples/grpc/shopping-analytics-service-scala
-          sbt Test/compile -Dakka-projection.version=`cat ~/.version`
-          sbt "clean; ++${SCALA3_VERSION}!; Test/compile;"
+      - name: Save version
+        # https://github.com/actions/upload-artifact/releases
+        # v4.3.1
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+        with:
+          name: akka-projection-version
+          path: ~/.version
+          retention-days: 1
 
-      - name: Compile Java Projection gRPC sample Shopping Cart
-        run: |-
-          cd samples/grpc/shopping-cart-service-java
-          mvn test -nsu -ntp -Dakka-projection.version=`cat ~/.version`
+  check-samples:
+    name: ${{ matrix.sample.name }}
+    needs: setup-samples
+    runs-on: Akka-Default
+    env:
+      RUSTFLAGS: -Dwarnings
+      CARGO_TERM_COLOR: always
+      PROTOC_VERSION: 3.23.4
+      SCALA3_VERSION: 3.3.7
+    strategy:
+      fail-fast: false
+      matrix:
+        sample:
+          - name: "Test Scala gRPC Shopping Cart"
+            path: "samples/grpc/shopping-cart-service-scala"
+            type: "scala"
+            command: |
+              sbt test -Dakka-projection.version=`cat ~/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; test;" -Dakka-projection.version=`cat ~/.version`
+          - name: "Compile Scala gRPC Analytics"
+            path: "samples/grpc/shopping-analytics-service-scala"
+            type: "scala"
+            command: |
+              sbt Test/compile -Dakka-projection.version=`cat ~/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;"
+          - name: "Test Java gRPC Shopping Cart"
+            path: "samples/grpc/shopping-cart-service-java"
+            type: "java"
+            command: "mvn test -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+          - name: "Compile Java gRPC Analytics"
+            path: "samples/grpc/shopping-analytics-service-java"
+            type: "java"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+          - name: "Compile Scala Replicated Shopping Cart"
+            path: "samples/replicated/shopping-cart-service-scala"
+            type: "scala"
+            command: |
+              sbt Test/compile -Dakka-projection.version=`cat ~/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;"
+          - name: "Compile Java Replicated Shopping Cart"
+            path: "samples/replicated/shopping-cart-service-java"
+            type: "java"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+          - name: "Compile Scala Local Drone Control"
+            path: "samples/grpc/local-drone-control-scala"
+            type: "scala"
+            command: |
+              sbt Test/compile -Dakka-projection.version=`cat ~/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat ~/.version`
+          - name: "Compile Scala Restaurant Drone Deliveries"
+            path: "samples/grpc/restaurant-drone-deliveries-service-scala"
+            type: "scala"
+            command: |
+              sbt compile -Dakka-projection.version=`cat ~/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat ~/.version`
+          - name: "Compile Java Local Drone Control"
+            path: "samples/grpc/local-drone-control-java"
+            type: "java"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+          - name: "Compile Java Restaurant Drone Deliveries"
+            path: "samples/grpc/restaurant-drone-deliveries-service-java"
+            type: "java"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+          - name: "Test Scala gRPC IoT Service"
+            path: "samples/grpc/iot-service-scala"
+            type: "scala"
+            command: |
+              sbt test -Dakka-projection.version=`cat ~/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; test;" -Dakka-projection.version=`cat ~/.version`
+          - name: "Compile Java gRPC IoT Service"
+            path: "samples/grpc/iot-service-java"
+            type: "java"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+          - name: "Test Rust IoT Service"
+            path: "samples/grpc/iot-service-rs"
+            type: "rust"
+            command: |
+              cargo clippy --tests
+              cargo fmt -- --check
+              cargo test
+          - name: "Check Java Charger RES Implementation"
+            path: "."
+            type: "diff"
+            command: "diff samples/grpc/local-drone-control-java/src/main/java/charging/ChargingStation.java samples/grpc/restaurant-drone-deliveries-service-java/src/main/java/charging/ChargingStation.java"
+          - name: "Check Scala Charger RES Implementation"
+            path: "."
+            type: "diff"
+            command: "diff samples/grpc/local-drone-control-scala/src/main/scala/charging/ChargingStation.scala samples/grpc/restaurant-drone-deliveries-service-scala/src/main/scala/charging/ChargingStation.scala"
+          - name: "Build Scala Native Image"
+            path: "samples/grpc/local-drone-control-scala"
+            type: "scala-native"
+            command: |
+              sbt nativeImage -Dnative.mode=clustered -Dakka-projection.version=`cat ~/.version`
+              sbt nativeImage -Dakka-projection.version=`cat ~/.version`
+              target/native-image/local-drone-control &
+              DRONE_CONTROL_PID=$!
+              sbt "Test/runMain drones.DroneClientTestApp 127.0.0.1 8080" -Dakka-projection.version=`cat ~/.version`
+              kill -9 $DRONE_CONTROL_PID
+          - name: "Build Java Native Image"
+            path: "samples/grpc/local-drone-control-java"
+            type: "java-native"
+            command: |
+              mvn -DskipTests=true -Pnative package -nsu -Dakka-projection.version=`cat ~/.version`
+              mvn -DskipTests=true -Pnative -Pclustered package -nsu -Dakka-projection.version=`cat ~/.version`
+    steps:
+      - name: Checkout
+        # https://github.com/actions/checkout/releases
+        # v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          fetch-depth: 0
 
-      - name: Compile Java Projection gRPC sample Analytics
+      - name: Checkout GitHub merge
+        if: github.event.pull_request
         run: |-
-          cd samples/grpc/shopping-analytics-service-java
-          mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`
+          git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
+          git checkout scratch
 
-      - name: Compile Scala Replicated Event Sourcing over gRPC sample Shopping Cart
-        run: |-
-          cd samples/replicated/shopping-cart-service-scala
-          sbt Test/compile -Dakka-projection.version=`cat ~/.version`
-          sbt "clean; ++${SCALA3_VERSION}!; Test/compile;"
+      - name: Cache Coursier cache
+        # https://github.com/coursier/cache-action/releases
+        # v6.4.5
+        uses: coursier/cache-action@1ff273bff02a8787bc9f1877d347948af647956d
 
-      - name: Compile Java Replicated Event Sourcing over gRPC sample Shopping Cart
-        run: |-
-          cd samples/replicated/shopping-cart-service-java
-          mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`
-
-      - name: Compile Scala Projection gRPC Local Drone Control sample
-        run: |-
-          cd samples/grpc/local-drone-control-scala
-          sbt Test/compile -Dakka-projection.version=`cat ~/.version`
-          sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat ~/.version`
-
-      - name: Compile Scala Projection gRPC Restaurant Drone Deliveries sample
-        run: |-
-          cd samples/grpc/restaurant-drone-deliveries-service-scala
-          sbt compile -Dakka-projection.version=`cat ~/.version`
-          sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat ~/.version`
-
-      - name: Compile Java Projection gRPC Local Drone Control sample
-        run: |-
-          cd samples/grpc/local-drone-control-java
-          mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`
-
-      - name: Compile Java Projection gRPC Restaurant Drone Deliveries sample
-        run: |-
-          cd samples/grpc/restaurant-drone-deliveries-service-java
-          mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`
-
-      - name: Test Scala Projection gRPC IoT service sample
-        run: |-
-          cd samples/grpc/iot-service-scala
-          sbt test -Dakka-projection.version=`cat ~/.version`
-          sbt "clean; ++${SCALA3_VERSION}!; test;" -Dakka-projection.version=`cat ~/.version`
-
-      - name: Compile Java Projection gRPC IoT service sample
-        run: |-
-          cd samples/grpc/iot-service-java
-          mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`
-
-      - name: Test Rust IoT service sample
-        run: |-
-          cd samples/grpc/iot-service-rs
-          cargo clippy --tests
-          cargo fmt -- --check
-          cargo test
-
-      - name: gRPC sample Java charger RES identical impl check
-        run: |-
-          diff samples/grpc/local-drone-control-java/src/main/java/charging/ChargingStation.java samples/grpc/restaurant-drone-deliveries-service-java/src/main/java/charging/ChargingStation.java
-
-      - name: gRPC sample Scala charger RES identical impl check
-        run: |-
-          # RES sample should be identical
-          diff samples/grpc/local-drone-control-scala/src/main/scala/charging/ChargingStation.scala samples/grpc/restaurant-drone-deliveries-service-scala/src/main/scala/charging/ChargingStation.scala
-
-      - name: Local drone control sample Scala native image build
-        run: |-
-          cd samples/grpc/local-drone-control-scala
-          sbt nativeImage -Dnative.mode=clustered -Dakka-projection.version=`cat ~/.version`
-          sbt nativeImage -Dakka-projection.version=`cat ~/.version`
-          # This will likely be quite noisy, logging failures to connect to restaurant-drone-deliveries service
-          target/native-image/local-drone-control &
-          DRONE_CONTROL_PID=$!
-          sbt "Test/runMain drones.DroneClientTestApp 127.0.0.1 8080" -Dakka-projection.version=`cat ~/.version`
-          kill -9 $DRONE_CONTROL_PID
+      - name: Set up JDK 11
+        if: matrix.sample.type != 'rust'
+        # https://github.com/coursier/setup-action/releases
+        # v1.3.5
+        uses: coursier/setup-action@7bde40eee928896f074dbb76d22dd772eed5c65f
+        with:
+          jvm: temurin:1.11
 
       - name: Set up GraalVM 21
+        if: matrix.sample.type == 'java-native'
         # https://github.com/coursier/setup-action/releases
         # v1.3.5
         uses: coursier/setup-action@7bde40eee928896f074dbb76d22dd772eed5c65f
         with:
           jvm: graalvm-community:21.0.2
 
-      - name: Local drone control sample Java native image build
-        run: |-
-          cd samples/grpc/local-drone-control-java
-          mvn -DskipTests=true -Pnative package -nsu -Dakka-projection.version=`cat ~/.version`
-          mvn -DskipTests=true -Pnative -Pclustered package -nsu -Dakka-projection.version=`cat ~/.version`
+      - name: Update Rust
+        if: matrix.sample.type == 'rust'
+        run: |
+          rustup update
+
+      - name: Install protoc
+        # https://github.com/taiki-e/install-action/releases
+        # v2.20.3
+        uses: taiki-e/install-action@47d27149ff6b3422864ec504071d5cc7873d642e
+        with:
+          tool: protoc@${{ env.PROTOC_VERSION }}
+
+      - name: Cache Rust
+        if: matrix.sample.type == 'rust'
+        # https://github.com/Swatinem/rust-cache/releases
+        # v2.7.0
+        uses: Swatinem/rust-cache@a95ba195448af2da9b00fb742d14ffaaf3c21f43
+
+      - name: Restore published artifacts
+        if: matrix.sample.type != 'diff'
+        # https://github.com/actions/cache/releases
+        # v4.0.0
+        uses: actions/cache/restore@13aacd865c20de90d75de3b17ebe84f7a17d57d2
+        with:
+          path: |
+            ~/.ivy2/local
+            ~/.m2/repository
+          key: published-artifacts-${{ github.run_id }}-${{ github.run_attempt }}
+          fail-on-cache-miss: true
+
+      - name: Download version
+        if: matrix.sample.type != 'diff'
+        # https://github.com/actions/download-artifact/releases
+        # v4.1.4
+        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        with:
+          name: akka-projection-version
+          path: ~/
+
+      - name: Run sample
+        run: |
+          cd ${{ matrix.sample.path }}
+          ${{ matrix.sample.command }}
