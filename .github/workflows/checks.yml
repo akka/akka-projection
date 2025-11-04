@@ -127,8 +127,8 @@ jobs:
 
       - name: Cache published artifacts
         # https://github.com/actions/cache/releases
-        # v4.0.0
-        uses: actions/cache/save@13aacd865c20de90d75de3b17ebe84f7a17d57d2
+        # v4.3.0
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: |
             ~/.ivy2/local
@@ -304,8 +304,8 @@ jobs:
       - name: Restore published artifacts
         if: matrix.sample.type != 'diff'
         # https://github.com/actions/cache/releases
-        # v4.0.0
-        uses: actions/cache/restore@13aacd865c20de90d75de3b17ebe84f7a17d57d2
+        # v4.3.0
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
         with:
           path: |
             ~/.ivy2/local
