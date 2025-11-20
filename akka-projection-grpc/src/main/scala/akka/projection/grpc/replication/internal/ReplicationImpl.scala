@@ -95,24 +95,29 @@ private[akka] object ReplicationImpl {
     }
 
     // set up a publisher
-    val eps = EventProducerSource(
+    val epsBase = EventProducerSource(
       settings.entityTypeKey.name,
       settings.streamId,
       Transformation.identity,
       settings.eventProducerSettings.withAkkaSerializationOnly(),
       settings.producerFilter)
-      .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
-      .withReplicatedEventMetadataTransformation(env =>
-        if (env.metadata[ReplicatedEventMetadata].isDefined) None
-        else {
-          // migrated from non-replicated, fill in metadata
-          Some(
-            ReplicatedEventMetadata(
-              originReplica = settings.selfReplicaId,
-              originSequenceNr = env.sequenceNr,
-              version = VersionVector(settings.selfReplicaId.id, env.sequenceNr),
-              concurrent = false))
-        })
+      .withReplicatedEventMetadataTransformation(
+        env =>
+          if (env.metadata[ReplicatedEventMetadata].isDefined) None
+          else {
+            // migrated from non-replicated, fill in metadata
+            Some(
+              ReplicatedEventMetadata(
+                originReplica = settings.selfReplicaId,
+                originSequenceNr = env.sequenceNr,
+                version = VersionVector(settings.selfReplicaId.id, env.sequenceNr),
+                concurrent = false))
+          })
+    val eps =
+      if (settings.eventOriginFilterEnabled)
+        epsBase.withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
+      else
+        epsBase
 
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)
@@ -257,11 +262,18 @@ private[akka] object ReplicationImpl {
                               replicatedEventMetadata.version,
                               envelope.internalEventMetadata)),
                           Some(replyTo)))
+
                       askResult.failed.foreach(error =>
                         log.warn(
                           s"Failing replication stream [$projectionName/$projectionKey] from [${remoteReplica.replicaId.id}], event pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]",
                           error))
-                      askResult
+
+                      askResult.map { _ =>
+                        // FIXME don't lookup extension each time
+                        ConsumerFilter(system).ref ! ConsumerFilter
+                          .Ack(settings.streamId, envelope.persistenceId, replicatedEventMetadata.originSequenceNr)
+                        Done
+                      }
 
                     case unexpected =>
                       throw new IllegalArgumentException(

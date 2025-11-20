@@ -94,7 +94,6 @@ import akka.util.Timeout
     }
 
     def publishToSubscribers(cmd: SubscriberCommand): Unit = {
-      context.log.debug("Publish command [{}] to subscribers", cmd)
       subscribers.foreach {
         case (sub, _) =>
           if (sub.streamId == cmd.streamId)
@@ -104,6 +103,10 @@ import akka.util.Timeout
 
     Behaviors
       .receiveMessage {
+        case ack: Ack =>
+          publishToSubscribers(ack)
+          Behaviors.same
+
         case Subscribe(streamId, initCriteria, subscriberRef) =>
           val subscriber = Subscriber(streamId, subscriberRef)
           context.watchWith(subscriberRef, SubscriberTerminated(subscriber))
@@ -138,10 +141,12 @@ import akka.util.Timeout
           behavior(subscribers, stores.updated(streamId, store))
 
         case cmd: ReplayWithFilter =>
+          context.log.debug("Publish ReplayWithFilter to subscribers")
           publishToSubscribers(cmd)
           Behaviors.same
 
         case cmd: Replay =>
+          context.log.debug("Publish Replay to subscribers")
           publishToSubscribers(cmd)
           Behaviors.same
 

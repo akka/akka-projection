@@ -54,6 +54,7 @@ message StreamIn {
     // If the consumer detects a missing sequence number it can request a replay of
     // events for a specific entity.
     ReplayReq replay = 3;
+    Ack ack = 4;
   }
 }
 
@@ -95,6 +96,15 @@ message ReplayPersistenceId {
   // apply filters for replayed events after this sequence number
   int64 filter_after_seq_nr = 2;
   optional string correlation_id = 3;
+}
+
+// Ack that the event with this origin persistence id and sequence number
+// has been processed by the consumer, and doesn't have to be sent again.
+// It is an optimization to reduce sending same events from several replicas.
+// Duplicates are are ok, but good to avoid unnecessary transfer.
+// Only used for Replicated Event Sourcing.
+message Ack {
+    PersistenceIdSeqNr origin_event = 1;
 }
 
 message FilterCriteria {

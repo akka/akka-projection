@@ -316,6 +316,16 @@ final class GrpcReadJournal private (
           bufferSize = 1024,
           OverflowStrategy.fail)
         .collect {
+          case ConsumerFilter.Ack(`streamId`, originPersistenceId, originSeqNr) =>
+            log.trace(
+              "{}: Sending ack of origin persistenceId [{}], seqNr [{}]",
+              streamId,
+              originPersistenceId,
+              originSeqNr)
+            StreamIn(
+              StreamIn.Message.Ack(
+                akka.projection.grpc.internal.proto.Ack(Some(PersistenceIdSeqNr(originPersistenceId, originSeqNr)))))
+
           case ConsumerFilter.UpdateFilter(`streamId`, criteria) =>
             val protoCriteria = toProtoFilterCriteria(criteria)
             if (log.isDebugEnabled)

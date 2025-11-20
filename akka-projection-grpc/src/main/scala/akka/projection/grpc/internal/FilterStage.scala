@@ -389,6 +389,14 @@ import scala.concurrent.ExecutionContext
         new InHandler {
           override def onPush(): Unit = {
             grab(inReq) match {
+              case StreamIn(StreamIn.Message.Ack(ack), _) =>
+                log.debug(
+                  "Stream [{}]: Ack origin persistenceId [{}], seqNr [{}]",
+                  logPrefix,
+                  ack.getOriginEvent.persistenceId,
+                  ack.getOriginEvent.seqNr)
+              // FIXME implement a "cache" of acks, which is used onPush
+
               case StreamIn(StreamIn.Message.Filter(filterReq), _) =>
                 log.debug("Stream [{}]: Filter update requested [{}]", logPrefix, filterReq.criteria)
                 updateFilter(filterReq.criteria)
@@ -430,6 +438,9 @@ import scala.concurrent.ExecutionContext
               replicaId = Some(ReplicationId.fromString(pid).replicaId)
 
             if (producerFilter(env) && filter.matches(env)) {
+
+              // FIXME here we can filter based on the acks and push FilteredPayload in same way as EventOriginFilter
+
               if (replicatedEventOriginFilter(env)) {
                 // Note that the producer filter has higher priority - if a producer decides to filter events out the consumer
                 // can never include them

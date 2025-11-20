@@ -200,6 +200,7 @@ class ReplicationIntegrationSpec(testContainerConf: TestContainerConf)
       10.seconds,
       8,
       R2dbcReplication())
+      .withEventOriginFilterEnabled(false)
     Replication.grpcReplication(settings)(ReplicationIntegrationSpec.LWWHelloWorld.apply)(replicaSystem)
   }
 
