@@ -6,14 +6,12 @@ package akka.projection.r2dbc.internal
 
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicLong
-
 import scala.annotation.nowarn
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
-
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
@@ -68,13 +66,17 @@ import akka.projection.r2dbc.scaladsl.R2dbcSession
 import akka.projection.scaladsl
 import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
+import akka.stream.KillSwitches
 import akka.stream.RestartSettings
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.FlowWithContext
+import akka.stream.scaladsl.Keep
 import akka.stream.scaladsl.Source
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
+
+import scala.concurrent.Promise
 
 /**
  * INTERNAL API
@@ -588,7 +590,10 @@ private[projection] object R2dbcProjectionImpl {
 
     // This is similar to R2dbcProjectionImpl.replayIfPossible but difficult to extract common parts
     // since this is flow processing
-    def replayIfPossible(originalEnvelope: Envelope, observer: HandlerObserver[Envelope]): Future[ReplayResult] = {
+    def replayIfPossible(
+        originalEnvelope: Envelope,
+        observer: HandlerObserver[Envelope],
+        parentFlowCompleted: Future[Done]): Future[ReplayResult] = {
       if (offsetStore.settings.replayOnRejectedSequenceNumbers) {
         val logPrefix = offsetStore.logPrefix
         originalEnvelope match {
@@ -613,6 +618,11 @@ private[projection] object R2dbcProjectionImpl {
                   provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                     case Some(querySource) =>
                       querySource
+                        .viaMat(KillSwitches.single)(Keep.right)
+                        .mapMaterializedValue { killSwitch =>
+                          // make sure to cancel replay if parent projection flow stops
+                          parentFlowCompleted.onComplete(_ => killSwitch.shutdown())
+                        }
                         .mapAsync(1) { envelope =>
                           import R2dbcOffsetStore.Validation._
                           offsetStore
@@ -700,7 +710,13 @@ private[projection] object R2dbcProjectionImpl {
       }
     }
 
+    val parentFlowTerminated = Promise[Done]()
+
     val validate = Flow[(Envelope, ProjectionContext)]
+      .watchTermination() { (notUsed, futureDone) =>
+        parentFlowTerminated.completeWith(futureDone)
+        notUsed
+      }
       .mapAsync(1) {
         case (env, context) =>
           offsetStore
@@ -711,14 +727,14 @@ private[projection] object R2dbcProjectionImpl {
               case Duplicate =>
                 Future.successful(None)
               case RejectedSeqNr =>
-                replayIfPossible(env, observer(context)).flatMap {
+                replayIfPossible(env, observer(context), parentFlowTerminated.future).flatMap {
                   // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
                   case ReplayedOnRejection => accepted(env, context)
                   case ReplayTriggered     => Future.successful(None)
                   case NotReplayed         => Future.successful(None)
                 }
               case RejectedBacktrackingSeqNr =>
-                replayIfPossible(env, observer(context)).flatMap {
+                replayIfPossible(env, observer(context), parentFlowTerminated.future).flatMap {
                   // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
                   case ReplayedOnRejection => accepted(env, context)
                   case ReplayTriggered     => Future.successful(None)
