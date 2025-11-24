@@ -216,7 +216,10 @@ object InternalProjectionStateMetricsSpec {
 
     class TestRunningProjection(val source: Source[Done, _], killSwitch: SharedKillSwitch) extends RunningProjection {
 
-      private val futureDone = source.run()
+      private val futureDone = source
+      // make sure to not wait for RestartSource backoff if the mappedSource failed just before the projection stopped
+        .via(killSwitch.flow)
+        .run()
 
       override def stop(): Future[Done] = {
         killSwitch.shutdown()

@@ -1182,7 +1182,10 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
       extends RunningProjection
       with RunningProjectionManagement[Offset] {
 
-    private val streamDone = source.run()
+    private val streamDone = source
+    // make sure to not wait for RestartSource backoff if the mappedSource failed just before the projection stopped
+      .via(projectionState.killSwitch.flow)
+      .run()
 
     override def stop(): Future[Done] = {
       projectionState.killSwitch.shutdown()

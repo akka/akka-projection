@@ -201,7 +201,10 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
 
     private implicit val executionContext: ExecutionContext = system.executionContext
 
-    private val streamDone = source.run()
+    private val streamDone = source
+    // make sure to not wait for RestartSource backoff if the mappedSource failed just before the projection stopped
+      .via(projectionState.killSwitch.flow)
+      .run()
 
     override def stop(): Future[Done] = {
       projectionState.killSwitch.shutdown()
