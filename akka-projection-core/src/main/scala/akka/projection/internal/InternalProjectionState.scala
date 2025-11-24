@@ -13,7 +13,6 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 import scala.util.control.NonFatal
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.Cancellable
@@ -32,10 +31,19 @@ import akka.projection.scaladsl.HandlerLifecycle
 import akka.projection.scaladsl.MergeableOffsetSourceProvider
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.scaladsl.VerifiableSourceProvider
+import akka.stream.FlowShape
+import akka.stream.Graph
 import akka.stream.KillSwitches
 import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Source
+
+trait LooksLikeAKillSwitch {
+  def shutdown(): Unit
+  def abort(reason: Throwable): Unit
+  def flow[T]: Graph[FlowShape[T, T], SharedKillSwitch]
+  def actual: SharedKillSwitch
+}
 
 /**
  * INTERNAL API
@@ -61,7 +69,21 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
   def readPaused(): Future[Boolean]
   def readOffsets(): Future[Option[Offset]]
   def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done]
-  val killSwitch: SharedKillSwitch = KillSwitches.shared(projectionId.id)
+  val killSwitch: LooksLikeAKillSwitch = new LooksLikeAKillSwitch {
+    override val actual: SharedKillSwitch = KillSwitches.shared(projectionId.id)
+
+    override def shutdown(): Unit = {
+      logger.info("Killswitch shutdown for projection [{}]", projectionId.id)
+      actual.shutdown()
+    }
+
+    override def abort(reason: Throwable): Unit = {
+      logger.info("Killswitch abort for projection [{}], reason: [{}]", projectionId.id, reason.getMessage)
+      actual.abort(reason)
+    }
+
+    def flow[T]: Graph[FlowShape[T, T], SharedKillSwitch] = actual.flow
+  }
   val abort: Promise[Done] = Promise()
 
   protected def saveOffsetAndReport(
@@ -473,6 +495,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
         futDone
           .andThen {
             case _ =>
+              logger.info("Projection stream stopped, projection id [{}]", projectionId.id)
               handlerLifecycle.tryStop()
               backlogStatusChecks.foreach(_.cancel())
           }

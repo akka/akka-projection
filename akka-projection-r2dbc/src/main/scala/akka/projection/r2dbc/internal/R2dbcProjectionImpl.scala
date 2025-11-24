@@ -1266,7 +1266,8 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     private val streamDone = source.run()
 
     override def stop(): Future[Done] = {
-      projectionState.killSwitch.shutdown()
+      // needs to be aborted or else the RestartSource will backoff+restart
+      projectionState.killSwitch.abort(AbortProjectionException)
       // if the handler is retrying it will be aborted by this,
       // otherwise the stream would not be completed by the killSwitch until after all retries
       projectionState.abort.failure(AbortProjectionException)

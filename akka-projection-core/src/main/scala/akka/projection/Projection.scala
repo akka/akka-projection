@@ -16,6 +16,8 @@ import akka.projection.internal.ProjectionSettings
 import akka.stream.scaladsl.RestartSource
 import akka.stream.scaladsl.Source
 
+import scala.concurrent.ExecutionContext
+
 /**
  * The core abstraction in Akka Projections.
  *
@@ -103,6 +105,10 @@ private[projection] object RunningProjection {
     RestartSource
       .onFailuresWithBackoff(settings.restartBackoff) { () =>
         source()
+          .watchTermination() { (l, r) =>
+            r.failed.foreach(t => println("### stream fail: " + t))(ExecutionContext.parasitic)
+            l
+          }
           .recoverWithRetries(1, {
             case AbortProjectionException => Source.empty // don't restart
           })

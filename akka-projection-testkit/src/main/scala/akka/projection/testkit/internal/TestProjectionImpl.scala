@@ -168,7 +168,7 @@ private[projection] class TestInternalProjectionState[Offset, Envelope](
     offsetStore.saveOffset(projectionId, offset)
 
   def newRunningInstance(): RunningProjection =
-    new TestRunningProjection(mappedSource(), killSwitch)
+    new TestRunningProjection(mappedSource(), killSwitch.actual)
 
 }
 
