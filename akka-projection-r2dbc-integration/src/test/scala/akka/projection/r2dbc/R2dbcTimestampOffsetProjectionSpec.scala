@@ -13,7 +13,6 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Supplier
-
 import scala.annotation.tailrec
 import scala.collection.immutable
 import scala.concurrent.Await
@@ -25,7 +24,6 @@ import scala.jdk.CollectionConverters._
 import scala.jdk.DurationConverters._
 import scala.jdk.FutureConverters._
 import scala.jdk.OptionConverters._
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.testkit.typed.TestException
@@ -2570,6 +2568,72 @@ class R2dbcTimestampOffsetProjectionSpec
           slice1 -> expectedRecord1,
           slice2 -> expectedRecord2)
       }
+    }
+
+    "stop replay when the flow projection stops" in {
+      val pid1 = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+
+      // gap to trigger replay
+      val skipSeqNrs = Set(2L, 3L, 4L)
+      val allEnvelopes = createEnvelopes(pid1, 6)
+      val envelopes = allEnvelopes.filterNot { env =>
+        (env.persistenceId == pid1 && skipSeqNrs(env.sequenceNr))
+      }
+
+      val sourceProvider =
+        createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
+
+      sealed trait HandlerEvent {}
+      case object HandlerMaterialized extends HandlerEvent
+      case object HandlerStopped extends HandlerEvent
+      case class Process(envelope: EventEnvelope[String], complete: Promise[Done]) extends HandlerEvent
+      val handlerProbe = createTestProbe[HandlerEvent]()
+
+      val flowHandler: FlowWithContext[EventEnvelope[String], ProjectionContext, Done, ProjectionContext, NotUsed] =
+        FlowWithContext[EventEnvelope[String], ProjectionContext]
+          .mapMaterializedValue { _ =>
+            handlerProbe.ref ! HandlerMaterialized
+            NotUsed
+          }
+          .mapAsync(1) { env =>
+            val promise = Promise[Done]()
+            handlerProbe.ref ! Process(env, promise)
+            promise.future
+          }
+          .asFlow
+          .watchTermination() { (_, terminationFuture) =>
+            terminationFuture.onComplete(_ => handlerProbe.ref ! HandlerStopped)
+            NotUsed
+          }
+          .asFlowWithContext[EventEnvelope[String], ProjectionContext, ProjectionContext]((env, ctx) => (env, ctx))(t =>
+            t._2)
+          .map(_._1)
+
+      val projectionRef = spawn(
+        ProjectionBehavior(
+          R2dbcProjection
+            .atLeastOnceFlow[TimestampOffset, EventEnvelope[String]](
+              projectionId,
+              Some(settings.withReplayOnRejectedSequenceNumbers(true)),
+              sourceProvider,
+              handler = flowHandler)))
+
+      handlerProbe.expectMessage(HandlerMaterialized)
+      val Process(envelope1, complete1) = handlerProbe.expectMessageType[Process]
+      envelope1.sequenceNr shouldEqual 1L
+      complete1.success(Done)
+
+      // gap detected triggers replay, separate materialization
+      handlerProbe.expectMessage(HandlerMaterialized)
+      val Process(envelope2, _) = handlerProbe.expectMessageType[Process]
+      envelope2.sequenceNr shouldEqual 2L
+
+      // don't complete it, instead stop the projection
+      projectionRef ! ProjectionBehavior.Stop
+      // main flow waiting for mapAsync replay completing, replay killswitch is upstream of process, so we
+      handlerProbe.expectMessage(HandlerStopped) // main flow
+      handlerProbe.expectMessage(HandlerStopped) // replay
     }
 
     "replay rejected sequence numbers due to clock skew for flow projection" in {

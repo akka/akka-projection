@@ -618,11 +618,6 @@ private[projection] object R2dbcProjectionImpl {
                   provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                     case Some(querySource) =>
                       querySource
-                        .viaMat(KillSwitches.single)(Keep.right)
-                        .mapMaterializedValue { killSwitch =>
-                          // make sure to cancel replay if parent projection flow stops
-                          parentFlowCompleted.onComplete(_ => killSwitch.shutdown())
-                        }
                         .mapAsync(1) { envelope =>
                           import R2dbcOffsetStore.Validation._
                           offsetStore
@@ -653,6 +648,13 @@ private[projection] object R2dbcProjectionImpl {
                           case Some(env) => ProjectionContextImpl(sourceProvider.extractOffset(env), env)
                         }
                         .via(ObservableFlowHandler(handler.asFlow, observer))
+                        .viaMat(KillSwitches.single)(Keep.right)
+                        .mapMaterializedValue { killSwitch =>
+                          // make sure to cancel replay if parent projection flow stops
+                          parentFlowCompleted.onComplete { _ =>
+                            killSwitch.abort(AbortProjectionException)
+                          }
+                        }
                         .run()
                         .map(_ => ReplayedOnRejection: ReplayResult)(ExecutionContext.parasitic)
                         .recoverWith { exc =>
@@ -1279,7 +1281,9 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       extends RunningProjection
       with RunningProjectionManagement[Offset] {
 
-    private val streamDone = source.run()
+    private val streamDone = source
+      .via(projectionState.killSwitch.flow)
+      .run()
 
     override def stop(): Future[Done] = {
       projectionState.killSwitch.shutdown()
