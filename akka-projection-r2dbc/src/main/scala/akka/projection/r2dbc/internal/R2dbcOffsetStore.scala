@@ -518,9 +518,9 @@ private[projection] class R2dbcOffsetStore(
       Future.successful(oldState)
     else {
       val slice = persistenceExt.sliceForPersistenceId(pid)
-      logger.trace("{} load [{}]", logPrefix, pid)
       dao.readTimestampOffset(slice, pid).flatMap {
         case Some(record) =>
+          logger.trace("{} loaded pid [{}], seqNr [{}]", logPrefix, pid, record.seqNr)
           val newState = oldState.add(Vector(record), settings.acceptSequenceNumberResetAfter)
           if (state.compareAndSet(oldState, newState))
             Future.successful(newState)
@@ -537,14 +537,16 @@ private[projection] class R2dbcOffsetStore(
     if (pidsToLoad.isEmpty)
       Future.successful(oldState)
     else {
-      if (logger.isTraceEnabled()) {
-        logger.trace("{} load many [{}]", logPrefix, pidsToLoad.mkString(", "))
-      }
       val loadedRecords = pidsToLoad.map { pid =>
         val slice = persistenceExt.sliceForPersistenceId(pid)
         dao.readTimestampOffset(slice, pid)
       }
       Future.sequence(loadedRecords).flatMap { records =>
+        if (logger.isTraceEnabled) {
+          records.flatten.foreach { record =>
+            logger.trace("{} loaded pid [{}], seqNr [{}]", logPrefix, record.pid, record.seqNr)
+          }
+        }
         val newState = oldState.add(records.flatten, settings.acceptSequenceNumberResetAfter)
         if (state.compareAndSet(oldState, newState))
           Future.successful(newState)
