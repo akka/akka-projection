@@ -23,6 +23,7 @@ import akka.projection.internal.NoopStatusObserver
 import akka.projection.internal.OffsetStoredByHandler
 import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.r2dbc.R2dbcProjectionSettings
+import akka.projection.r2dbc.internal.R2dbcOffsetStore
 import akka.projection.r2dbc.internal.R2dbcProjectionImpl
 import akka.projection.scaladsl.AtLeastOnceFlowProjection
 import akka.projection.scaladsl.AtLeastOnceProjection
@@ -57,14 +58,16 @@ object R2dbcProjection {
       new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding, closeExceeding)(
         system.executionContext,
         system)
-    val offsetStore =
-      R2dbcProjectionImpl.createOffsetStore(
-        projectionId,
-        timestampOffsetBySlicesSourceProvider(sourceProvider),
-        r2dbcSettings,
-        r2dbcExecutor)
+    val offsetStoreFactory: String => R2dbcOffsetStore =
+      uuid =>
+        R2dbcProjectionImpl.createOffsetStore(
+          projectionId,
+          uuid,
+          timestampOffsetBySlicesSourceProvider(sourceProvider),
+          r2dbcSettings,
+          r2dbcExecutor)
 
-    val adaptedHandler =
+    def adaptedHandler(offsetStore: R2dbcOffsetStore) =
       R2dbcProjectionImpl.adaptedHandlerForExactlyOnce(sourceProvider, handler, offsetStore, r2dbcExecutor)(
         system.executionContext,
         system)
@@ -76,9 +79,9 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = ExactlyOnce(),
-      handlerStrategy = SingleHandlerStrategy(adaptedHandler),
+      handlerStrategyFactory = offsetStore => SingleHandlerStrategy(adaptedHandler(offsetStore)),
       NoopStatusObserver,
-      offsetStore)
+      offsetStoreFactory)
   }
 
   /**
@@ -110,14 +113,16 @@ object R2dbcProjection {
       new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding, closeExceeding)(
         system.executionContext,
         system)
-    val offsetStore =
-      R2dbcProjectionImpl.createOffsetStore(
-        projectionId,
-        timestampOffsetBySlicesSourceProvider(sourceProvider),
-        r2dbcSettings,
-        r2dbcExecutor)
+    val offsetStoreFactory: String => R2dbcOffsetStore =
+      uuid =>
+        R2dbcProjectionImpl.createOffsetStore(
+          projectionId,
+          uuid,
+          timestampOffsetBySlicesSourceProvider(sourceProvider),
+          r2dbcSettings,
+          r2dbcExecutor)
 
-    val adaptedHandler =
+    def adaptedHandler(offsetStore: R2dbcOffsetStore) =
       R2dbcProjectionImpl.adaptedHandlerForAtLeastOnce(sourceProvider, handler, offsetStore, r2dbcExecutor)(
         system.executionContext,
         system)
@@ -129,9 +134,9 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
-      handlerStrategy = SingleHandlerStrategy(adaptedHandler),
+      handlerStrategyFactory = offsetStore => SingleHandlerStrategy(adaptedHandler(offsetStore)),
       NoopStatusObserver,
-      offsetStore)
+      offsetStoreFactory)
   }
 
   /**
@@ -161,14 +166,16 @@ object R2dbcProjection {
       new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding, closeExceeding)(
         system.executionContext,
         system)
-    val offsetStore =
-      R2dbcProjectionImpl.createOffsetStore(
-        projectionId,
-        timestampOffsetBySlicesSourceProvider(sourceProvider),
-        r2dbcSettings,
-        r2dbcExecutor)
+    val offsetStoreFactory: String => R2dbcOffsetStore =
+      uuid =>
+        R2dbcProjectionImpl.createOffsetStore(
+          projectionId,
+          uuid,
+          timestampOffsetBySlicesSourceProvider(sourceProvider),
+          r2dbcSettings,
+          r2dbcExecutor)
 
-    val adaptedHandler =
+    def adaptedHandler(offsetStore: R2dbcOffsetStore) =
       R2dbcProjectionImpl.adaptedHandlerForAtLeastOnceAsync(sourceProvider, handler, offsetStore)(
         system.executionContext,
         system)
@@ -180,9 +187,9 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
-      handlerStrategy = SingleHandlerStrategy(adaptedHandler),
+      handlerStrategyFactory = offsetStore => SingleHandlerStrategy(adaptedHandler(offsetStore)),
       NoopStatusObserver,
-      offsetStore)
+      offsetStoreFactory)
   }
 
   /**
@@ -209,14 +216,16 @@ object R2dbcProjection {
       new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding, closeExceeding)(
         system.executionContext,
         system)
-    val offsetStore =
-      R2dbcProjectionImpl.createOffsetStore(
-        projectionId,
-        timestampOffsetBySlicesSourceProvider(sourceProvider),
-        r2dbcSettings,
-        r2dbcExecutor)
+    val offsetStoreFactory: String => R2dbcOffsetStore =
+      uuid =>
+        R2dbcProjectionImpl.createOffsetStore(
+          projectionId,
+          uuid,
+          timestampOffsetBySlicesSourceProvider(sourceProvider),
+          r2dbcSettings,
+          r2dbcExecutor)
 
-    val adaptedHandler =
+    def adaptedHandler(offsetStore: R2dbcOffsetStore) =
       R2dbcProjectionImpl.adaptedHandlerForGrouped(sourceProvider, handler, offsetStore, r2dbcExecutor)(
         system.executionContext,
         system)
@@ -228,9 +237,9 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = ExactlyOnce(),
-      handlerStrategy = GroupedHandlerStrategy(adaptedHandler),
+      handlerStrategyFactory = offsetStore => GroupedHandlerStrategy(adaptedHandler(offsetStore)),
       NoopStatusObserver,
-      offsetStore)
+      offsetStoreFactory)
   }
 
   /**
@@ -261,14 +270,16 @@ object R2dbcProjection {
       new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding, closeExceeding)(
         system.executionContext,
         system)
-    val offsetStore =
-      R2dbcProjectionImpl.createOffsetStore(
-        projectionId,
-        timestampOffsetBySlicesSourceProvider(sourceProvider),
-        r2dbcSettings,
-        r2dbcExecutor)
+    val offsetStoreFactory: String => R2dbcOffsetStore =
+      uuid =>
+        R2dbcProjectionImpl.createOffsetStore(
+          projectionId,
+          uuid,
+          timestampOffsetBySlicesSourceProvider(sourceProvider),
+          r2dbcSettings,
+          r2dbcExecutor)
 
-    val adaptedHandler =
+    def adaptedHandler(offsetStore: R2dbcOffsetStore) =
       R2dbcProjectionImpl.adaptedHandlerForGroupedAsync(sourceProvider, handler, offsetStore)(
         system.executionContext,
         system)
@@ -280,9 +291,9 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = OffsetStoredByHandler(),
-      handlerStrategy = GroupedHandlerStrategy(adaptedHandler),
+      handlerStrategyFactory = offsetStore => GroupedHandlerStrategy(adaptedHandler(offsetStore)),
       NoopStatusObserver,
-      offsetStore)
+      offsetStoreFactory)
   }
 
   /**
@@ -321,14 +332,16 @@ object R2dbcProjection {
       new R2dbcExecutor(connFactory, R2dbcProjectionImpl.log, r2dbcSettings.logDbCallsExceeding, closeExceeding)(
         system.executionContext,
         system)
-    val offsetStore =
-      R2dbcProjectionImpl.createOffsetStore(
-        projectionId,
-        timestampOffsetBySlicesSourceProvider(sourceProvider),
-        r2dbcSettings,
-        r2dbcExecutor)
+    val offsetStoreFactory: String => R2dbcOffsetStore =
+      uuid =>
+        R2dbcProjectionImpl.createOffsetStore(
+          projectionId,
+          uuid,
+          timestampOffsetBySlicesSourceProvider(sourceProvider),
+          r2dbcSettings,
+          r2dbcExecutor)
 
-    val adaptedHandler =
+    def adaptedHandler(offsetStore: R2dbcOffsetStore) =
       R2dbcProjectionImpl.adaptedHandlerForFlow(sourceProvider, handler, offsetStore, r2dbcSettings)(system)
 
     new R2dbcProjectionImpl(
@@ -338,9 +351,9 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
-      handlerStrategy = FlowHandlerStrategy(adaptedHandler),
+      handlerStrategyFactory = offsetStore => FlowHandlerStrategy(adaptedHandler(offsetStore)),
       NoopStatusObserver,
-      offsetStore)
+      offsetStoreFactory)
   }
 
   private def connectionFactory(system: ActorSystem[_], r2dbcSettings: R2dbcProjectionSettings): ConnectionFactory = {

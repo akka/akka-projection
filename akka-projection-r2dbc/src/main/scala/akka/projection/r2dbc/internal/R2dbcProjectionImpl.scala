@@ -5,6 +5,7 @@
 package akka.projection.r2dbc.internal
 
 import java.time.Instant
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 
 import scala.annotation.nowarn
@@ -63,6 +64,7 @@ import akka.projection.javadsl
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.RejectedEnvelope
 import akka.projection.r2dbc.internal.R2dbcProjectionImpl.extractOffsetPidSeqNr
+import akka.projection.r2dbc.internal.R2dbcProjectionImpl.log
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcSession
 import akka.projection.scaladsl
@@ -91,10 +93,11 @@ private[projection] object R2dbcProjectionImpl {
 
   private[projection] def createOffsetStore(
       projectionId: ProjectionId,
+      uuid: String,
       sourceProvider: Option[BySlicesSourceProvider],
       settings: R2dbcProjectionSettings,
       r2dbcExecutor: R2dbcExecutor)(implicit system: ActorSystem[_]) = {
-    new R2dbcOffsetStore(projectionId, sourceProvider, system, settings, r2dbcExecutor)
+    new R2dbcOffsetStore(projectionId, uuid, sourceProvider, system, settings, r2dbcExecutor)
   }
 
   private val loadEnvelopeCounter = new AtomicLong
@@ -1061,9 +1064,9 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     sourceProvider: SourceProvider[Offset, Envelope],
     restartBackoffOpt: Option[RestartSettings],
     val offsetStrategy: OffsetStrategy,
-    handlerStrategy: HandlerStrategy,
+    handlerStrategyFactory: R2dbcOffsetStore => HandlerStrategy,
     override val statusObserver: StatusObserver[Envelope],
-    offsetStore: R2dbcOffsetStore)
+    offsetStoreFactory: String => R2dbcOffsetStore)
     extends scaladsl.ExactlyOnceProjection[Offset, Envelope]
     with javadsl.ExactlyOnceProjection[Offset, Envelope]
     with scaladsl.GroupedProjection[Offset, Envelope]
@@ -1079,7 +1082,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,
       restartBackoffOpt: Option[RestartSettings] = this.restartBackoffOpt,
       offsetStrategy: OffsetStrategy = this.offsetStrategy,
-      handlerStrategy: HandlerStrategy = this.handlerStrategy,
+      handlerStrategyFactory: R2dbcOffsetStore => HandlerStrategy = this.handlerStrategyFactory,
       statusObserver: StatusObserver[Envelope] = this.statusObserver): R2dbcProjectionImpl[Offset, Envelope] =
     new R2dbcProjectionImpl(
       projectionId,
@@ -1088,9 +1091,9 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       sourceProvider,
       restartBackoffOpt,
       offsetStrategy,
-      handlerStrategy,
+      handlerStrategyFactory,
       statusObserver,
-      offsetStore)
+      offsetStoreFactory)
 
   type ReadOffset = () => Future[Option[Offset]]
 
@@ -1118,9 +1121,10 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
   override def withGroup(
       groupAfterEnvelopes: Int,
       groupAfterDuration: FiniteDuration): R2dbcProjectionImpl[Offset, Envelope] =
-    copy(handlerStrategy = handlerStrategy
-      .asInstanceOf[GroupedHandlerStrategy[Envelope]]
-      .copy(afterEnvelopes = Some(groupAfterEnvelopes), orAfterDuration = Some(groupAfterDuration)))
+    copy(handlerStrategyFactory = offsetStore =>
+      handlerStrategyFactory(offsetStore)
+        .asInstanceOf[GroupedHandlerStrategy[Envelope]]
+        .copy(afterEnvelopes = Some(groupAfterEnvelopes), orAfterDuration = Some(groupAfterDuration)))
 
   override def withRecoveryStrategy(
       recoveryStrategy: HandlerRecoveryStrategy): R2dbcProjectionImpl[Offset, Envelope] = {
@@ -1138,14 +1142,18 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
   override def withStatusObserver(observer: StatusObserver[Envelope]): R2dbcProjectionImpl[Offset, Envelope] =
     copy(statusObserver = observer)
 
-  private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
-    handlerStrategy.actorHandlerInit
+  private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = {
+    // FIXME can actorHandlerInit be moved to the RunningProjection?
+    //handlerStrategy.actorHandlerInit
+    None
+  }
 
   /**
    * INTERNAL API Return a RunningProjection
    */
-  override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
+  override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection = {
     new R2dbcInternalProjectionState(settingsOrDefaults).newRunningInstance()
+  }
 
   /**
    * INTERNAL API
@@ -1156,15 +1164,26 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
   override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] =
     new R2dbcInternalProjectionState(settingsOrDefaults).mappedSource()
 
-  private class R2dbcInternalProjectionState(settings: ProjectionSettings)(implicit val system: ActorSystem[_])
+  private class R2dbcInternalProjectionState(
+      settings: ProjectionSettings,
+      val uuid: String,
+      val offsetStore: R2dbcOffsetStore)(implicit val system: ActorSystem[_])
       extends InternalProjectionState[Offset, Envelope](
         projectionId,
         sourceProvider,
         offsetStrategy,
-        handlerStrategy,
+        handlerStrategyFactory(offsetStore),
         statusObserver,
         settings)
       with BacklogStatusProjectionState {
+
+    def this(settings: ProjectionSettings, uuid: String)(implicit system: ActorSystem[_]) = {
+      this(settings, uuid, offsetStore = offsetStoreFactory(uuid))
+    }
+
+    def this(settings: ProjectionSettings)(implicit system: ActorSystem[_]) = {
+      this(settings, uuid = UUID.randomUUID().toString)
+    }
 
     implicit val executionContext: ExecutionContext = system.executionContext
     override val logger: LoggingAdapter = Logging(system.classicSystem, classOf[R2dbcProjectionImpl[_, _]])
@@ -1186,7 +1205,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       // need the envelope to be able to call offsetStore.saveOffset
       // FIXME maybe we can cleanup this mess when moving R2dbcProjection to the Akka Projections repository? This is all internal api.
       throw new IllegalStateException(
-        "Unexpected call to saveOffset. It should have called saveOffsetAndReport. Please report bug at https://github.com/akka/akka-projection/issues")
+        s"[$uuid] Unexpected call to saveOffset. It should have called saveOffsetAndReport. Please report bug at https://github.com/akka/akka-projection/issues")
     }
 
     override protected def saveOffsetAndReport(
@@ -1253,8 +1272,21 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     override private[akka] def latestOffsetTimestamp(): Future[Option[Instant]] =
       Future.successful(offsetStore.getState().latestOffset.map(_.timestamp))
 
-    private[projection] def newRunningInstance(): RunningProjection =
+    private[projection] def newRunningInstance(): RunningProjection = {
       new R2dbcRunningProjection(RunningProjection.withBackoff(() => this.mappedSource(), settings), this)
+    }
+
+    override def mappedSource(): Source[Done, Future[Done]] = {
+      super.mappedSource().mapMaterializedValue { value =>
+        log.info(
+          "Starting projection instance {} [{}-{}] [{}]",
+          projectionId.name,
+          offsetStore.minSlice,
+          offsetStore.maxSlice,
+          uuid)
+        value
+      }
+    }
   }
 
   private class R2dbcRunningProjection(source: Source[Done, _], projectionState: R2dbcInternalProjectionState)(
@@ -1266,33 +1298,39 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     private val streamDone = source.run()
 
     override def stop(): Future[Done] = {
+      log.info(
+        "Stopping projection instance {} [{}-{}] [{}]",
+        projectionId.name,
+        projectionState.offsetStore.minSlice,
+        projectionState.offsetStore.maxSlice,
+        projectionState.uuid)
       projectionState.killSwitch.shutdown()
       // if the handler is retrying it will be aborted by this,
       // otherwise the stream would not be completed by the killSwitch until after all retries
       projectionState.abort.failure(AbortProjectionException)
-      streamDone.andThen(_ => offsetStore.stop())(system.executionContext)
+      streamDone.andThen(_ => projectionState.offsetStore.stop())(system.executionContext)
     }
 
     // RunningProjectionManagement
     override def getOffset(): Future[Option[Offset]] = {
-      offsetStore.getOffset()
+      projectionState.offsetStore.getOffset()
     }
 
     // RunningProjectionManagement
     override def setOffset(offset: Option[Offset]): Future[Done] = {
       offset match {
-        case Some(o) => offsetStore.managementSetOffset(o)
-        case None    => offsetStore.managementClearOffset()
+        case Some(o) => projectionState.offsetStore.managementSetOffset(o)
+        case None    => projectionState.offsetStore.managementClearOffset()
       }
     }
 
     // RunningProjectionManagement
     override def getManagementState(): Future[Option[ManagementState]] =
-      offsetStore.readManagementState()
+      projectionState.offsetStore.readManagementState()
 
     // RunningProjectionManagement
     override def setPaused(paused: Boolean): Future[Done] =
-      offsetStore.savePaused(paused)
+      projectionState.offsetStore.savePaused(paused)
   }
 
 }

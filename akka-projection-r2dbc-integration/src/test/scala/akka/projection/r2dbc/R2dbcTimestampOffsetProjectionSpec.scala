@@ -237,7 +237,13 @@ class R2dbcTimestampOffsetProjectionSpec
   private def createOffsetStore(
       projectionId: ProjectionId,
       sourceProvider: TestTimestampSourceProvider): R2dbcOffsetStore =
-    new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+    new R2dbcOffsetStore(
+      projectionId,
+      UUID.randomUUID().toString,
+      Some(sourceProvider),
+      system,
+      settings,
+      r2dbcExecutor)
   private val projectionTestKit = ProjectionTestKit(system)
 
   override protected def beforeAll(): Unit = {
@@ -773,7 +779,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       val projectionRef = spawn(
         ProjectionBehavior(
@@ -830,7 +842,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       val projectionRef = spawn(
         ProjectionBehavior(
@@ -878,7 +896,13 @@ class R2dbcTimestampOffsetProjectionSpec
       val sourceProvider = createSourceProvider(envelopes)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, testSettings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          testSettings,
+          r2dbcExecutor)
 
       val projectionRef = spawn(
         ProjectionBehavior(R2dbcProjection
@@ -925,7 +949,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, testSettings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          testSettings,
+          r2dbcExecutor)
 
       val projectionRef = spawn(
         ProjectionBehavior(R2dbcProjection
@@ -1092,7 +1122,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       val handlerProbe = createTestProbe[String]("calls-to-handler")
 
@@ -1152,7 +1188,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       val handlerProbe = createTestProbe[String]("calls-to-handler")
 
@@ -1202,7 +1244,13 @@ class R2dbcTimestampOffsetProjectionSpec
       val (sourceProvider, sourceProbe) = createDynamicSourceProvider(allEnvelopes)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, testSettings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          testSettings,
+          r2dbcExecutor)
 
       val handlerProbe = createTestProbe[String]("calls-to-handler")
 
@@ -1261,7 +1309,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createDynamicSourceProvider(allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, testSettings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          testSettings,
+          r2dbcExecutor)
 
       val handlerProbe = createTestProbe[String]("calls-to-handler")
 
@@ -1379,7 +1433,13 @@ class R2dbcTimestampOffsetProjectionSpec
       val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       val result1 = new StringBuffer()
       val result2 = new StringBuffer()
@@ -1482,7 +1542,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       val results = new ConcurrentHashMap[String, String]()
 
@@ -1552,7 +1618,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       val results = new ConcurrentHashMap[String, String]()
 
@@ -1612,7 +1684,13 @@ class R2dbcTimestampOffsetProjectionSpec
       val (sourceProvider, sourceProbe) = createDynamicSourceProvider(allEnvelopes)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, testSettings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          testSettings,
+          r2dbcExecutor)
 
       val results = new ConcurrentHashMap[String, String]()
 
@@ -1677,7 +1755,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createDynamicSourceProvider(allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, testSettings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          testSettings,
+          r2dbcExecutor)
 
       val results = new ConcurrentHashMap[String, String]()
 
@@ -1733,7 +1817,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createJavaSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       val results = new ConcurrentHashMap[String, String]()
 
@@ -1804,7 +1894,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createJavaSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       val results = new ConcurrentHashMap[String, String]()
 
@@ -1890,7 +1986,13 @@ class R2dbcTimestampOffsetProjectionSpec
       val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       val projectionRef = spawn(
         ProjectionBehavior(
@@ -2094,7 +2196,13 @@ class R2dbcTimestampOffsetProjectionSpec
       val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       val result1 = new StringBuffer()
       val result2 = new StringBuffer()
@@ -2183,7 +2291,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       val projectionRef = spawn(
         ProjectionBehavior(
@@ -2240,7 +2354,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       val projectionRef = spawn(
         ProjectionBehavior(
@@ -2288,7 +2408,13 @@ class R2dbcTimestampOffsetProjectionSpec
       val (sourceProvider, sourceProbe) = createDynamicSourceProvider(allEnvelopes)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, testSettings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          testSettings,
+          r2dbcExecutor)
 
       val projectionRef = spawn(
         ProjectionBehavior(R2dbcProjection
@@ -2339,7 +2465,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createDynamicSourceProvider(allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, testSettings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          testSettings,
+          r2dbcExecutor)
 
       val projectionRef = spawn(
         ProjectionBehavior(R2dbcProjection
@@ -2434,7 +2566,13 @@ class R2dbcTimestampOffsetProjectionSpec
       val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       val flowHandler =
         FlowWithContext[EventEnvelope[String], ProjectionContext]
@@ -2530,7 +2668,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       offsetShouldBeEmpty()
 
@@ -2606,7 +2750,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, settings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          settings,
+          r2dbcExecutor)
 
       offsetShouldBeEmpty()
 
@@ -2660,7 +2810,13 @@ class R2dbcTimestampOffsetProjectionSpec
       val (sourceProvider, sourceProbe) = createDynamicSourceProvider(allEnvelopes)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, testSettings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          testSettings,
+          r2dbcExecutor)
 
       val flowHandler =
         FlowWithContext[EventEnvelope[String], ProjectionContext]
@@ -2719,7 +2875,13 @@ class R2dbcTimestampOffsetProjectionSpec
         createDynamicSourceProvider(allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: R2dbcOffsetStore =
-        new R2dbcOffsetStore(projectionId, Some(sourceProvider), system, testSettings, r2dbcExecutor)
+        new R2dbcOffsetStore(
+          projectionId,
+          UUID.randomUUID().toString,
+          Some(sourceProvider),
+          system,
+          testSettings,
+          r2dbcExecutor)
 
       val flowHandler =
         FlowWithContext[EventEnvelope[String], ProjectionContext]

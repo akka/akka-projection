@@ -238,6 +238,9 @@ private[projection] object R2dbcOffsetStore {
       deleteOffsets.foreach(_.cancel())
     }
   }
+
+  final class AttemptToUseStoppedOffsetStore(logPrefix: String)
+      extends RuntimeException(s"$logPrefix R2dbcOffsetStore was stopped")
 }
 
 /**
@@ -246,6 +249,7 @@ private[projection] object R2dbcOffsetStore {
 @InternalApi
 private[projection] class R2dbcOffsetStore(
     projectionId: ProjectionId,
+    uuid: String,
     sourceProvider: Option[BySlicesSourceProvider],
     system: ActorSystem[_],
     val settings: R2dbcProjectionSettings,
@@ -256,7 +260,7 @@ private[projection] class R2dbcOffsetStore(
 
   private val persistenceExt = Persistence(system)
 
-  private val (minSlice, maxSlice) = {
+  val (minSlice, maxSlice) = {
     sourceProvider match {
       case Some(provider) => (provider.minSlice, provider.maxSlice)
       case None           => (0, persistenceExt.numberOfSlices - 1)
@@ -264,7 +268,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private val logger = LoggerFactory.getLogger(this.getClass)
-  val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]:"
+  val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice] [$uuid]:"
 
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
@@ -312,6 +316,8 @@ private[projection] class R2dbcOffsetStore(
   private val adoptingForeignOffsets = !settings.adoptInterval.isZero && !settings.adoptInterval.isNegative
 
   private val scheduledTasks = new AtomicReference[ScheduledTasks](ScheduledTasks(None, None))
+
+  @volatile private var stopped = false
 
   @tailrec
   private def scheduleTasks(): Unit = {
@@ -381,6 +387,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   def readOffset[Offset](): Future[Option[Offset]] = {
+    checkStopped()
     scheduleTasks()
 
     // look for TimestampOffset first since that is used by akka-persistence-r2dbc,
@@ -401,6 +408,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private def readTimestampOffset(): Future[Option[TimestampOffset]] = {
+    checkStopped()
     implicit val sys = system // for implicit stream materializer
     triggerDeletionPerSlice.clear()
     val oldState = state.get()
@@ -490,6 +498,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private def readPrimitiveOffset[Offset](): Future[Option[Offset]] = {
+    checkStopped()
     if (settings.isOffsetTableDefined) {
       val singleOffsets = dao.readPrimitiveOffset()
       singleOffsets.map { offsets =>
@@ -513,6 +522,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   def load(pid: Pid): Future[State] = {
+    checkStopped()
     val oldState = state.get()
     if (oldState.contains(pid))
       Future.successful(oldState)
@@ -532,6 +542,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   def load(pids: Set[Pid]): Future[State] = {
+    checkStopped()
     val oldState = state.get()
     val pidsToLoad = pids.filterNot(oldState.contains)
     if (pidsToLoad.isEmpty)
@@ -560,6 +571,7 @@ private[projection] class R2dbcOffsetStore(
    * Like saveOffsetInTx, but in own transaction. Used by atLeastOnce.
    */
   def saveOffset(offset: OffsetPidSeqNr): Future[Done] = {
+    checkStopped()
     r2dbcExecutor
       .withConnection("save offset") { conn =>
         saveOffsetInTx(conn, offset)
@@ -571,6 +583,7 @@ private[projection] class R2dbcOffsetStore(
    * This method is used together with the users' handler code and run in same transaction.
    */
   def saveOffsetInTx(conn: Connection, offset: OffsetPidSeqNr): Future[Done] = {
+    checkStopped()
     offset match {
       case OffsetPidSeqNr(t: TimestampOffset, Some((pid, seqNr))) =>
         val slice = persistenceExt.sliceForPersistenceId(pid)
@@ -585,6 +598,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   def saveOffsets(offsets: immutable.IndexedSeq[OffsetPidSeqNr]): Future[Done] = {
+    checkStopped()
     r2dbcExecutor
       .withConnection("save offsets") { conn =>
         saveOffsetsInTx(conn, offsets, canBeConcurrent = true)
@@ -599,6 +613,7 @@ private[projection] class R2dbcOffsetStore(
       conn: Connection,
       offsets: immutable.IndexedSeq[OffsetPidSeqNr],
       canBeConcurrent: Boolean): Future[Done] = {
+    checkStopped()
     if (offsets.isEmpty)
       FutureDone
     else if (offsets.head.offset.isInstanceOf[TimestampOffset]) {
@@ -623,6 +638,7 @@ private[projection] class R2dbcOffsetStore(
       conn: Connection,
       records: immutable.IndexedSeq[Record],
       canBeConcurrent: Boolean): Future[Done] = {
+    checkStopped()
     load(records.iterator.map(_.pid).toSet).flatMap { oldState =>
       val filteredRecords = {
         if (records.size <= 1)
@@ -726,6 +742,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   @tailrec private def cleanupInflight(newState: State): Unit = {
+    checkStopped()
     val currentInflight = getInflight()
     val newInflight =
       currentInflight.filter {
@@ -746,12 +763,14 @@ private[projection] class R2dbcOffsetStore(
   }
 
   @tailrec private def clearInflight(): Unit = {
+    checkStopped()
     val currentInflight = getInflight()
     if (!inflight.compareAndSet(currentInflight, Map.empty[Pid, SeqNr]))
       clearInflight() // CAS retry, concurrent update of inflight
   }
 
   private def savePrimitiveOffsetInTx[Offset](conn: Connection, offset: Offset): Future[Done] = {
+    checkStopped()
     logger.trace("{} saving offset [{}]", logPrefix, offset)
 
     if (!settings.isOffsetTableDefined)
@@ -772,6 +791,7 @@ private[projection] class R2dbcOffsetStore(
    * The stored sequence number for a persistenceId, or 0 if unknown persistenceId.
    */
   def storedSeqNr(pid: Pid): Future[SeqNr] = {
+    checkStopped()
     getState().byPid.get(pid) match {
       case Some(record) => Future.successful(record.seqNr)
       case None =>
@@ -785,6 +805,7 @@ private[projection] class R2dbcOffsetStore(
 
   def validateAll[Envelope](envelopes: immutable.Seq[Envelope]): Future[immutable.Seq[(Envelope, Validation)]] = {
     import Validation._
+    checkStopped()
     envelopes
       .foldLeft(Future.successful((getInflight(), Vector.empty[(Envelope, Validation)]))) { (acc, envelope) =>
         acc.flatMap {
@@ -816,6 +837,7 @@ private[projection] class R2dbcOffsetStore(
    * should be rejected.
    */
   def validate[Envelope](envelope: Envelope): Future[Validation] = {
+    checkStopped()
     createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) => validate(recordWithOffset, getInflight())
       case None                   => Validation.FutureAccepted
@@ -824,6 +846,7 @@ private[projection] class R2dbcOffsetStore(
 
   private def validate(recordWithOffset: RecordWithOffset, currentInflight: Map[Pid, SeqNr]): Future[Validation] = {
     import Validation._
+    checkStopped()
     val pid = recordWithOffset.record.pid
     val seqNr = recordWithOffset.record.seqNr
 
@@ -1015,6 +1038,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   @tailrec final def addInflight[Envelope](envelope: Envelope): Unit = {
+    checkStopped()
     createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) =>
         if (logger.isTraceEnabled)
@@ -1047,6 +1071,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   def isInflight[Envelope](envelope: Envelope): Boolean = {
+    checkStopped()
     createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) =>
         val pid = recordWithOffset.record.pid
@@ -1062,6 +1087,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   def deleteOldTimestampOffsets(): Future[Long] = {
+    checkStopped()
     // This is running in the background, so fine to progress slowly one slice at a time
     def loop(slice: Int, count: Long): Future[Long] = {
       if (slice > maxSlice)
@@ -1113,13 +1139,18 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
-  def getForeignOffsets(): Seq[RecordWithProjectionKey] =
+  def getForeignOffsets(): Seq[RecordWithProjectionKey] = {
+    checkStopped()
     foreignOffsets.get()
+  }
 
-  def hasForeignOffsets(): Boolean =
+  def hasForeignOffsets(): Boolean = {
+    checkStopped()
     adoptingForeignOffsets && getForeignOffsets().nonEmpty
+  }
 
   @tailrec private def setForeignOffsets(records: Seq[RecordWithProjectionKey]): Unit = {
+    checkStopped()
     val currentForeignOffsets = getForeignOffsets()
     if (!foreignOffsets.compareAndSet(currentForeignOffsets, records))
       setForeignOffsets(records) // CAS retry, concurrent update of foreignOffsets
@@ -1127,6 +1158,7 @@ private[projection] class R2dbcOffsetStore(
 
   // return the adoptable foreign offsets up to the latest timestamp, and set to the remaining foreign offsets
   @tailrec private def takeAdoptableForeignOffsets(latestTimestamp: Instant): Seq[RecordWithProjectionKey] = {
+    checkStopped()
     val currentForeignOffsets = getForeignOffsets()
     val adoptable = currentForeignOffsets.takeWhile(_.record.timestamp.compareTo(latestTimestamp) <= 0)
     if (adoptable.isEmpty) Seq.empty
@@ -1139,10 +1171,13 @@ private[projection] class R2dbcOffsetStore(
 
   private def clearForeignOffsets(): Unit = setForeignOffsets(Seq.empty)
 
-  def getLatestSeen(): Instant =
+  def getLatestSeen(): Instant = {
+    checkStopped()
     latestSeen.get()
+  }
 
   @tailrec private def updateLatestSeen(instant: Instant): Unit = {
+    checkStopped()
     val currentLatestSeen = getLatestSeen()
     if (instant.isAfter(currentLatestSeen)) {
       if (!latestSeen.compareAndSet(currentLatestSeen, instant))
@@ -1151,12 +1186,14 @@ private[projection] class R2dbcOffsetStore(
   }
 
   @tailrec private def clearLatestSeen(): Unit = {
+    checkStopped()
     val currentLatestSeen = getLatestSeen()
     if (!latestSeen.compareAndSet(currentLatestSeen, Instant.EPOCH))
       clearLatestSeen() // CAS retry, concurrent update of latestSeen
   }
 
   def adoptForeignOffsets(): Future[Long] = {
+    checkStopped()
     if (!hasForeignOffsets()) {
       scheduledTasks.get.adoptForeignOffsets.foreach(_.cancel())
       Future.successful(0)
@@ -1176,6 +1213,7 @@ private[projection] class R2dbcOffsetStore(
    * the projection is supposed to be stopped/started for this operation.
    */
   def managementSetOffset[Offset](offset: Offset): Future[Done] = {
+    checkStopped()
     offset match {
       case t: TimestampOffset =>
         r2dbcExecutor
@@ -1208,6 +1246,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private def deleteNewTimestampOffsetsInTx(conn: Connection, timestamp: Instant): Future[Long] = {
+    checkStopped()
     val currentState = getState()
     if (timestamp.isAfter(currentState.latestTimestamp)) {
       // nothing to delete
@@ -1228,10 +1267,12 @@ private[projection] class R2dbcOffsetStore(
    * supposed to be stopped/started for this operation.
    */
   def managementClearOffset(): Future[Done] = {
+    checkStopped()
     clearTimestampOffset().flatMap(_ => clearPrimitiveOffset())
   }
 
   private def clearTimestampOffset(): Future[Done] = {
+    checkStopped()
     sourceProvider match {
       case Some(_) =>
         triggerDeletionPerSlice.clear()
@@ -1247,6 +1288,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private def clearPrimitiveOffset(): Future[Done] = {
+    checkStopped()
     if (settings.isOffsetTableDefined) {
       dao.clearPrimitiveOffset().map { n =>
         logger.debug("{} clearing offsets - executed statement returned [{}]", logPrefix, n)
@@ -1257,10 +1299,13 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
-  def readManagementState(): Future[Option[ManagementState]] =
+  def readManagementState(): Future[Option[ManagementState]] = {
+    checkStopped()
     dao.readManagementState()
+  }
 
   def savePaused(paused: Boolean): Future[Done] = {
+    checkStopped()
 
     val update = dao.updateManagementState(paused, Instant.now(clock))
     (if (dialect == SqlServerDialect) {
@@ -1320,8 +1365,14 @@ private[projection] class R2dbcOffsetStore(
   }
 
   def stop(): Unit = {
+    stopped = true
     scheduledTasks.get.cancel()
     scheduledTasks.set(ScheduledTasks(None, None))
+  }
+
+  private def checkStopped(): Unit = {
+    if (stopped)
+      throw new AttemptToUseStoppedOffsetStore(logPrefix)
   }
 
 }
