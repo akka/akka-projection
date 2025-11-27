@@ -1249,6 +1249,9 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     def offsetStore(): R2dbcOffsetStore =
       offsetStoreAccess.offsetStore()
 
+    lazy val managementOffsetStore: R2dbcOffsetStore =
+      offsetStoreFactory(s"mgmt-${UUID.randomUUID()}")
+
     def uuid(): String = offsetStore().uuid
 
     private val isExactlyOnceWithSkip: Boolean =
@@ -1403,24 +1406,24 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
 
     // RunningProjectionManagement
     override def getOffset(): Future[Option[Offset]] = {
-      projectionState.offsetStore().getOffset()
+      projectionState.managementOffsetStore.getOffset()
     }
 
     // RunningProjectionManagement
     override def setOffset(offset: Option[Offset]): Future[Done] = {
       offset match {
-        case Some(o) => projectionState.offsetStore().managementSetOffset(o)
-        case None    => projectionState.offsetStore().managementClearOffset()
+        case Some(o) => projectionState.managementOffsetStore.managementSetOffset(o)
+        case None    => projectionState.managementOffsetStore.managementClearOffset()
       }
     }
 
     // RunningProjectionManagement
     override def getManagementState(): Future[Option[ManagementState]] =
-      projectionState.offsetStore().readManagementState()
+      projectionState.managementOffsetStore.readManagementState()
 
     // RunningProjectionManagement
     override def setPaused(paused: Boolean): Future[Done] =
-      projectionState.offsetStore().savePaused(paused)
+      projectionState.managementOffsetStore.savePaused(paused)
   }
 
 }

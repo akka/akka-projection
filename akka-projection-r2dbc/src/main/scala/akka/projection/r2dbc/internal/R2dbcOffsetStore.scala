@@ -378,7 +378,7 @@ private[projection] class R2dbcOffsetStore(
   def getOffset[Offset](): Future[Option[Offset]] = {
     getState().latestOffset match {
       case Some(t) => Future.successful(Some(t.asInstanceOf[Offset]))
-      case None    => readOffset()
+      case None    => readOffset(startup = false)
     }
   }
 
@@ -386,15 +386,19 @@ private[projection] class R2dbcOffsetStore(
     s"$s inFlight [${flight.map { case (pid, seqNr) => s"$pid->$seqNr" }.mkString(",")}]"
   }
 
-  def readOffset[Offset](): Future[Option[Offset]] = {
+  def readOffset[Offset](): Future[Option[Offset]] =
+    readOffset(startup = true)
+
+  def readOffset[Offset](startup: Boolean): Future[Option[Offset]] = {
     checkStopped()
-    scheduleTasks()
+    if (startup)
+      scheduleTasks()
 
     // look for TimestampOffset first since that is used by akka-persistence-r2dbc,
     // and then fall back to the other more primitive offset types
     sourceProvider match {
       case Some(_) =>
-        readTimestampOffset().flatMap {
+        readTimestampOffset(startup).flatMap {
           case Some(t) => Future.successful(Some(t.asInstanceOf[Offset]))
           case None =>
             settings.acceptWhenPreviousTimestampBefore match {
@@ -407,10 +411,11 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
-  private def readTimestampOffset(): Future[Option[TimestampOffset]] = {
+  private def readTimestampOffset(startup: Boolean): Future[Option[TimestampOffset]] = {
     checkStopped()
     implicit val sys = system // for implicit stream materializer
-    triggerDeletionPerSlice.clear()
+    if (startup)
+      triggerDeletionPerSlice.clear()
     val oldState = state.get()
 
     val recordsWithKeyFut =
@@ -423,9 +428,11 @@ private[projection] class R2dbcOffsetStore(
         .map(_.toVector)(ExecutionContext.parasitic)
 
     recordsWithKeyFut.map { recordsWithKey =>
-      clearInflight()
-      clearForeignOffsets()
-      clearLatestSeen()
+      if (startup) {
+        clearInflight()
+        clearForeignOffsets()
+        clearLatestSeen()
+      }
 
       val newState = {
         val s = State(recordsWithKey.map(_.record), settings.acceptSequenceNumberResetAfter)
@@ -451,7 +458,7 @@ private[projection] class R2dbcOffsetStore(
           // Only needed if there's more than one projection key within the latest offsets by slice.
           // To handle restarts after previous downscaling, and all latest are from the same instance.
           if (moreThanOneProjectionKey(latestBySliceWithKey)) {
-            if (adoptingForeignOffsets) {
+            if (adoptingForeignOffsets && startup) {
               val foreignOffsets = latestBySliceWithKey
                 .filter(_.projectionKey != projectionId.key)
                 .sortBy(_.record.timestamp)
@@ -479,10 +486,12 @@ private[projection] class R2dbcOffsetStore(
         newState.latestTimestamp,
         startOffset)
 
-      if (!state.compareAndSet(oldState, newState))
-        throw new IllegalStateException(
-          s"$logPrefix Unexpected concurrent modification of state from readOffset. " +
-          s"${dumpState(oldState, getInflight())}")
+      if (startup) {
+        if (!state.compareAndSet(oldState, newState))
+          throw new IllegalStateException(
+            s"$logPrefix Unexpected concurrent modification of state from readOffset. " +
+            s"${dumpState(oldState, getInflight())}")
+      }
 
       startOffset
     }
