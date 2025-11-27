@@ -1256,19 +1256,13 @@ private[projection] class R2dbcOffsetStore(
 
   private def deleteNewTimestampOffsetsInTx(conn: Connection, timestamp: Instant): Future[Long] = {
     checkStopped()
-    val currentState = getState()
-    if (timestamp.isAfter(currentState.latestTimestamp)) {
-      // nothing to delete
-      Future.successful(0)
-    } else {
-      val result = dao.deleteNewTimestampOffsetsInTx(conn, timestamp)
-      if (logger.isDebugEnabled)
-        result.foreach { rows =>
-          logger.debug("{} Deleted [{}] timestamp offset rows >= [{}]", logPrefix, rows, timestamp)
-        }
+    val result = dao.deleteNewTimestampOffsetsInTx(conn, timestamp)
+    if (logger.isDebugEnabled)
+      result.foreach { rows =>
+        logger.debug("{} Deleted [{}] timestamp offset rows >= [{}]", logPrefix, rows, timestamp)
+      }
 
-      result
-    }
+    result
   }
 
   /**
