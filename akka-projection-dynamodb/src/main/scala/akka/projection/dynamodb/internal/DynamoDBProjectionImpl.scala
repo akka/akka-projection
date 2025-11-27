@@ -1188,8 +1188,13 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
       projectionState.killSwitch.shutdown()
       // if the handler is retrying it will be aborted by this,
       // otherwise the stream would not be completed by the killSwitch until after all retries
-      projectionState.abort.failure(AbortProjectionException)
+      projectionState.abort.tryFailure(AbortProjectionException)
       streamDone
+    }
+
+    override def forcedStop(): Unit = {
+      projectionState.killSwitch.shutdown()
+      projectionState.abort.tryFailure(AbortProjectionException)
     }
 
     // RunningProjectionManagement

@@ -222,6 +222,10 @@ object InternalProjectionStateMetricsSpec {
         killSwitch.shutdown()
         futureDone
       }
+
+      override def forcedStop(): Unit = {
+        killSwitch.shutdown()
+      }
     }
   }
 

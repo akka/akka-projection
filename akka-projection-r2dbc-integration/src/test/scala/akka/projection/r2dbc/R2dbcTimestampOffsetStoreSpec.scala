@@ -71,6 +71,7 @@ class R2dbcTimestampOffsetStoreSpec
       eventTimestampQueryClock: TestClock = clock) =
     new R2dbcOffsetStore(
       projectionId,
+      UUID.randomUUID().toString,
       Some(new TestTimestampSourceProvider(0, persistenceExt.numberOfSlices - 1, eventTimestampQueryClock)),
       system,
       customSettings,
@@ -368,6 +369,7 @@ class R2dbcTimestampOffsetStoreSpec
       val offsetStore0 =
         new R2dbcOffsetStore(
           projectionId0,
+          UUID.randomUUID().toString,
           Some(new TestTimestampSourceProvider(0, persistenceExt.numberOfSlices - 1, clock)),
           system,
           settings,
@@ -389,6 +391,7 @@ class R2dbcTimestampOffsetStoreSpec
       val offsetStore1 =
         new R2dbcOffsetStore(
           projectionId1,
+          UUID.randomUUID().toString,
           Some(new TestTimestampSourceProvider(0, 511, clock)),
           system,
           settings,
@@ -399,6 +402,7 @@ class R2dbcTimestampOffsetStoreSpec
       val offsetStore2 =
         new R2dbcOffsetStore(
           projectionId2,
+          UUID.randomUUID().toString,
           Some(new TestTimestampSourceProvider(512, 1023, clock)),
           system,
           settings,
@@ -1593,18 +1597,21 @@ class R2dbcTimestampOffsetStoreSpec
       val projectionId4 = ProjectionId(projectionId1.name, "512-1023")
       val offsetStore1 = new R2dbcOffsetStore(
         projectionId1,
+        UUID.randomUUID().toString,
         Some(new TestTimestampSourceProvider(640, 767, clock)),
         system,
         settings,
         r2dbcExecutor)
       val offsetStore2 = new R2dbcOffsetStore(
         projectionId2,
+        UUID.randomUUID().toString,
         Some(new TestTimestampSourceProvider(512, 767, clock)),
         system,
         settings,
         r2dbcExecutor)
       val offsetStore3 = new R2dbcOffsetStore(
         projectionId3,
+        UUID.randomUUID().toString,
         Some(new TestTimestampSourceProvider(768, 1023, clock)),
         system,
         settings,
@@ -1630,6 +1637,7 @@ class R2dbcTimestampOffsetStoreSpec
       // after downscaling
       val offsetStore4 = new R2dbcOffsetStore(
         projectionId4,
+        UUID.randomUUID().toString,
         Some(new TestTimestampSourceProvider(512, 1023, clock)),
         system,
         settings,
@@ -1653,6 +1661,7 @@ class R2dbcTimestampOffsetStoreSpec
       def offsetStore(minSlice: Int, maxSlice: Int) =
         new R2dbcOffsetStore(
           ProjectionId(projectionName, s"$minSlice-$maxSlice"),
+          UUID.randomUUID().toString,
           Some(new TestTimestampSourceProvider(minSlice, maxSlice, clock)),
           system,
           settings.withTimeWindow(10.seconds).withDeleteAfter(10.seconds),
@@ -1846,6 +1855,7 @@ class R2dbcTimestampOffsetStoreSpec
       def offsetStore(minSlice: Int, maxSlice: Int) =
         new R2dbcOffsetStore(
           ProjectionId(projectionName, s"$minSlice-$maxSlice"),
+          UUID.randomUUID().toString,
           Some(new TestTimestampSourceProvider(minSlice, maxSlice, clock)),
           system,
           settings,

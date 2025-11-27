@@ -1,0 +1,2 @@
+# internal
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.r2dbc.internal.R2dbcProjectionImpl#R2dbcInternalProjectionState.this")
