@@ -1,6 +1,7 @@
 /*
- * Copyright (C) 2009-2025 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2009-2025 Lightbend Inc. <https://akka.io>
  */
+
 package akka.projection.r2dbc.internal
 
 import akka.NotUsed
