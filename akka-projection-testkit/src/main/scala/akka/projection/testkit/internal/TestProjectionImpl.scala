@@ -188,4 +188,8 @@ private[projection] class TestRunningProjection(val source: Source[Done, _], kil
     killSwitch.shutdown()
     futureDone
   }
+
+  override def forcedStop(): Unit = {
+    killSwitch.shutdown()
+  }
 }
