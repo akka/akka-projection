@@ -12,14 +12,13 @@ import java.time.{ Duration => JDuration }
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicReference
-
 import scala.annotation.tailrec
 import scala.collection.immutable
 import scala.collection.immutable.TreeSet
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.Done
+import akka.NotUsed
 import akka.actor.Cancellable
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
@@ -41,6 +40,7 @@ import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.MultipleOffsets
 import akka.projection.r2dbc.R2dbcProjectionSettings
+import akka.projection.r2dbc.internal.FastFutureSource.fastSourceFuture
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import io.r2dbc.spi.Connection
@@ -223,6 +223,7 @@ private[projection] object R2dbcOffsetStore {
     val FutureDuplicate: Future[Validation] = Future.successful(Duplicate)
     val FutureRejectedSeqNr: Future[Validation] = Future.successful(RejectedSeqNr)
     val FutureRejectedBacktrackingSeqNr: Future[Validation] = Future.successful(RejectedBacktrackingSeqNr)
+    val SourceAccepted: Source[Validation, NotUsed] = Source.single(Accepted)
 
     def acceptReset(candidate: Record, reference: Record, acceptAfter: JDuration): Boolean =
       candidate.timestamp.isAfter(reference.timestamp.plus(acceptAfter))
@@ -800,6 +801,16 @@ private[projection] class R2dbcOffsetStore(
     createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) => validate(recordWithOffset, getInflight())
       case None                   => Validation.FutureAccepted
+    }
+  }
+
+  // same as validate above, but optimized for use in streams
+  def validateSource[Envelope](envelope: Envelope): Source[Validation, NotUsed] = {
+    createRecordWithOffset(envelope) match {
+      case Some(recordWithOffset) =>
+        // try to use source single when possible as that can be optimized away in streams
+        fastSourceFuture(validate(recordWithOffset, getInflight()))
+      case None => Validation.SourceAccepted
     }
   }
 

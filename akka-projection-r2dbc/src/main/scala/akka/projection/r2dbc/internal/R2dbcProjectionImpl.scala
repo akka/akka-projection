@@ -60,6 +60,8 @@ import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.javadsl
 import akka.projection.r2dbc.R2dbcProjectionSettings
+import akka.projection.r2dbc.internal.FastFutureSource.fastFutureSource
+import akka.projection.r2dbc.internal.FastFutureSource.fastSourceFuture
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.RejectedEnvelope
 import akka.projection.r2dbc.internal.R2dbcProjectionImpl.extractOffsetPidSeqNr
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
@@ -614,10 +616,10 @@ private[projection] object R2dbcProjectionImpl {
                   provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                     case Some(querySource) =>
                       querySource
-                        .mapAsync(1) { envelope =>
+                        .flatMapConcat { envelope =>
                           import R2dbcOffsetStore.Validation._
                           offsetStore
-                            .validate(envelope)
+                            .validateSource(envelope) // Note: single element stream
                             .map {
                               case Accepted =>
                                 if (isFilteredEvent(envelope) && settings.warnAboutFilteredEventsInFlow) {
@@ -677,7 +679,7 @@ private[projection] object R2dbcProjectionImpl {
                   case false => SourceNotReplayed
                 }(ExecutionContext.parasitic)
             }
-            Source.futureSource(futureSource).mapMaterializedValue(_ => NotUsed)
+            fastFutureSource(futureSource)
           case _ =>
             SourceNotReplayed // no replay support for non typed envelopes
         }
@@ -691,44 +693,45 @@ private[projection] object R2dbcProjectionImpl {
     def observer(context: ProjectionContext): HandlerObserver[Envelope] =
       context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]].observer
 
-    def accepted(envelope: Envelope, context: ProjectionContext): Future[Option[(Envelope, ProjectionContext)]] = {
+    def accepted(
+        envelope: Envelope,
+        context: ProjectionContext): Source[Option[(Envelope, ProjectionContext)], NotUsed] = {
       if (isFilteredEvent(envelope) && settings.warnAboutFilteredEventsInFlow) {
         log.info("atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.", envelope)
       }
-      loadEnvelope(envelope, sourceProvider).map { loadedEnvelope =>
+      fastSourceFuture(loadEnvelope(envelope, sourceProvider)).map { loadedEnvelope =>
         offsetStore.addInflight(loadedEnvelope)
         Some((loadedEnvelope, context))
       }
     }
 
+    val singleNoneSource: Source[Option[(Envelope, ProjectionContext)], NotUsed] = Source.single(None)
     val validate = Flow[(Envelope, ProjectionContext)]
       .flatMapConcat {
         case (env, context) =>
-          // Note: while replays are a submaterialized source, they are in fact folded into a single source element
-          val futureSource: Future[Source[Option[(Envelope, ProjectionContext)], NotUsed]] =
-            offsetStore
-              .validate(env)
-              .map[Source[Option[(Envelope, ProjectionContext)], NotUsed]] {
-                case Accepted =>
-                  Source.future(accepted(env, context))
-                case Duplicate =>
-                  Source.single(None)
-                case RejectedSeqNr =>
-                  replayIfPossible(env, observer(context)).mapAsync(1) {
-                    // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
-                    case ReplayedOnRejection => accepted(env, context)
-                    case ReplayTriggered     => Future.successful(None)
-                    case NotReplayed         => Future.successful(None)
-                  }
-                case RejectedBacktrackingSeqNr =>
-                  replayIfPossible(env, observer(context)).mapAsync(1) {
-                    // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
-                    case ReplayedOnRejection => accepted(env, context)
-                    case ReplayTriggered     => Future.successful(None)
-                    case NotReplayed         => throwRejectedEnvelope(sourceProvider, env)
-                  }
-              }
-          Source.futureSource(futureSource)
+          // Note: several calls here return Sources while actually only ever returning a single value to fold it into
+          // the stream rather than through a future+mapAsync
+          offsetStore
+            .validateSource(env)
+            .flatMapConcat {
+              case Accepted => accepted(env, context)
+              case Duplicate =>
+                singleNoneSource
+              case RejectedSeqNr =>
+                replayIfPossible(env, observer(context)).flatMapConcat {
+                  // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
+                  case ReplayedOnRejection => accepted(env, context)
+                  case ReplayTriggered     => singleNoneSource
+                  case NotReplayed         => singleNoneSource
+                }
+              case RejectedBacktrackingSeqNr =>
+                replayIfPossible(env, observer(context)).flatMapConcat {
+                  // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
+                  case ReplayedOnRejection => accepted(env, context)
+                  case ReplayTriggered     => singleNoneSource
+                  case NotReplayed         => throwRejectedEnvelope(sourceProvider, env)
+                }
+            }
       }
       .collect {
         case Some(envelopeAndContext) => envelopeAndContext
