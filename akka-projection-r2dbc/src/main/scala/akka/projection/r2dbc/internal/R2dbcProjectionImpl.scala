@@ -7,8 +7,10 @@ package akka.projection.r2dbc.internal
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 import scala.annotation.nowarn
+import scala.annotation.tailrec
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -63,6 +65,7 @@ import akka.projection.internal.SettingsImpl
 import akka.projection.javadsl
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.RejectedEnvelope
+import akka.projection.r2dbc.internal.R2dbcProjectionImpl.OffsetStoreAccess
 import akka.projection.r2dbc.internal.R2dbcProjectionImpl.extractOffsetPidSeqNr
 import akka.projection.r2dbc.internal.R2dbcProjectionImpl.log
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
@@ -98,6 +101,68 @@ private[projection] object R2dbcProjectionImpl {
       settings: R2dbcProjectionSettings,
       r2dbcExecutor: R2dbcExecutor)(implicit system: ActorSystem[_]) = {
     new R2dbcOffsetStore(projectionId, uuid, sourceProvider, system, settings, r2dbcExecutor)
+  }
+
+  /**
+   * Mutable holder of the R2dbcOffsetStore
+   */
+  final class OffsetStoreAccess(projectionId: ProjectionId, offsetStoreFactory: String => R2dbcOffsetStore) {
+
+    private val offsetStoreRef = new AtomicReference[R2dbcOffsetStore]()
+
+    @tailrec final def offsetStore(): R2dbcOffsetStore = {
+      offsetStoreRef.get() match {
+        case null =>
+          val uuid = UUID.randomUUID().toString
+          val newStore = offsetStoreFactory(uuid)
+          if (offsetStoreRef.compareAndSet(null, newStore)) {
+            log.info(
+              "Created offset store {} [{}-{}] [{}]",
+              projectionId.name,
+              newStore.minSlice,
+              newStore.maxSlice,
+              newStore.uuid)
+            newStore
+          } else
+            offsetStore() // CAS retry
+        case os => os
+      }
+    }
+
+    @tailrec final def newOffsetStore(): R2dbcOffsetStore = {
+      offsetStoreRef.get() match {
+        case null =>
+          val uuid = UUID.randomUUID().toString
+          val newStore = offsetStoreFactory(uuid)
+          if (offsetStoreRef.compareAndSet(null, newStore)) {
+            log.info(
+              "Created offset store {} [{}-{}] [{}]",
+              projectionId.name,
+              newStore.minSlice,
+              newStore.maxSlice,
+              newStore.uuid)
+            newStore
+          } else
+            newOffsetStore() // CAS retry
+        case existing =>
+          val uuid = UUID.randomUUID().toString
+          val newStore = offsetStoreFactory(uuid)
+          if (offsetStoreRef.compareAndSet(existing, newStore)) {
+            existing.stop()
+            log.info(
+              "Recreated offset store {} [{}-{}] [{}], old incarnation [{}]",
+              projectionId.name,
+              newStore.minSlice,
+              newStore.maxSlice,
+              newStore.uuid,
+              existing.uuid)
+            newStore
+          } else
+            newOffsetStore() // CAS retry
+      }
+    }
+
+    def uuid(): String = offsetStore().uuid
   }
 
   private val loadEnvelopeCounter = new AtomicLong
@@ -1064,7 +1129,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     sourceProvider: SourceProvider[Offset, Envelope],
     restartBackoffOpt: Option[RestartSettings],
     val offsetStrategy: OffsetStrategy,
-    handlerStrategyFactory: R2dbcOffsetStore => HandlerStrategy,
+    handlerStrategyFactory: OffsetStoreAccess => HandlerStrategy,
     override val statusObserver: StatusObserver[Envelope],
     offsetStoreFactory: String => R2dbcOffsetStore)
     extends scaladsl.ExactlyOnceProjection[Offset, Envelope]
@@ -1082,7 +1147,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,
       restartBackoffOpt: Option[RestartSettings] = this.restartBackoffOpt,
       offsetStrategy: OffsetStrategy = this.offsetStrategy,
-      handlerStrategyFactory: R2dbcOffsetStore => HandlerStrategy = this.handlerStrategyFactory,
+      handlerStrategyFactory: OffsetStoreAccess => HandlerStrategy = this.handlerStrategyFactory,
       statusObserver: StatusObserver[Envelope] = this.statusObserver): R2dbcProjectionImpl[Offset, Envelope] =
     new R2dbcProjectionImpl(
       projectionId,
@@ -1152,7 +1217,8 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
    * INTERNAL API Return a RunningProjection
    */
   override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection = {
-    new R2dbcInternalProjectionState(settingsOrDefaults).newRunningInstance()
+    val offsetStoreAccess = new OffsetStoreAccess(projectionId, offsetStoreFactory)
+    new R2dbcInternalProjectionState(settingsOrDefaults, offsetStoreAccess).newRunningInstance()
   }
 
   /**
@@ -1161,32 +1227,29 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
    * This method returns the projection Source mapped with user 'handler' function, but before any sink attached. This
    * is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
-  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] =
-    new R2dbcInternalProjectionState(settingsOrDefaults).mappedSource()
+  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] = {
+    val offsetStoreAccess = new OffsetStoreAccess(projectionId, offsetStoreFactory)
+    new R2dbcInternalProjectionState(settingsOrDefaults, offsetStoreAccess).mappedSource()
+  }
 
-  private class R2dbcInternalProjectionState(
-      settings: ProjectionSettings,
-      val uuid: String,
-      val offsetStore: R2dbcOffsetStore)(implicit val system: ActorSystem[_])
+  private class R2dbcInternalProjectionState(settings: ProjectionSettings, offsetStoreAccess: OffsetStoreAccess)(
+      implicit val system: ActorSystem[_])
       extends InternalProjectionState[Offset, Envelope](
         projectionId,
         sourceProvider,
         offsetStrategy,
-        handlerStrategyFactory(offsetStore),
+        () => handlerStrategyFactory(offsetStoreAccess),
         statusObserver,
         settings)
       with BacklogStatusProjectionState {
 
-    def this(settings: ProjectionSettings, uuid: String)(implicit system: ActorSystem[_]) = {
-      this(settings, uuid, offsetStore = offsetStoreFactory(uuid))
-    }
-
-    def this(settings: ProjectionSettings)(implicit system: ActorSystem[_]) = {
-      this(settings, uuid = UUID.randomUUID().toString)
-    }
-
     implicit val executionContext: ExecutionContext = system.executionContext
     override val logger: LoggingAdapter = Logging(system.classicSystem, classOf[R2dbcProjectionImpl[_, _]])
+
+    def offsetStore(): R2dbcOffsetStore =
+      offsetStoreAccess.offsetStore()
+
+    def uuid(): String = offsetStore().uuid
 
     private val isExactlyOnceWithSkip: Boolean =
       offsetStrategy match {
@@ -1195,17 +1258,17 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       }
 
     override def readPaused(): Future[Boolean] =
-      offsetStore.readManagementState().map(_.exists(_.paused))
+      offsetStore().readManagementState().map(_.exists(_.paused))
 
     override def readOffsets(): Future[Option[Offset]] =
-      offsetStore.readOffset()
+      offsetStore().readOffset()
 
     // Called from InternalProjectionState.saveOffsetAndReport
     override def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] = {
       // need the envelope to be able to call offsetStore.saveOffset
       // FIXME maybe we can cleanup this mess when moving R2dbcProjection to the Akka Projections repository? This is all internal api.
       throw new IllegalStateException(
-        s"[$uuid] Unexpected call to saveOffset. It should have called saveOffsetAndReport. Please report bug at https://github.com/akka/akka-projection/issues")
+        s"[${uuid()}] Unexpected call to saveOffset. It should have called saveOffsetAndReport. Please report bug at https://github.com/akka/akka-projection/issues")
     }
 
     override protected def saveOffsetAndReport(
@@ -1215,9 +1278,13 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       import R2dbcProjectionImpl.FutureDone
       val envelope = projectionContext.envelope
 
-      if (offsetStore.isInflight(envelope) || isExactlyOnceWithSkip) {
+      // FIXME here we don't have any correlation of the offset store
+      // we might need to include the uuid in the ProjectionContextImpl
+      val store = offsetStore()
+
+      if (store.isInflight(envelope) || isExactlyOnceWithSkip) {
         val offset = extractOffsetPidSeqNr(projectionContext.offset, envelope)
-        offsetStore
+        store
           .saveOffset(offset)
           .map { done =>
             try {
@@ -1245,15 +1312,19 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
         else {
           batch.iterator.filter { ctx =>
             val env = ctx.envelope
-            offsetStore.isInflight(env)
+            offsetStore().isInflight(env)
           }.toVector
         }
 
       if (acceptedContexts.isEmpty) {
         FutureDone
       } else {
+        // FIXME here we don't have any correlation of the offset store
+        // we might need to include the uuid in the ProjectionContextImpl
+        val store = offsetStore()
+
         val offsets = acceptedContexts.map(ctx => extractOffsetPidSeqNr(ctx.offset, ctx.envelope))
-        offsetStore
+        store
           .saveOffsets(offsets)
           .map { done =>
             val batchSize = batch.map { _.groupSize }.sum
@@ -1270,10 +1341,13 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     }
 
     override private[akka] def latestOffsetTimestamp(): Future[Option[Instant]] =
-      Future.successful(offsetStore.getState().latestOffset.map(_.timestamp))
+      Future.successful(offsetStore().getState().latestOffset.map(_.timestamp))
 
     private[projection] def newRunningInstance(): RunningProjection = {
-      new R2dbcRunningProjection(RunningProjection.withBackoff(() => this.mappedSource(), settings), this)
+      new R2dbcRunningProjection(RunningProjection.withBackoff({ () =>
+        offsetStoreAccess.newOffsetStore()
+        this.mappedSource()
+      }, settings), this)
     }
 
     override def mappedSource(): Source[Done, Future[Done]] = {
@@ -1281,9 +1355,9 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
         log.info(
           "Starting projection instance {} [{}-{}] [{}]",
           projectionId.name,
-          offsetStore.minSlice,
-          offsetStore.maxSlice,
-          uuid)
+          offsetStore().minSlice,
+          offsetStore().maxSlice,
+          uuid())
         value
       }
     }
@@ -1298,53 +1372,55 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     private val streamDone = source.run()
 
     override def stop(): Future[Done] = {
+      val store = projectionState.offsetStore()
       log.info(
         "Stopping projection instance {} [{}-{}] [{}]",
         projectionId.name,
-        projectionState.offsetStore.minSlice,
-        projectionState.offsetStore.maxSlice,
-        projectionState.uuid)
+        store.minSlice,
+        store.maxSlice,
+        store.uuid)
       projectionState.killSwitch.shutdown()
       // if the handler is retrying it will be aborted by this,
       // otherwise the stream would not be completed by the killSwitch until after all retries
       projectionState.abort.tryFailure(AbortProjectionException)
-      streamDone.andThen(_ => projectionState.offsetStore.stop())(system.executionContext)
+      streamDone.andThen(_ => store.stop())(system.executionContext)
     }
 
     override def forcedStop(): Unit = {
-      if (!projectionState.offsetStore.isStopped())
+      val store = projectionState.offsetStore()
+      if (!store.isStopped())
         log.info(
           "Stopping projection instance forced {} [{}-{}] [{}]",
           projectionId.name,
-          projectionState.offsetStore.minSlice,
-          projectionState.offsetStore.maxSlice,
-          projectionState.uuid)
+          store.minSlice,
+          store.maxSlice,
+          store.uuid)
 
       projectionState.killSwitch.shutdown()
       projectionState.abort.tryFailure(AbortProjectionException)
-      projectionState.offsetStore.stop()
+      store.stop()
     }
 
     // RunningProjectionManagement
     override def getOffset(): Future[Option[Offset]] = {
-      projectionState.offsetStore.getOffset()
+      projectionState.offsetStore().getOffset()
     }
 
     // RunningProjectionManagement
     override def setOffset(offset: Option[Offset]): Future[Done] = {
       offset match {
-        case Some(o) => projectionState.offsetStore.managementSetOffset(o)
-        case None    => projectionState.offsetStore.managementClearOffset()
+        case Some(o) => projectionState.offsetStore().managementSetOffset(o)
+        case None    => projectionState.offsetStore().managementClearOffset()
       }
     }
 
     // RunningProjectionManagement
     override def getManagementState(): Future[Option[ManagementState]] =
-      projectionState.offsetStore.readManagementState()
+      projectionState.offsetStore().readManagementState()
 
     // RunningProjectionManagement
     override def setPaused(paused: Boolean): Future[Done] =
-      projectionState.offsetStore.savePaused(paused)
+      projectionState.offsetStore().savePaused(paused)
   }
 
 }

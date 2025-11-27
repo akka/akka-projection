@@ -249,7 +249,7 @@ private[projection] object R2dbcOffsetStore {
 @InternalApi
 private[projection] class R2dbcOffsetStore(
     projectionId: ProjectionId,
-    uuid: String,
+    val uuid: String,
     sourceProvider: Option[BySlicesSourceProvider],
     system: ActorSystem[_],
     val settings: R2dbcProjectionSettings,

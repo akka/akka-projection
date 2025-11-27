@@ -25,6 +25,7 @@ import akka.projection.internal.SingleHandlerStrategy
 import akka.projection.r2dbc.R2dbcProjectionSettings
 import akka.projection.r2dbc.internal.R2dbcOffsetStore
 import akka.projection.r2dbc.internal.R2dbcProjectionImpl
+import akka.projection.r2dbc.internal.R2dbcProjectionImpl.OffsetStoreAccess
 import akka.projection.scaladsl.AtLeastOnceFlowProjection
 import akka.projection.scaladsl.AtLeastOnceProjection
 import akka.projection.scaladsl.ExactlyOnceProjection
@@ -67,10 +68,12 @@ object R2dbcProjection {
           r2dbcSettings,
           r2dbcExecutor)
 
-    def adaptedHandler(offsetStore: R2dbcOffsetStore) =
-      R2dbcProjectionImpl.adaptedHandlerForExactlyOnce(sourceProvider, handler, offsetStore, r2dbcExecutor)(
-        system.executionContext,
-        system)
+    def adaptedHandler(storeAccess: OffsetStoreAccess) =
+      R2dbcProjectionImpl.adaptedHandlerForExactlyOnce(
+        sourceProvider,
+        handler,
+        storeAccess.offsetStore(),
+        r2dbcExecutor)(system.executionContext, system)
 
     new R2dbcProjectionImpl(
       projectionId,
@@ -79,7 +82,7 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = ExactlyOnce(),
-      handlerStrategyFactory = offsetStore => SingleHandlerStrategy(adaptedHandler(offsetStore)),
+      handlerStrategyFactory = storeAccess => SingleHandlerStrategy(adaptedHandler(storeAccess)),
       NoopStatusObserver,
       offsetStoreFactory)
   }
@@ -122,10 +125,12 @@ object R2dbcProjection {
           r2dbcSettings,
           r2dbcExecutor)
 
-    def adaptedHandler(offsetStore: R2dbcOffsetStore) =
-      R2dbcProjectionImpl.adaptedHandlerForAtLeastOnce(sourceProvider, handler, offsetStore, r2dbcExecutor)(
-        system.executionContext,
-        system)
+    def adaptedHandler(storeAccess: OffsetStoreAccess) =
+      R2dbcProjectionImpl.adaptedHandlerForAtLeastOnce(
+        sourceProvider,
+        handler,
+        storeAccess.offsetStore(),
+        r2dbcExecutor)(system.executionContext, system)
 
     new R2dbcProjectionImpl(
       projectionId,
@@ -134,7 +139,7 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
-      handlerStrategyFactory = offsetStore => SingleHandlerStrategy(adaptedHandler(offsetStore)),
+      handlerStrategyFactory = storeAccess => SingleHandlerStrategy(adaptedHandler(storeAccess)),
       NoopStatusObserver,
       offsetStoreFactory)
   }
@@ -175,8 +180,8 @@ object R2dbcProjection {
           r2dbcSettings,
           r2dbcExecutor)
 
-    def adaptedHandler(offsetStore: R2dbcOffsetStore) =
-      R2dbcProjectionImpl.adaptedHandlerForAtLeastOnceAsync(sourceProvider, handler, offsetStore)(
+    def adaptedHandler(storeAccess: OffsetStoreAccess) =
+      R2dbcProjectionImpl.adaptedHandlerForAtLeastOnceAsync(sourceProvider, handler, storeAccess.offsetStore())(
         system.executionContext,
         system)
 
@@ -187,7 +192,7 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
-      handlerStrategyFactory = offsetStore => SingleHandlerStrategy(adaptedHandler(offsetStore)),
+      handlerStrategyFactory = storeAccess => SingleHandlerStrategy(adaptedHandler(storeAccess)),
       NoopStatusObserver,
       offsetStoreFactory)
   }
@@ -225,8 +230,8 @@ object R2dbcProjection {
           r2dbcSettings,
           r2dbcExecutor)
 
-    def adaptedHandler(offsetStore: R2dbcOffsetStore) =
-      R2dbcProjectionImpl.adaptedHandlerForGrouped(sourceProvider, handler, offsetStore, r2dbcExecutor)(
+    def adaptedHandler(storeAccess: OffsetStoreAccess) =
+      R2dbcProjectionImpl.adaptedHandlerForGrouped(sourceProvider, handler, storeAccess.offsetStore(), r2dbcExecutor)(
         system.executionContext,
         system)
 
@@ -237,7 +242,7 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = ExactlyOnce(),
-      handlerStrategyFactory = offsetStore => GroupedHandlerStrategy(adaptedHandler(offsetStore)),
+      handlerStrategyFactory = storeAccess => GroupedHandlerStrategy(adaptedHandler(storeAccess)),
       NoopStatusObserver,
       offsetStoreFactory)
   }
@@ -279,8 +284,8 @@ object R2dbcProjection {
           r2dbcSettings,
           r2dbcExecutor)
 
-    def adaptedHandler(offsetStore: R2dbcOffsetStore) =
-      R2dbcProjectionImpl.adaptedHandlerForGroupedAsync(sourceProvider, handler, offsetStore)(
+    def adaptedHandler(storeAccess: OffsetStoreAccess) =
+      R2dbcProjectionImpl.adaptedHandlerForGroupedAsync(sourceProvider, handler, storeAccess.offsetStore())(
         system.executionContext,
         system)
 
@@ -291,7 +296,7 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = OffsetStoredByHandler(),
-      handlerStrategyFactory = offsetStore => GroupedHandlerStrategy(adaptedHandler(offsetStore)),
+      handlerStrategyFactory = storeAccess => GroupedHandlerStrategy(adaptedHandler(storeAccess)),
       NoopStatusObserver,
       offsetStoreFactory)
   }
@@ -341,8 +346,9 @@ object R2dbcProjection {
           r2dbcSettings,
           r2dbcExecutor)
 
-    def adaptedHandler(offsetStore: R2dbcOffsetStore) =
-      R2dbcProjectionImpl.adaptedHandlerForFlow(sourceProvider, handler, offsetStore, r2dbcSettings)(system)
+    def adaptedHandler(storeAccess: OffsetStoreAccess) =
+      R2dbcProjectionImpl.adaptedHandlerForFlow(sourceProvider, handler, storeAccess.offsetStore(), r2dbcSettings)(
+        system)
 
     new R2dbcProjectionImpl(
       projectionId,
@@ -351,7 +357,7 @@ object R2dbcProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
-      handlerStrategyFactory = offsetStore => FlowHandlerStrategy(adaptedHandler(offsetStore)),
+      handlerStrategyFactory = storeAccess => FlowHandlerStrategy(adaptedHandler(storeAccess)),
       NoopStatusObserver,
       offsetStoreFactory)
   }

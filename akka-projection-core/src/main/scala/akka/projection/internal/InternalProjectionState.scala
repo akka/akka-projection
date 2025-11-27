@@ -45,9 +45,18 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
     projectionId: ProjectionId,
     sourceProvider: SourceProvider[Offset, Envelope],
     offsetStrategy: OffsetStrategy,
-    handlerStrategy: HandlerStrategy,
+    handlerStrategyFactory: () => HandlerStrategy,
     statusObserver: StatusObserver[Envelope],
     settings: ProjectionSettings) {
+
+  def this(
+      projectionId: ProjectionId,
+      sourceProvider: SourceProvider[Offset, Envelope],
+      offsetStrategy: OffsetStrategy,
+      handlerStrategy: HandlerStrategy,
+      statusObserver: StatusObserver[Envelope],
+      settings: ProjectionSettings) =
+    this(projectionId, sourceProvider, offsetStrategy, () => handlerStrategy, statusObserver, settings)
 
   def logger: LoggingAdapter
   implicit def system: ActorSystem[_]
@@ -134,7 +143,8 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
       source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed],
       afterEnvelopes: Int,
       orAfterDuration: FiniteDuration,
-      recoveryStrategy: HandlerRecoveryStrategy): Source[Done, NotUsed] = {
+      recoveryStrategy: HandlerRecoveryStrategy,
+      handlerStrategy: HandlerStrategy): Source[Done, NotUsed] = {
 
     val atLeastOnceHandlerFlow
         : Flow[ProjectionContextImpl[Offset, Envelope], ProjectionContextImpl[Offset, Envelope], NotUsed] =
@@ -232,7 +242,8 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
    */
   private def offsetStoredByHandlerProcessing(
       source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed],
-      recoveryStrategy: HandlerRecoveryStrategy): Source[Done, NotUsed] = {
+      recoveryStrategy: HandlerRecoveryStrategy,
+      handlerStrategy: HandlerStrategy): Source[Done, NotUsed] = {
 
     val handlerRecovery =
       HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver, telemetry)
@@ -361,7 +372,8 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
 
   private def atMostOnceProcessing(
       source: Source[ProjectionContextImpl[Offset, Envelope], NotUsed],
-      recoveryStrategy: HandlerRecoveryStrategy): Source[Done, NotUsed] = {
+      recoveryStrategy: HandlerRecoveryStrategy,
+      handlerStrategy: HandlerStrategy): Source[Done, NotUsed] = {
 
     val handlerRecovery =
       HandlerRecoveryImpl[Offset, Envelope](projectionId, recoveryStrategy, logger, statusObserver, telemetry)
@@ -393,6 +405,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
   }
 
   def mappedSource(): Source[Done, Future[Done]] = {
+    val handlerStrategy = handlerStrategyFactory()
     val handlerLifecycle = handlerStrategy.lifecycle
     statusObserver.started(projectionId)
     telemetry = TelemetryProvider.start(projectionId, system)
@@ -439,23 +452,30 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
     val composedSource: Source[Done, NotUsed] =
       offsetStrategy match {
         case ExactlyOnce(recoveryStrategyOpt) =>
-          offsetStoredByHandlerProcessing(source, recoveryStrategyOpt.getOrElse(settings.recoveryStrategy))
+          offsetStoredByHandlerProcessing(
+            source,
+            recoveryStrategyOpt.getOrElse(settings.recoveryStrategy),
+            handlerStrategy)
 
         case OffsetStoredByHandler(recoveryStrategyOpt) =>
-          offsetStoredByHandlerProcessing(source, recoveryStrategyOpt.getOrElse(settings.recoveryStrategy))
+          offsetStoredByHandlerProcessing(
+            source,
+            recoveryStrategyOpt.getOrElse(settings.recoveryStrategy),
+            handlerStrategy)
 
         case AtLeastOnce(afterEnvelopesOpt, orAfterDurationOpt, recoveryStrategyOpt) =>
           atLeastOnceProcessing(
             source,
             afterEnvelopesOpt.getOrElse(settings.saveOffsetAfterEnvelopes),
             orAfterDurationOpt.getOrElse(settings.saveOffsetAfterDuration),
-            recoveryStrategyOpt.getOrElse(settings.recoveryStrategy))
+            recoveryStrategyOpt.getOrElse(settings.recoveryStrategy),
+            handlerStrategy)
 
         case AtMostOnce(recoveryStrategyOpt) =>
-          atMostOnceProcessing(source, recoveryStrategyOpt.getOrElse(settings.recoveryStrategy))
+          atMostOnceProcessing(source, recoveryStrategyOpt.getOrElse(settings.recoveryStrategy), handlerStrategy)
       }
 
-    stopHandlerOnTermination(composedSource, handlerLifecycle)
+    stopHandlerOnTermination(composedSource, handlerLifecycle, handlerStrategy)
 
   }
 
@@ -466,7 +486,8 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
    */
   private def stopHandlerOnTermination(
       src: Source[Done, NotUsed],
-      handlerLifecycle: HandlerLifecycle): Source[Done, Future[Done]] = {
+      handlerLifecycle: HandlerLifecycle,
+      handlerStrategy: HandlerStrategy): Source[Done, Future[Done]] = {
     src
       .watchTermination() { (_, futDone) =>
         handlerStrategy.recreateHandlerOnNextAccess()
