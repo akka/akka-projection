@@ -286,7 +286,6 @@ public class ProjectionTestKitTest extends JUnitSuite {
       public void forcedStop() {
         killSwitch.shutdown();
       }
-
     }
   }
 }
