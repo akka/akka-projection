@@ -642,6 +642,7 @@ private[projection] class R2dbcOffsetStore(
         updateLatestSeen(latestTimestamp)
       }
       if (filteredRecords.isEmpty) {
+        logger.trace("{} save offsets, all duplicates", logPrefix)
         FutureDone
       } else {
         val offsetInserts = dao.insertTimestampOffsetInTx(conn, filteredRecords)
@@ -684,7 +685,21 @@ private[projection] class R2dbcOffsetStore(
 
         val evictedNewState = addRecordsAndEvict(oldState)
 
+        if (logger.isTraceEnabled)
+          offsetInserts.failed.foreach { exc =>
+            logger.trace(
+              "{} save offsets failed [{}]: {}",
+              logPrefix,
+              filteredRecords.iterator.map(r => s"${r.pid} -> ${r.seqNr}").mkString(", "),
+              exc.toString)
+          }
+
         offsetInserts.flatMap { _ =>
+          if (logger.isTraceEnabled)
+            logger.trace(
+              "{} save offsets [{}]",
+              logPrefix,
+              filteredRecords.iterator.map(r => s"${r.pid} -> ${r.seqNr}").mkString(", "))
           if (state.compareAndSet(oldState, evictedNewState)) {
             slices.foreach(s => triggerDeletionPerSlice.put(s, TRUE))
             cleanupInflight(evictedNewState)
@@ -861,6 +876,11 @@ private[projection] class R2dbcOffsetStore(
           } else if (seqNr <= currentInflight.getOrElse(pid, 0L)) {
             // currentInFlight contains those that have been processed or about to be processed in Flow,
             // but offset not saved yet => ok to handle as duplicate
+            logger.trace(
+              "{} Filtering out duplicate in-flight sequence number [{}] for pid [{}]",
+              logPrefix,
+              seqNr,
+              pid)
             FutureDuplicate
           } else if (recordWithOffset.fromSnapshot) {
             // snapshots will mean we are starting from some arbitrary offset after last seen offset
