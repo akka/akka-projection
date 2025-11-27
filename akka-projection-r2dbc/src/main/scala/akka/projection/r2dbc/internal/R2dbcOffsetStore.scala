@@ -1370,6 +1370,9 @@ private[projection] class R2dbcOffsetStore(
     scheduledTasks.set(ScheduledTasks(None, None))
   }
 
+  def isStopped(): Boolean =
+    stopped
+
   private def checkStopped(): Unit = {
     if (stopped)
       throw new AttemptToUseStoppedOffsetStore(logPrefix)

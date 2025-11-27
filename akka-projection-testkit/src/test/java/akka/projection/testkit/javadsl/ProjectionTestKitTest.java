@@ -281,6 +281,12 @@ public class ProjectionTestKitTest extends JUnitSuite {
         killSwitch.shutdown();
         return this.futureDone;
       }
+
+      @Override
+      public void forcedStop() {
+        killSwitch.shutdown();
+      }
+
     }
   }
 }

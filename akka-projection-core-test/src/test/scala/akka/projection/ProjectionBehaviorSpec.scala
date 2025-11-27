@@ -162,6 +162,10 @@ object ProjectionBehaviorSpec {
           }
       }
 
+      override def forcedStop(): Unit = {
+        killSwitch.shutdown()
+      }
+
       override def getOffset(): Future[Option[Int]] = {
         offsetStore.lastOffset() match {
           case Some(0) => Future.successful(None)

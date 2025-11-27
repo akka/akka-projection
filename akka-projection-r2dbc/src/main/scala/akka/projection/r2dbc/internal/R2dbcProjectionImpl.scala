@@ -1307,8 +1307,22 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       projectionState.killSwitch.shutdown()
       // if the handler is retrying it will be aborted by this,
       // otherwise the stream would not be completed by the killSwitch until after all retries
-      projectionState.abort.failure(AbortProjectionException)
+      projectionState.abort.tryFailure(AbortProjectionException)
       streamDone.andThen(_ => projectionState.offsetStore.stop())(system.executionContext)
+    }
+
+    override def forcedStop(): Unit = {
+      if (!projectionState.offsetStore.isStopped())
+        log.info(
+          "Stopping projection instance forced {} [{}-{}] [{}]",
+          projectionId.name,
+          projectionState.offsetStore.minSlice,
+          projectionState.offsetStore.maxSlice,
+          projectionState.uuid)
+
+      projectionState.killSwitch.shutdown()
+      projectionState.abort.tryFailure(AbortProjectionException)
+      projectionState.offsetStore.stop()
     }
 
     // RunningProjectionManagement
