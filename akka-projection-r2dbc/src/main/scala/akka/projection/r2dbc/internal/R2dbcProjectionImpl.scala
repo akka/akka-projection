@@ -1263,7 +1263,11 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       extends RunningProjection
       with RunningProjectionManagement[Offset] {
 
-    private val streamDone = source.run()
+    private val streamDone = source
+    // Kill the stream from the end to make it stop as fast as possible on shutdown
+    // (regardless if in restart-backoff for failed stream or not)
+      .via(projectionState.killSwitch.flow)
+      .run()
 
     override def stop(): Future[Done] = {
       projectionState.killSwitch.shutdown()
