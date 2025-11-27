@@ -51,7 +51,6 @@ import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.JavaToScalaBySliceSourceProviderAdapter
 import akka.projection.internal.ManagementState
-import akka.projection.internal.ObservableFlowHandler
 import akka.projection.internal.ObservableHandler
 import akka.projection.internal.OffsetStoredByHandler
 import akka.projection.internal.OffsetStrategy
@@ -570,13 +569,11 @@ private[projection] object R2dbcProjectionImpl {
     }
   }
 
-  private sealed trait ReplayResult
-  private case object ReplayTriggered extends ReplayResult
-  private case object ReplayedOnRejection extends ReplayResult
-  private case object NotReplayed extends ReplayResult
-
-  private val SourceReplayTriggered: Source[ReplayResult, NotUsed] = Source.single(ReplayTriggered)
-  private val SourceNotReplayed: Source[ReplayResult, NotUsed] = Source.single(NotReplayed)
+  private sealed trait ReplayResult[+Envelope, +Offset]
+  private case object ReplayTriggered extends ReplayResult[Nothing, Nothing]
+  private final case class ReplayedOnRejection[Envelope, Offset](source: Source[(Envelope, Offset), NotUsed])
+      extends ReplayResult[Envelope, Offset]
+  private case object NotReplayed extends ReplayResult[Nothing, Nothing]
 
   private[projection] def adaptedHandlerForFlow[Offset, Envelope](
       sourceProvider: SourceProvider[Offset, Envelope],
@@ -589,25 +586,25 @@ private[projection] object R2dbcProjectionImpl {
 
     // This is similar to R2dbcProjectionImpl.replayIfPossible but difficult to extract common parts
     // since this is flow processing
-    def replayIfPossible(
-        originalEnvelope: Envelope,
-        observer: HandlerObserver[Envelope]): Source[ReplayResult, NotUsed] = {
+    def replayIfPossible(originalEnvelope: Envelope): Future[ReplayResult[Envelope, ProjectionContext]] = {
+
       if (offsetStore.settings.replayOnRejectedSequenceNumbers) {
         val logPrefix = offsetStore.logPrefix
         originalEnvelope match {
           case originalEventEnvelope: EventEnvelope[Any @unchecked]
               if EnvelopeOrigin.fromPubSub(originalEventEnvelope) =>
             // don't replay from pubsub events
-            SourceNotReplayed
+            Future.successful(NotReplayed)
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
             val underlyingProvider = sourceProvider match {
               case adapted: JavaToScalaBySliceSourceProviderAdapter[_, _] => adapted.delegate
               case provider                                               => provider
             }
-            val futureSource = underlyingProvider match {
+
+            underlyingProvider match {
               case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked] =>
                 val persistenceId = originalEventEnvelope.persistenceId
-                offsetStore.storedSeqNr(persistenceId).map { storedSeqNr =>
+                offsetStore.storedSeqNr(persistenceId).map[ReplayResult[Envelope, ProjectionContext]] { storedSeqNr =>
                   // stored seq number can be higher when we've detected a seq number reset by not marking as
                   // duplicate, but it was rejected when seq number != 1 -- trigger replay from 1 in this case
                   val toSeqNr = originalEventEnvelope.sequenceNr - 1 // replay until the rejected envelope for flows
@@ -615,38 +612,35 @@ private[projection] object R2dbcProjectionImpl {
                   logReplayRejected(logPrefix, originalEventEnvelope, fromSeqNr)
                   provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                     case Some(querySource) =>
-                      querySource
-                        .flatMapConcat { envelope =>
+                      val source: Source[(Envelope, ProjectionContext), NotUsed] = querySource
+                        .flatMapConcat { replayedEnvelope =>
                           import R2dbcOffsetStore.Validation._
                           offsetStore
-                            .validateSource(envelope) // Note: single element stream
-                            .map {
+                            .validateSource(replayedEnvelope) // Note: single element stream
+                            .mapConcat {
                               case Accepted =>
-                                if (isFilteredEvent(envelope) && settings.warnAboutFilteredEventsInFlow) {
+                                if (isFilteredEvent(replayedEnvelope) && settings.warnAboutFilteredEventsInFlow) {
                                   log.info(
                                     "atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.",
-                                    envelope)
+                                    replayedEnvelope)
                                 }
-                                offsetStore.addInflight(envelope)
-                                Some(envelope.asInstanceOf[Envelope])
+                                offsetStore.addInflight(replayedEnvelope)
+                                // FIXME: use a new envelope source for replays, for observability?
+                                val envelope = replayedEnvelope.asInstanceOf[Envelope]
+                                Some(
+                                  envelope -> ProjectionContextImpl(sourceProvider.extractOffset(envelope), envelope))
                               case Duplicate =>
                                 None
                               case RejectedSeqNr =>
                                 // this shouldn't happen
                                 throw new RejectedEnvelope(
-                                  s"Replay due to rejected envelope was rejected. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
+                                  s"Replay due to rejected envelope was rejected. PersistenceId [$persistenceId] seqNr [${replayedEnvelope.sequenceNr}].")
                               case RejectedBacktrackingSeqNr =>
                                 // this shouldn't happen
                                 throw new RejectedEnvelope(
-                                  s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
+                                  s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${replayedEnvelope.sequenceNr}].")
                             }
                         }
-                        .collect {
-                          // FIXME: use a new envelope source for replays, for observability?
-                          case Some(env) => ProjectionContextImpl(sourceProvider.extractOffset(env), env)
-                        }
-                        .via(ObservableFlowHandler(handler.asFlow, observer))
-                        .fold(ReplayedOnRejection: ReplayResult)((r, _) => r) // fold into a single result
                         .recoverWith { exc =>
                           if (exc.getMessage.contains("UNIMPLEMENTED") && exc.getMessage.contains(
                                 "CurrentEventsByPersistenceId")) {
@@ -657,84 +651,75 @@ private[projection] object R2dbcProjectionImpl {
                                 persistenceId,
                                 fromSeqNr,
                                 originalEventEnvelope.sequenceNr))
-                            SourceReplayTriggered
+                            // Source.empty[(Envelope, ProjectionContext)]
+                            // FIXME recover with to a different mechanism ReplayTriggered after stream started !?!
+                            ???
                           } else {
                             logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
                             throw exc
                           }
                         }
+                      ReplayedOnRejection[Envelope, ProjectionContext](source)
                     case None =>
                       if (triggerReplayIfPossible(
                             sourceProvider,
                             persistenceId,
                             fromSeqNr,
                             originalEventEnvelope.sequenceNr))
-                        SourceReplayTriggered
-                      else SourceNotReplayed
+                        ReplayTriggered
+                      else NotReplayed
                   }
                 }
               case _ =>
                 triggerReplayIfPossible(sourceProvider, offsetStore, originalEnvelope).map {
-                  case true  => SourceReplayTriggered
-                  case false => SourceNotReplayed
+                  case true  => ReplayTriggered
+                  case false => NotReplayed
                 }(ExecutionContext.parasitic)
             }
-            fastFutureSource(futureSource)
           case _ =>
-            SourceNotReplayed // no replay support for non typed envelopes
+            // no replay support for non typed envelopes
+            Future.successful(NotReplayed)
         }
 
       } else {
         // replayOnRejectedSequenceNumbers is disabled
-        SourceNotReplayed
+        Future.successful(NotReplayed)
       }
     }
 
-    def observer(context: ProjectionContext): HandlerObserver[Envelope] =
-      context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]].observer
-
-    def accepted(
-        envelope: Envelope,
-        context: ProjectionContext): Source[Option[(Envelope, ProjectionContext)], NotUsed] = {
+    def accepted(envelope: Envelope, context: ProjectionContext): Source[(Envelope, ProjectionContext), NotUsed] = {
       if (isFilteredEvent(envelope) && settings.warnAboutFilteredEventsInFlow) {
         log.info("atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.", envelope)
       }
       fastSourceFuture(loadEnvelope(envelope, sourceProvider)).map { loadedEnvelope =>
         offsetStore.addInflight(loadedEnvelope)
-        Some((loadedEnvelope, context))
+        (loadedEnvelope, context)
       }
     }
 
-    val singleNoneSource: Source[Option[(Envelope, ProjectionContext)], NotUsed] = Source.single(None)
     val validate = Flow[(Envelope, ProjectionContext)]
       .flatMapConcat {
         case (env, context) =>
-          // Note: several calls here return Sources while actually only ever returning a single value to fold it into
-          // the stream rather than through a future+mapAsync
           offsetStore
             .validateSource(env)
-            .flatMapConcat {
-              case Accepted => accepted(env, context)
-              case Duplicate =>
-                singleNoneSource
+            .flatMapConcat[(Envelope, ProjectionContext), NotUsed] {
+              case Accepted  => accepted(env, context)
+              case Duplicate => Source.empty
               case RejectedSeqNr =>
-                replayIfPossible(env, observer(context)).flatMapConcat {
+                fastFutureSource(replayIfPossible(env).map[Source[(Envelope, ProjectionContext), NotUsed]] {
                   // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
-                  case ReplayedOnRejection => accepted(env, context)
-                  case ReplayTriggered     => singleNoneSource
-                  case NotReplayed         => singleNoneSource
-                }
+                  case ReplayedOnRejection(source) => source.concat(accepted(env, context))
+                  case ReplayTriggered             => Source.empty
+                  case NotReplayed                 => Source.empty
+                })
               case RejectedBacktrackingSeqNr =>
-                replayIfPossible(env, observer(context)).flatMapConcat {
+                fastFutureSource(replayIfPossible(env).map[Source[(Envelope, ProjectionContext), NotUsed]] {
                   // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
-                  case ReplayedOnRejection => accepted(env, context)
-                  case ReplayTriggered     => singleNoneSource
-                  case NotReplayed         => throwRejectedEnvelope(sourceProvider, env)
-                }
+                  case ReplayedOnRejection(source) => source.concat(accepted(env, context))
+                  case ReplayTriggered             => Source.empty
+                  case NotReplayed                 => throwRejectedEnvelope(sourceProvider, env)
+                })
             }
-      }
-      .collect {
-        case Some(envelopeAndContext) => envelopeAndContext
       }
 
     FlowWithContext[Envelope, ProjectionContext]
