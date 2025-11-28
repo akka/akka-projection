@@ -636,8 +636,7 @@ private[projection] object R2dbcProjectionImpl {
                                     sourceProvider.extractOffset(envelope),
                                     envelope,
                                     originalObserver,
-                                    externalContext,
-                                    groupSize = 1))
+                                    externalContext))
                               case Duplicate =>
                                 None
                               case RejectedSeqNr =>

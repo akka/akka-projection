@@ -38,4 +38,12 @@ import akka.projection.ProjectionContext
 @InternalApi private[projection] object ProjectionContextImpl {
   def apply[Offset, Envelope](offset: Offset, envelope: Envelope): ProjectionContextImpl[Offset, Envelope] =
     new ProjectionContextImpl(offset, envelope, observer = NoopHandlerObserver, externalContext = null, groupSize = 1)
+
+  def apply[Offset, Envelope](
+      offset: Offset,
+      envelope: Envelope,
+      observer: HandlerObserver[Envelope],
+      externalContext: AnyRef): ProjectionContextImpl[Offset, Envelope] =
+    new ProjectionContextImpl(offset, envelope, observer, externalContext, groupSize = 1)
+
 }
