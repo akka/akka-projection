@@ -43,6 +43,7 @@ object ProjectionBehaviorSpec {
   case object StartObserved extends ProbeMessage
   case class Consumed(n: Int, currentState: String) extends ProbeMessage
   case object StopObserved extends ProbeMessage
+  case object ForcedStopObserved extends ProbeMessage
 
   private val TestProjectionId = ProjectionId("test-projection", "00")
 
@@ -164,6 +165,7 @@ object ProjectionBehaviorSpec {
 
       override def forcedStop(): Unit = {
         killSwitch.shutdown()
+        testProbe.ref ! ForcedStopObserved
       }
 
       override def getOffset(): Future[Option[Int]] = {
@@ -288,7 +290,7 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
       // good, things are flowing
 
       testKit.stop(projectionRef)
-      testProbe.expectMessage(StopObserved)
+      testProbe.expectMessage(ForcedStopObserved)
       streamDoneProbe.expectMessage(Done)
 
       createTestProbe().expectTerminated(projectionRef)
