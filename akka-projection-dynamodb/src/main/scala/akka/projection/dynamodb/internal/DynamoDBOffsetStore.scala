@@ -449,6 +449,7 @@ private[projection] class DynamoDBOffsetStore(
         }
 
       if (filteredRecords.isEmpty) {
+        logger.trace("{} save offsets, all duplicates", logPrefix)
         FutureDone
       } else {
         val newState = oldState.add(filteredRecords, settings.acceptSequenceNumberResetAfter)
@@ -481,11 +482,28 @@ private[projection] class DynamoDBOffsetStore(
         }.toMap
 
         storeSequenceNumbers(filteredRecords).flatMap { _ =>
+          if (logger.isTraceEnabled) {
+            logger.trace(
+              "{} save offsets [{}]",
+              logPrefix,
+              filteredRecords.iterator.map(r => s"${r.pid} -> ${r.seqNr}").mkString(", "))
+          }
+
           val storeOffsetsResult =
             if (changedOffsetBySlice.isEmpty)
               FutureDone
             else
               dao.storeTimestampOffsets(changedOffsetBySlice)
+
+          if (logger.isTraceEnabled)
+            storeOffsetsResult.failed.foreach { exc =>
+              logger.trace(
+                "{} save offsets failed [{}]: {}",
+                logPrefix,
+                filteredRecords.iterator.map(r => s"${r.pid} -> ${r.seqNr}").mkString(", "),
+                exc.toString)
+            }
+
           storeOffsetsResult.flatMap { _ =>
             if (logger.isTraceEnabled) {
               logger.trace(
@@ -647,6 +665,11 @@ private[projection] class DynamoDBOffsetStore(
           } else if (seqNr <= currentInflight.getOrElse(pid, 0L)) {
             // currentInFlight contains those that have been processed or about to be processed in Flow,
             // but offset not saved yet => ok to handle as duplicate
+            logger.trace(
+              "{} Filtering out duplicate in-flight sequence number [{}] for pid [{}]",
+              logPrefix,
+              seqNr,
+              pid)
             FutureDuplicate
           } else if (recordWithOffset.fromSnapshot) {
             // snapshots will mean we are starting from some arbitrary offset after last seen offset
