@@ -1095,26 +1095,33 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
+  /**
+   * Scheduled task
+   */
   def deleteOldTimestampOffsets(): Future[Long] = {
-    checkStopped()
-    // This is running in the background, so fine to progress slowly one slice at a time
-    def loop(slice: Int, count: Long): Future[Long] = {
-      if (slice > maxSlice)
-        Future.successful(count)
-      else
-        deleteOldTimestampOffsets(slice).flatMap { c =>
-          loop(slice + 1, count + c)
-        }
-    }
-
-    val result = loop(minSlice, 0L)
-
-    if (logger.isDebugEnabled)
-      result.foreach { rows =>
-        logger.debug("{} Deleted [{}] timestamp offset rows", logPrefix, rows)
+    if (stopped) {
+      // scheduled task should have been canceled when stopped, but could be an in-flight call from the scheduler
+      Future.successful(0)
+    } else {
+      // This is running in the background, so fine to progress slowly one slice at a time
+      def loop(slice: Int, count: Long): Future[Long] = {
+        if (slice > maxSlice)
+          Future.successful(count)
+        else
+          deleteOldTimestampOffsets(slice).flatMap { c =>
+            loop(slice + 1, count + c)
+          }
       }
 
-    result
+      val result = loop(minSlice, 0L)
+
+      if (logger.isDebugEnabled)
+        result.foreach { rows =>
+          logger.debug("{} Deleted [{}] timestamp offset rows", logPrefix, rows)
+        }
+
+      result
+    }
   }
 
   def deleteOldTimestampOffsets(slice: Int): Future[Long] = {
@@ -1201,19 +1208,26 @@ private[projection] class R2dbcOffsetStore(
       clearLatestSeen() // CAS retry, concurrent update of latestSeen
   }
 
+  /**
+   * Scheduled task
+   */
   def adoptForeignOffsets(): Future[Long] = {
-    checkStopped()
-    if (!hasForeignOffsets()) {
-      scheduledTasks.get.adoptForeignOffsets.foreach(_.cancel())
+    if (stopped) {
+      // scheduled task should have been canceled when stopped, but could be an in-flight call from the scheduler
       Future.successful(0)
     } else {
-      val latestTimestamp = getLatestSeen()
-      val adoptableRecords = takeAdoptableForeignOffsets(latestTimestamp)
-      if (!hasForeignOffsets()) scheduledTasks.get.adoptForeignOffsets.foreach(_.cancel())
-      val adoptableLatestBySlice = adoptableRecords.map { adoptable =>
-        LatestBySlice(adoptable.record.slice, adoptable.record.pid, adoptable.record.seqNr)
+      if (!hasForeignOffsets()) {
+        scheduledTasks.get.adoptForeignOffsets.foreach(_.cancel())
+        Future.successful(0)
+      } else {
+        val latestTimestamp = getLatestSeen()
+        val adoptableRecords = takeAdoptableForeignOffsets(latestTimestamp)
+        if (!hasForeignOffsets()) scheduledTasks.get.adoptForeignOffsets.foreach(_.cancel())
+        val adoptableLatestBySlice = adoptableRecords.map { adoptable =>
+          LatestBySlice(adoptable.record.slice, adoptable.record.pid, adoptable.record.seqNr)
+        }
+        dao.adoptTimestampOffsets(adoptableLatestBySlice)
       }
-      dao.adoptTimestampOffsets(adoptableLatestBySlice)
     }
   }
 
