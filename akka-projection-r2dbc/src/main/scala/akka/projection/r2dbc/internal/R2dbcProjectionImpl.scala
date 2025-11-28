@@ -641,23 +641,9 @@ private[projection] object R2dbcProjectionImpl {
                                   s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${replayedEnvelope.sequenceNr}].")
                             }
                         }
-                        .recoverWith { exc =>
-                          if (exc.getMessage.contains("UNIMPLEMENTED") && exc.getMessage.contains(
-                                "CurrentEventsByPersistenceId")) {
-                            logReplayUnimplementedException(logPrefix, originalEventEnvelope, fromSeqNr)
-                            Future.successful(
-                              triggerReplayIfPossible(
-                                sourceProvider,
-                                persistenceId,
-                                fromSeqNr,
-                                originalEventEnvelope.sequenceNr))
-                            // Source.empty[(Envelope, ProjectionContext)]
-                            // FIXME recover with to a different mechanism ReplayTriggered after stream started !?!
-                            ???
-                          } else {
-                            logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
-                            throw exc
-                          }
+                        .recover { exc =>
+                          logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
+                          throw exc
                         }
                       ReplayedOnRejection[Envelope, ProjectionContext](source)
                     case None =>
