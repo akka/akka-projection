@@ -586,8 +586,9 @@ private[projection] object R2dbcProjectionImpl {
 
     // This is similar to R2dbcProjectionImpl.replayIfPossible but difficult to extract common parts
     // since this is flow processing
-    def replayIfPossible(originalEnvelope: Envelope): Future[ReplayResult[Envelope, ProjectionContext]] = {
-
+    def replayIfPossible(
+        originalEnvelope: Envelope,
+        originalContext: ProjectionContext): Future[ReplayResult[Envelope, ProjectionContext]] = {
       if (offsetStore.settings.replayOnRejectedSequenceNumbers) {
         val logPrefix = offsetStore.logPrefix
         originalEnvelope match {
@@ -600,6 +601,8 @@ private[projection] object R2dbcProjectionImpl {
               case adapted: JavaToScalaBySliceSourceProviderAdapter[_, _] => adapted.delegate
               case provider                                               => provider
             }
+
+            val originalObserver = originalContext.asInstanceOf[ProjectionContextImpl[Offset, Envelope]].observer
 
             underlyingProvider match {
               case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked] =>
@@ -627,8 +630,13 @@ private[projection] object R2dbcProjectionImpl {
                                 offsetStore.addInflight(replayedEnvelope)
                                 // FIXME: use a new envelope source for replays, for observability?
                                 val envelope = replayedEnvelope.asInstanceOf[Envelope]
+                                val externalContext = originalObserver.beforeProcess(envelope)
                                 Some(
-                                  envelope -> ProjectionContextImpl(sourceProvider.extractOffset(envelope), envelope))
+                                  envelope -> ProjectionContextImpl[Offset, Envelope](
+                                    sourceProvider.extractOffset(envelope),
+                                    envelope,
+                                    originalObserver,
+                                    externalContext))
                               case Duplicate =>
                                 None
                               case RejectedSeqNr =>
@@ -692,7 +700,7 @@ private[projection] object R2dbcProjectionImpl {
               case Accepted  => accepted(env, context)
               case Duplicate => Source.empty
               case RejectedSeqNr =>
-                fastFutureSource(replayIfPossible(env).map[Source[(Envelope, ProjectionContext), NotUsed]] {
+                fastFutureSource(replayIfPossible(env, context).map[Source[(Envelope, ProjectionContext), NotUsed]] {
                   // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
                   case ReplayedOnRejection(source) =>
                     source.concatLazy(accepted(env, context))
@@ -700,7 +708,7 @@ private[projection] object R2dbcProjectionImpl {
                   case NotReplayed     => Source.empty
                 })
               case RejectedBacktrackingSeqNr =>
-                fastFutureSource(replayIfPossible(env).map[Source[(Envelope, ProjectionContext), NotUsed]] {
+                fastFutureSource(replayIfPossible(env, context).map[Source[(Envelope, ProjectionContext), NotUsed]] {
                   // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
                   case ReplayedOnRejection(source) => source.concatLazy(accepted(env, context))
                   case ReplayTriggered             => Source.empty
