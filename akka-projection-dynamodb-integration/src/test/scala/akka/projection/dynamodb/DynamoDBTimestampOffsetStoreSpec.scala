@@ -314,7 +314,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       offsetStore.getState().offsetBySlice(slice4) shouldBe TimestampOffset(offset2.timestamp, Map(p4 -> 1L))
       readOffset1.get.offsets shouldBe offsetStore.getState().offsetBySlice
 
-      val state1 = offsetStore.load(Vector(p1, p2, p3, p4)).futureValue
+      val state1 = offsetStore.load(Set(p1, p2, p3, p4)).futureValue
       state1.byPid(p1).seqNr shouldBe 4L
       state1.byPid(p2).seqNr shouldBe 2L
       state1.byPid(p3).seqNr shouldBe 5L
@@ -340,7 +340,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
 
       offsetStore.saveOffsets(offsetsBatch2).futureValue
       val readOffset2 = offsetStore.readOffset[TimestampOffsetBySlice]().futureValue
-      val state2 = offsetStore.load(Vector(p1, p2, p3, p4)).futureValue
+      val state2 = offsetStore.load(Set(p1, p2, p3, p4)).futureValue
       state2.byPid(p1).seqNr shouldBe 8L
       state2.byPid(p2).seqNr shouldBe 2L // duplicate with lower seqNr not saved
       state2.byPid(p3).seqNr shouldBe 5L
@@ -500,7 +500,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
           client)
       offsetStore1.readOffset().futureValue
       // FIXME this is not really testing anything, the test is supposed to test that it is responsible for a range
-      val state1 = offsetStore1.load(Vector(p1, p2)).futureValue
+      val state1 = offsetStore1.load(Set(p1, p2)).futureValue
       state1.byPid.keySet shouldBe Set(p1, p2)
 
       val offsetStore2 =
@@ -512,7 +512,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
           client)
       offsetStore2.readOffset().futureValue
       // FIXME this is not really testing anything, the test is supposed to test that it is responsible for a range
-      val state2 = offsetStore2.load(Vector(p3, p4)).futureValue
+      val state2 = offsetStore2.load(Set(p3, p4)).futureValue
       state2.byPid.keySet shouldBe Set(p3, p4)
     }
 

@@ -518,9 +518,9 @@ private[projection] class R2dbcOffsetStore(
       Future.successful(oldState)
     else {
       val slice = persistenceExt.sliceForPersistenceId(pid)
-      logger.trace("{} load [{}]", logPrefix, pid)
       dao.readTimestampOffset(slice, pid).flatMap {
         case Some(record) =>
+          logger.trace("{} loaded pid [{}], seqNr [{}]", logPrefix, pid, record.seqNr)
           val newState = oldState.add(Vector(record), settings.acceptSequenceNumberResetAfter)
           if (state.compareAndSet(oldState, newState))
             Future.successful(newState)
@@ -531,7 +531,7 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
-  def load(pids: IndexedSeq[Pid]): Future[State] = {
+  def load(pids: Set[Pid]): Future[State] = {
     val oldState = state.get()
     val pidsToLoad = pids.filterNot(oldState.contains)
     if (pidsToLoad.isEmpty)
@@ -539,10 +539,14 @@ private[projection] class R2dbcOffsetStore(
     else {
       val loadedRecords = pidsToLoad.map { pid =>
         val slice = persistenceExt.sliceForPersistenceId(pid)
-        logger.trace("{} load [{}]", logPrefix, pid)
         dao.readTimestampOffset(slice, pid)
       }
       Future.sequence(loadedRecords).flatMap { records =>
+        if (logger.isTraceEnabled) {
+          records.flatten.foreach { record =>
+            logger.trace("{} loaded pid [{}], seqNr [{}]", logPrefix, record.pid, record.seqNr)
+          }
+        }
         val newState = oldState.add(records.flatten, settings.acceptSequenceNumberResetAfter)
         if (state.compareAndSet(oldState, newState))
           Future.successful(newState)
@@ -619,7 +623,7 @@ private[projection] class R2dbcOffsetStore(
       conn: Connection,
       records: immutable.IndexedSeq[Record],
       canBeConcurrent: Boolean): Future[Done] = {
-    load(records.map(_.pid)).flatMap { oldState =>
+    load(records.iterator.map(_.pid).toSet).flatMap { oldState =>
       val filteredRecords = {
         if (records.size <= 1)
           records.filterNot(record => oldState.isDuplicate(record, settings.acceptSequenceNumberResetAfter))
@@ -670,7 +674,7 @@ private[projection] class R2dbcOffsetStore(
         }
 
         def compareAndSwapRetry(): Future[Done] = {
-          load(records.map(_.pid)).flatMap { old =>
+          load(records.iterator.map(_.pid).toSet).flatMap { old =>
             val evictedNewState = addRecordsAndEvict(old)
             if (state.compareAndSet(old, evictedNewState)) {
               slices.foreach(s => triggerDeletionPerSlice.put(s, TRUE))

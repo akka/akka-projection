@@ -366,7 +366,7 @@ private[projection] class DynamoDBOffsetStore(
     }
   }
 
-  def load(pids: IndexedSeq[Pid]): Future[State] = {
+  def load(pids: Set[Pid]): Future[State] = {
     val oldState = state.get()
     val pidsToLoad = pids.filterNot(oldState.contains)
     if (pidsToLoad.isEmpty)
@@ -431,7 +431,7 @@ private[projection] class DynamoDBOffsetStore(
       records: IndexedSeq[Record],
       storeSequenceNumbers: IndexedSeq[Record] => Future[Done],
       canBeConcurrent: Boolean): Future[Done] = {
-    load(records.map(_.pid)).flatMap { oldState =>
+    load(records.iterator.map(_.pid).toSet).flatMap { oldState =>
       val filteredRecords =
         if (records.size <= 1)
           records.filterNot(record => oldState.isDuplicate(record, settings.acceptSequenceNumberResetAfter))
