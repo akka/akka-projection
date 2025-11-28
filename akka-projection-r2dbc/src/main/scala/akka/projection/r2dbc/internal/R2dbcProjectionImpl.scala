@@ -124,8 +124,10 @@ private[projection] object R2dbcProjectionImpl {
               newStore.maxSlice,
               newStore.uuid)
             newStore
-          } else
+          } else {
+            newStore.stop() // never used, but stop anyway
             offsetStore() // CAS retry
+          }
         case os => os
       }
     }
@@ -143,8 +145,10 @@ private[projection] object R2dbcProjectionImpl {
               newStore.maxSlice,
               newStore.uuid)
             newStore
-          } else
+          } else {
+            newStore.stop() // never used, but stop anyway
             newOffsetStore() // CAS retry
+          }
         case existing =>
           val uuid = UUID.randomUUID().toString
           val newStore = offsetStoreFactory(uuid)
@@ -158,8 +162,10 @@ private[projection] object R2dbcProjectionImpl {
               newStore.uuid,
               existing.uuid)
             newStore
-          } else
+          } else {
+            newStore.stop() // never used, but stop anyway
             newOffsetStore() // CAS retry
+          }
       }
     }
 
