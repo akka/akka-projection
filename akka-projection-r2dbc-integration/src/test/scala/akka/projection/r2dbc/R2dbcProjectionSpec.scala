@@ -215,7 +215,7 @@ class R2dbcProjectionSpec
   private val logger = LoggerFactory.getLogger(getClass)
   private val settings = R2dbcProjectionSettings(testKit.system)
   private def createOffsetStore(projectionId: ProjectionId): R2dbcOffsetStore =
-    new R2dbcOffsetStore(projectionId, None, system, settings, r2dbcExecutor)
+    new R2dbcOffsetStore(projectionId, UUID.randomUUID().toString, None, system, settings, r2dbcExecutor)
   private val projectionTestKit = ProjectionTestKit(system)
 
   override protected def beforeAll(): Unit = {

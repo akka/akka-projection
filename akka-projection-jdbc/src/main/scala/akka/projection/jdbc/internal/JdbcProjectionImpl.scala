@@ -283,6 +283,11 @@ private[projection] class JdbcProjectionImpl[Offset, Envelope, S <: JdbcSession]
       streamDone
     }
 
+    override def forcedStop(): Unit = {
+      projectionState.killSwitch.shutdown()
+      projectionState.abort.tryFailure(AbortProjectionException)
+    }
+
     // RunningProjectionManagement
     override def getOffset(): Future[Option[Offset]] = {
       offsetStore.readOffset(projectionId)
