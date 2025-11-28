@@ -704,7 +704,10 @@ private[projection] object R2dbcProjectionImpl {
                                 // FIXME: use a new envelope source for replays, for observability?
                                 val envelope = replayedEnvelope.asInstanceOf[Envelope]
                                 Some(
-                                  envelope -> ProjectionContextImpl(sourceProvider.extractOffset(envelope), envelope))
+                                  envelope -> ProjectionContextImpl(
+                                    sourceProvider.extractOffset(envelope),
+                                    envelope,
+                                    offsetStore.uuid))
                               case Duplicate =>
                                 None
                               case RejectedSeqNr =>
