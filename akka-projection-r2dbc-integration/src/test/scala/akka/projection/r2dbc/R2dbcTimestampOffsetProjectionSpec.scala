@@ -280,7 +280,7 @@ class R2dbcTimestampOffsetProjectionSpec
       complete: Boolean = true): (TestTimestampSourceProvider, Future[TestPublisher.Probe[EventEnvelope[String]]]) = {
     val sourceProbe = Promise[TestPublisher.Probe[EventEnvelope[String]]]()
     val source = TestSource[EventEnvelope[String]]().mapMaterializedValue { probe =>
-      sourceProbe.success(probe)
+      sourceProbe.trySuccess(probe)
       NotUsed
     }
     val sourceProvider = createTestSourceProvider(source, allEnvelopes, enableCurrentEventsByPersistenceId, complete)
