@@ -239,8 +239,7 @@ private[projection] object R2dbcOffsetStore {
     }
   }
 
-  final class AttemptToUseStoppedOffsetStore(logPrefix: String)
-      extends RuntimeException(s"$logPrefix R2dbcOffsetStore was stopped")
+  final class AttemptToUseStoppedOffsetStore(message: String) extends RuntimeException(message)
 }
 
 /**
@@ -1392,7 +1391,7 @@ private[projection] class R2dbcOffsetStore(
 
   private def checkStopped(): Unit = {
     if (stopped)
-      throw new AttemptToUseStoppedOffsetStore(logPrefix)
+      throw new AttemptToUseStoppedOffsetStore(s"$logPrefix R2dbcOffsetStore was stopped")
   }
 
 }

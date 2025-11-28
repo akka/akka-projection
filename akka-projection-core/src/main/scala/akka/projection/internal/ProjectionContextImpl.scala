@@ -17,7 +17,8 @@ import akka.projection.ProjectionContext
     envelope: Envelope,
     observer: HandlerObserver[Envelope],
     externalContext: AnyRef,
-    groupSize: Int)
+    groupSize: Int,
+    uuid: String)
     extends ProjectionContext {
 
   def withObserver(observer: HandlerObserver[Envelope]): ProjectionContextImpl[Offset, Envelope] =
@@ -30,12 +31,25 @@ import akka.projection.ProjectionContext
    * scala3 makes `copy` private
    */
   def withGroupSize(groupSize: Int): ProjectionContextImpl[Offset, Envelope] = copy(groupSize = groupSize)
+
 }
 
 /**
  * INTERNAL API
  */
 @InternalApi private[projection] object ProjectionContextImpl {
+  def apply[Offset, Envelope](
+      offset: Offset,
+      envelope: Envelope,
+      uuid: String): ProjectionContextImpl[Offset, Envelope] =
+    new ProjectionContextImpl(
+      offset,
+      envelope,
+      observer = NoopHandlerObserver,
+      externalContext = null,
+      groupSize = 1,
+      uuid = uuid)
+
   def apply[Offset, Envelope](offset: Offset, envelope: Envelope): ProjectionContextImpl[Offset, Envelope] =
-    new ProjectionContextImpl(offset, envelope, observer = NoopHandlerObserver, externalContext = null, groupSize = 1)
+    apply(offset, envelope, uuid = "")
 }

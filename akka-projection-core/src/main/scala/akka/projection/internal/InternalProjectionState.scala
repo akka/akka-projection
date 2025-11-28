@@ -270,7 +270,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
         case _: MergeableOffsetSourceProvider[_, _] =>
           val batches = envelopesAndOffsets
             .flatMap {
-              case context @ ProjectionContextImpl(offset: MergeableOffset[_] @unchecked, _, _, _, _) =>
+              case context @ ProjectionContextImpl(offset: MergeableOffset[_] @unchecked, _, _, _, _, _) =>
                 offset.entries.toSeq.map {
                   case (key, _) => (key, context)
                 }
@@ -404,7 +404,10 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
 
   }
 
-  def mappedSource(): Source[Done, Future[Done]] = {
+  def mappedSource(): Source[Done, Future[Done]] =
+    mappedSource(uuid = "")
+
+  def mappedSource(uuid: String): Source[Done, Future[Done]] = {
     val handlerStrategy = handlerStrategyFactory()
     val handlerLifecycle = handlerStrategy.lifecycle
     statusObserver.started(projectionId)
@@ -430,7 +433,7 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
         .via(killSwitch.flow)
         .map { env =>
           // note: external context and observer only used for flow handlers
-          ProjectionContextImpl(sourceProvider.extractOffset(env), env)
+          ProjectionContextImpl(sourceProvider.extractOffset(env), env, uuid)
         }
         .filter { context =>
           sourceProvider match {

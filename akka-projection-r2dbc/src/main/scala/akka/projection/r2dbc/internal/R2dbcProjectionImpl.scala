@@ -64,6 +64,7 @@ import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.javadsl
 import akka.projection.r2dbc.R2dbcProjectionSettings
+import akka.projection.r2dbc.internal.R2dbcOffsetStore.AttemptToUseStoppedOffsetStore
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.RejectedEnvelope
 import akka.projection.r2dbc.internal.R2dbcProjectionImpl.OffsetStoreAccess
 import akka.projection.r2dbc.internal.R2dbcProjectionImpl.extractOffsetPidSeqNr
@@ -1281,26 +1282,34 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       import R2dbcProjectionImpl.FutureDone
       val envelope = projectionContext.envelope
 
-      // FIXME here we don't have any correlation of the offset store
-      // we might need to include the uuid in the ProjectionContextImpl
       val store = offsetStore()
 
-      if (store.isInflight(envelope) || isExactlyOnceWithSkip) {
-        val offset = extractOffsetPidSeqNr(projectionContext.offset, envelope)
-        store
-          .saveOffset(offset)
-          .map { done =>
-            try {
-              statusObserver.offsetProgress(projectionId, envelope)
-            } catch {
-              case NonFatal(_) => // ignore
+      if (projectionContext.uuid == store.uuid) {
+        if (store.isInflight(envelope) || isExactlyOnceWithSkip) {
+          val offset = extractOffsetPidSeqNr(projectionContext.offset, envelope)
+          store
+            .saveOffset(offset)
+            .map { done =>
+              try {
+                statusObserver.offsetProgress(projectionId, envelope)
+              } catch {
+                case NonFatal(_) => // ignore
+              }
+              getTelemetry().onOffsetStored(batchSize)
+              done
             }
-            getTelemetry().onOffsetStored(batchSize)
-            done
-          }
 
+        } else {
+          FutureDone
+        }
       } else {
-        FutureDone
+        // uuid in context doesn't match current offset store, came from old incarnation
+        val offset = extractOffsetPidSeqNr(projectionContext.offset, envelope).pidSeqNr
+          .map { case (pid, seqNr) => s"$pid -> $seqNr" }
+          .getOrElse("")
+        throw throw new AttemptToUseStoppedOffsetStore(
+          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}] [${store.uuid}] attempt to save offset " +
+          s"but R2dbcOffsetStore was stopped: [$offset]")
       }
     }
 
@@ -1309,37 +1318,49 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
         batch: immutable.Seq[ProjectionContextImpl[Offset, Envelope]]): Future[Done] = {
       import R2dbcProjectionImpl.FutureDone
 
-      val acceptedContexts =
-        if (isExactlyOnceWithSkip)
-          batch.toVector
-        else {
-          batch.iterator.filter { ctx =>
-            val env = ctx.envelope
-            offsetStore().isInflight(env)
-          }.toVector
-        }
+      val store = offsetStore()
 
-      if (acceptedContexts.isEmpty) {
+      if (batch.isEmpty) {
         FutureDone
-      } else {
-        // FIXME here we don't have any correlation of the offset store
-        // we might need to include the uuid in the ProjectionContextImpl
-        val store = offsetStore()
-
-        val offsets = acceptedContexts.map(ctx => extractOffsetPidSeqNr(ctx.offset, ctx.envelope))
-        store
-          .saveOffsets(offsets)
-          .map { done =>
-            val batchSize = batch.map { _.groupSize }.sum
-            val last = acceptedContexts.last
-            try {
-              statusObserver.offsetProgress(projectionId, last.envelope)
-            } catch {
-              case NonFatal(_) => // ignore
-            }
-            getTelemetry().onOffsetStored(batchSize)
-            done
+      } else if (batch.head.uuid == store.uuid) {
+        val acceptedContexts =
+          if (isExactlyOnceWithSkip)
+            batch.toVector
+          else {
+            batch.iterator.filter { ctx =>
+              val env = ctx.envelope
+              offsetStore().isInflight(env)
+            }.toVector
           }
+
+        if (acceptedContexts.isEmpty) {
+          FutureDone
+        } else {
+          val offsets = acceptedContexts.map(ctx => extractOffsetPidSeqNr(ctx.offset, ctx.envelope))
+          store
+            .saveOffsets(offsets)
+            .map { done =>
+              val batchSize = batch.map {
+                _.groupSize
+              }.sum
+              val last = acceptedContexts.last
+              try {
+                statusObserver.offsetProgress(projectionId, last.envelope)
+              } catch {
+                case NonFatal(_) => // ignore
+              }
+              getTelemetry().onOffsetStored(batchSize)
+              done
+            }
+        }
+      } else {
+        // uuid in context doesn't match current offset store, came from old incarnation
+        val offsets = batch
+          .flatMap(ctx => extractOffsetPidSeqNr(ctx.offset, ctx.envelope).pidSeqNr)
+          .map { case (pid, seqNr) => s"$pid -> $seqNr" }
+        throw throw new AttemptToUseStoppedOffsetStore(
+          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}] [${store.uuid}] attempt to save offsets " +
+          s"but R2dbcOffsetStore was stopped: [${offsets.mkString(", ")}]")
       }
     }
 
@@ -1354,15 +1375,17 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     }
 
     override def mappedSource(): Source[Done, Future[Done]] = {
-      super.mappedSource().mapMaterializedValue { value =>
-        log.info(
-          "Starting projection instance {} [{}-{}] [{}]",
-          projectionId.name,
-          offsetStore().minSlice,
-          offsetStore().maxSlice,
-          uuid())
-        value
-      }
+      super
+        .mappedSource(uuid())
+        .mapMaterializedValue { value =>
+          log.info(
+            "Starting projection instance {} [{}-{}] [{}]",
+            projectionId.name,
+            offsetStore().minSlice,
+            offsetStore().maxSlice,
+            uuid())
+          value
+        }
     }
   }
 
