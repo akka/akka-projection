@@ -1,0 +1,10 @@
+# all internals
+ProblemFilters.exclude[MissingTypesProblem]("akka.projection.r2dbc.internal.R2dbcProjectionImpl$ReplayedOnRejection$")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.r2dbc.internal.R2dbcProjectionImpl#ReplayedOnRejection.productElementName")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.r2dbc.internal.R2dbcProjectionImpl#ReplayedOnRejection.productElementNames")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.r2dbc.internal.R2dbcProjectionImpl#ReplayedOnRejection.productPrefix")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.r2dbc.internal.R2dbcProjectionImpl#ReplayedOnRejection.productArity")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.r2dbc.internal.R2dbcProjectionImpl#ReplayedOnRejection.productElement")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.r2dbc.internal.R2dbcProjectionImpl#ReplayedOnRejection.productIterator")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.r2dbc.internal.R2dbcProjectionImpl#ReplayedOnRejection.canEqual")
+ProblemFilters.exclude[FinalMethodProblem]("akka.projection.r2dbc.internal.R2dbcProjectionImpl#ReplayedOnRejection.toString")
