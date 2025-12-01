@@ -17,6 +17,7 @@ import akka.grpc.scaladsl.StreamResponseRequestBuilder
 import akka.grpc.scaladsl.StringEntry
 import akka.persistence.Persistence
 import akka.persistence.query.Offset
+import akka.persistence.query.QueryCorrelationId
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.scaladsl._
 import akka.persistence.query.typed.EventEnvelope
@@ -53,14 +54,13 @@ import io.grpc.Status
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.LatestEventTimestampQuery
 import akka.projection.grpc.internal.proto.CurrentEventsByPersistenceIdRequest
@@ -68,6 +68,7 @@ import akka.projection.grpc.internal.proto.LatestEventTimestampRequest
 import akka.projection.grpc.internal.proto.ReplayPersistenceId
 import akka.projection.grpc.internal.proto.ReplicaInfo
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
+import akka.projection.internal.CorrelationId
 
 object GrpcReadJournal {
   val Identifier = "akka.projection.grpc.consumer"
@@ -287,8 +288,9 @@ final class GrpcReadJournal private (
       maxSlice: Int,
       offset: Offset): Source[EventEnvelope[Evt], NotUsed] = {
     require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
+    val correlationId = QueryCorrelationId.get()
     log.debug(
-      "Starting eventsBySlices stream from [{}] [{}], slices [{} - {}], offset [{}]",
+      "Starting eventsBySlices stream from [{}] [{}], slices [{} - {}], offset [{}]{}",
       clientSettings.serviceName,
       streamId,
       minSlice,
@@ -296,7 +298,8 @@ final class GrpcReadJournal private (
       offset match {
         case t: TimestampOffset => t.timestamp
         case _                  => offset
-      })
+      },
+      CorrelationId.toLogText(correlationId))
 
     def sliceHandledByThisStream(pid: String): Boolean = {
       val slice = persistenceExt.sliceForPersistenceId(pid)
@@ -342,14 +345,15 @@ final class GrpcReadJournal private (
 
       if (log.isDebugEnabled() && protoReplayPersistenceIds.nonEmpty)
         log.debug(
-          "{}: Replay triggered for [{}]",
+          "{}: Replay triggered for [{}]{}",
           streamId,
           protoReplayPersistenceIds
             .map { replayPersistenceId =>
               val offset = replayPersistenceId.fromPersistenceIdOffset.get
               s"${offset.persistenceId} -> ${offset.seqNr} (${replayPersistenceId.filterAfterSeqNr})"
             }
-            .mkString(", "))
+            .mkString(", "),
+          CorrelationId.toLogText(correlationId))
 
       StreamIn(StreamIn.Message.Replay(ReplayReq(protoPersistenceIdOffsets, protoReplayPersistenceIds)))
     }
@@ -368,7 +372,7 @@ final class GrpcReadJournal private (
         .futureSource {
           initFilter.map { filter =>
             val protoCriteria = toProtoFilterCriteria(filter.criteria)
-            val initReq = InitReq(streamId, minSlice, maxSlice, protoOffset, protoCriteria, replicaInfo)
+            val initReq = InitReq(streamId, minSlice, maxSlice, protoOffset, protoCriteria, replicaInfo, correlationId)
 
             Source
               .single(StreamIn(StreamIn.Message.Init(initReq)))
@@ -387,36 +391,41 @@ final class GrpcReadJournal private (
             throw new ConnectionException(clientSettings.serviceName, port, streamId)
 
           case th: Throwable =>
-            throw new RuntimeException(s"Failure to consume gRPC event stream for [${streamId}]", th)
+            throw new RuntimeException(
+              s"Failure to consume gRPC event stream for [$streamId]${CorrelationId.toLogText(correlationId)}",
+              th)
         }
 
     streamOut.map {
       case StreamOut(StreamOut.Message.Event(event), _) =>
         if (log.isTraceEnabled)
           log.trace(
-            "Received event from [{}] persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
+            "Received event from [{}] persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
             clientSettings.serviceName,
             event.persistenceId,
             event.seqNr,
             timestampOffset(event.offset.head).timestamp,
-            event.source)
+            event.source,
+            CorrelationId.toLogText(correlationId))
 
         eventToEnvelope(event, streamId)
 
       case StreamOut(StreamOut.Message.FilteredEvent(filteredEvent), _) =>
         if (log.isTraceEnabled)
           log.trace(
-            "Received filtered event from [{}] persistenceId [{}] with seqNr [{}], offset [{}], source [{}]",
+            "Received filtered event from [{}] persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
             clientSettings.serviceName,
             filteredEvent.persistenceId,
             filteredEvent.seqNr,
             timestampOffset(filteredEvent.offset.head).timestamp,
-            filteredEvent.source)
+            filteredEvent.source,
+            CorrelationId.toLogText(correlationId))
 
         filteredEventToEnvelope(filteredEvent, streamId)
 
       case other =>
-        throw new IllegalArgumentException(s"Unexpected StreamOut [${other.message.getClass.getName}]")
+        throw new IllegalArgumentException(
+          s"Unexpected StreamOut [${other.message.getClass.getName}]${CorrelationId.toLogText(correlationId)}")
     }
   }
 
@@ -456,21 +465,25 @@ final class GrpcReadJournal private (
   // EventTimestampQuery
   override def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
     import system.dispatcher
+    val correlationId = QueryCorrelationId.get()
     addRequestHeaders(client.eventTimestamp())
-      .invoke(EventTimestampRequest(settings.streamId, persistenceId, sequenceNr))
+      .invoke(EventTimestampRequest(settings.streamId, persistenceId, sequenceNr, correlationId))
       .map(_.timestamp.map(_.asJavaInstant))
   }
 
   //LoadEventQuery
   override def loadEnvelope[Evt](persistenceId: String, sequenceNr: Long): Future[EventEnvelope[Evt]] = {
-    log.trace(
-      "Loading event from [{}] persistenceId [{}] with seqNr [{}]",
-      clientSettings.serviceName,
-      persistenceId,
-      sequenceNr)
+    val correlationId = QueryCorrelationId.get()
+    if (log.isTraceEnabled)
+      log.trace(
+        "Loading event from [{}] persistenceId [{}] with seqNr [{}]{}",
+        clientSettings.serviceName,
+        persistenceId,
+        sequenceNr,
+        CorrelationId.toLogText(correlationId))
     import system.dispatcher
     addRequestHeaders(client.loadEvent())
-      .invoke(LoadEventRequest(settings.streamId, persistenceId, sequenceNr, replicaInfo))
+      .invoke(LoadEventRequest(settings.streamId, persistenceId, sequenceNr, replicaInfo, correlationId))
       .map {
         case LoadEventResponse(LoadEventResponse.Message.Event(event), _) =>
           eventToEnvelope(event, settings.streamId)
@@ -492,9 +505,10 @@ final class GrpcReadJournal private (
       minSlice: Int,
       maxSlice: Int): Future[Option[Instant]] = {
     require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
+    val correlationId = QueryCorrelationId.get()
     import system.dispatcher
     addRequestHeaders(client.latestEventTimestamp())
-      .invoke(LatestEventTimestampRequest(streamId, minSlice, maxSlice))
+      .invoke(LatestEventTimestampRequest(streamId, minSlice, maxSlice, correlationId))
       .map(_.timestamp.map(_.asJavaInstant))
   }
 
@@ -503,29 +517,37 @@ final class GrpcReadJournal private (
       persistenceId: String,
       fromSequenceNr: Long,
       toSequenceNr: Long): Source[EventEnvelope[Evt], NotUsed] = {
-
+    val correlationId = QueryCorrelationId.get()
     addRequestHeaders(client.currentEventsByPersistenceId())
-      .invoke(CurrentEventsByPersistenceIdRequest(settings.streamId, persistenceId, fromSequenceNr, toSequenceNr))
+      .invoke(
+        CurrentEventsByPersistenceIdRequest(
+          settings.streamId,
+          persistenceId,
+          fromSequenceNr,
+          toSequenceNr,
+          correlationId))
       .map {
         case StreamOut(StreamOut.Message.Event(event), _) =>
           if (log.isTraceEnabled)
             log.trace(
-              "currentEventsByPersistenceId event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]",
+              "currentEventsByPersistenceId event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]{}",
               clientSettings.serviceName,
               event.persistenceId,
               event.seqNr,
-              timestampOffset(event.offset.head).timestamp)
+              timestampOffset(event.offset.head).timestamp,
+              CorrelationId.toLogText(correlationId))
 
           eventToEnvelope(event, streamId)
 
         case StreamOut(StreamOut.Message.FilteredEvent(filteredEvent), _) =>
           if (log.isTraceEnabled)
             log.trace(
-              "currentEventsByPersistenceId filtered event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]",
+              "currentEventsByPersistenceId filtered event from [{}] persistenceId [{}] with seqNr [{}], offset [{}]{}",
               clientSettings.serviceName,
               filteredEvent.persistenceId,
               filteredEvent.seqNr,
-              timestampOffset(filteredEvent.offset.head).timestamp)
+              timestampOffset(filteredEvent.offset.head).timestamp,
+              CorrelationId.toLogText(correlationId))
 
           filteredEventToEnvelope(filteredEvent, streamId)
 
