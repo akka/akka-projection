@@ -47,6 +47,7 @@ import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.BacklogStatusProjectionState
 import akka.projection.internal.CanTriggerReplay
+import akka.projection.internal.CorrelationId
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerObserver
@@ -1287,7 +1288,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       // need the envelope to be able to call offsetStore.saveOffset
       // FIXME maybe we can cleanup this mess when moving R2dbcProjection to the Akka Projections repository? This is all internal api.
       throw new IllegalStateException(
-        s"[${uuid()}] Unexpected call to saveOffset. It should have called saveOffsetAndReport. Please report bug at https://github.com/akka/akka-projection/issues")
+        s"Correlation [${uuid()}], Unexpected call to saveOffset. It should have called saveOffsetAndReport. Please report bug at https://github.com/akka/akka-projection/issues")
     }
 
     override protected def saveOffsetAndReport(
@@ -1323,7 +1324,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
           .map { case (pid, seqNr) => s"$pid -> $seqNr" }
           .getOrElse("")
         throw throw new AttemptToUseStoppedOffsetStore(
-          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}] [${store.uuid}] attempt to save offset " +
+          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}]${CorrelationId} attempt to save offset " +
           s"but R2dbcOffsetStore was stopped: [$offset]")
       }
     }
@@ -1374,7 +1375,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
           .flatMap(ctx => extractOffsetPidSeqNr(ctx.offset, ctx.envelope).pidSeqNr)
           .map { case (pid, seqNr) => s"$pid -> $seqNr" }
         throw throw new AttemptToUseStoppedOffsetStore(
-          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}] [${store.uuid}] attempt to save offsets " +
+          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}]${CorrelationId.toLogText(store.uuid)} attempt to save offsets " +
           s"but R2dbcOffsetStore was stopped: [${offsets.mkString(", ")}]")
       }
     }
@@ -1394,7 +1395,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
         .mappedSource(uuid())
         .mapMaterializedValue { value =>
           log.info(
-            "Starting projection instance {} [{}-{}] [{}]",
+            "Starting projection instance {} [{}-{}], correlation [{}]",
             projectionId.name,
             offsetStore().minSlice,
             offsetStore().maxSlice,
@@ -1415,7 +1416,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     override def stop(): Future[Done] = {
       val store = projectionState.offsetStore()
       log.info(
-        "Stopping projection instance {} [{}-{}] [{}]",
+        "Stopping projection instance {} [{}-{}], correlation [{}]",
         projectionId.name,
         store.minSlice,
         store.maxSlice,
@@ -1431,7 +1432,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       val store = projectionState.offsetStore()
       if (!store.isStopped())
         log.info(
-          "Stopping projection instance forced {} [{}-{}] [{}]",
+          "Stopping projection instance forced {} [{}-{}], correlation [{}]",
           projectionId.name,
           store.minSlice,
           store.maxSlice,
