@@ -118,10 +118,16 @@ private[projection] object RunningProjection {
 private[projection] trait RunningProjection {
 
   /**
-   * Stop the projection if it's running.
+   * Gracefully stop the projection if it's running.
    * @return Future[Done] - the returned Future should return the stream materialized value.
    */
   def stop(): Future[Done]
+
+  /**
+   * Hard stop in case ProjectionBehavior is terminated, or restarted, or other reasons
+   * force a stop.
+   */
+  def forcedStop(): Unit
 }
 
 /**

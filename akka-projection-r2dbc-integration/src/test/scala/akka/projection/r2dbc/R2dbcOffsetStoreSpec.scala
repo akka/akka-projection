@@ -39,7 +39,7 @@ class R2dbcOffsetStoreSpec
   private implicit val queryAdapter: QueryAdapter = r2dbcSettings.codecSettings.queryAdapter
 
   private def createOffsetStore(projectionId: ProjectionId) =
-    new R2dbcOffsetStore(projectionId, None, system, settings, r2dbcExecutor, clock)
+    new R2dbcOffsetStore(projectionId, UUID.randomUUID().toString, None, system, settings, r2dbcExecutor, clock)
 
   private val table = settings.offsetTableWithSchema
 

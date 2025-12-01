@@ -187,7 +187,7 @@ object ProjectionBehavior {
           // Make sure it is stopped in case the actor is terminated/restarted in other ways
           // than with ProjectionBehavior.Stop message. Note that we can't wait in that case, so
           // it's always better to use ProjectionBehavior.Stop message.
-          running.stop()
+          running.forcedStop()
           Behaviors.same
       }
 
