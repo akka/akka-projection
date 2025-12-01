@@ -75,6 +75,7 @@ message InitReq {
   // consumer defined event filters
   repeated FilterCriteria filter = 5;
   ReplicaInfo replica_info = 6;
+  optional string correlation_id = 7;
 }
 
 // Add filter criteria to exclude and include events for matching entities.
@@ -93,7 +94,7 @@ message ReplayPersistenceId {
   PersistenceIdSeqNr from_persistence_id_offset = 1;
   // apply filters for replayed events after this sequence number
   int64 filter_after_seq_nr = 2;
-
+  optional string correlation_id = 3;
 }
 
 message FilterCriteria {
@@ -284,6 +285,7 @@ message EventTimestampRequest {
   string stream_id = 1;
   string persistence_id = 2;
   int64 seq_nr = 3;
+  optional string correlation_id = 4;
 }
 
 // Response to `EventTimestampRequest`.
@@ -300,6 +302,7 @@ message LoadEventRequest {
   string persistence_id = 2;
   int64 seq_nr = 3;
   ReplicaInfo replica_info = 4;
+  optional string correlation_id = 5;
 }
 
 // Response to `LoadEventRequest`.
@@ -315,6 +318,7 @@ message LatestEventTimestampRequest {
   string stream_id = 1;
   int32 slice_min = 2;
   int32 slice_max = 3;
+  optional string correlation_id = 4;
 }
 
 // Response to `LatestEventTimestampRequest`.
@@ -327,6 +331,7 @@ message CurrentEventsByPersistenceIdRequest {
   string persistence_id = 2;
   int64 from_seq_nr = 3;
   int64 to_seq_nr = 4;
+  optional string correlation_id = 5;
 }
 
 
