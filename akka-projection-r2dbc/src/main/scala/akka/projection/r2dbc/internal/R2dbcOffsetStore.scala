@@ -37,6 +37,7 @@ import akka.projection.AllowSeqNrGapsMetadata
 import akka.projection.BySlicesSourceProvider
 import akka.projection.MergeableOffset
 import akka.projection.ProjectionId
+import akka.projection.internal.CorrelationId
 import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.MultipleOffsets
@@ -269,7 +270,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private val logger = LoggerFactory.getLogger(this.getClass)
-  val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice] [$uuid]:"
+  val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]${CorrelationId.toLogText(uuid)}:"
 
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
