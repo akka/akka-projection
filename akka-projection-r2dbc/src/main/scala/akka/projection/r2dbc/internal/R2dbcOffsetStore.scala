@@ -25,6 +25,7 @@ import akka.annotation.InternalApi
 import akka.persistence.Persistence
 import akka.persistence.query.DeletedDurableState
 import akka.persistence.query.DurableStateChange
+import akka.persistence.query.QueryCorrelationId
 import akka.persistence.query.TimestampOffset
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.query.typed.EventEnvelope
@@ -355,11 +356,14 @@ private[projection] class R2dbcOffsetStore(
   private def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
     sourceProvider match {
       case Some(timestampQuery: EventTimestampQuery) =>
-        timestampQuery.timestampOf(persistenceId, sequenceNr)
+        QueryCorrelationId.withCorrelationId(uuid)(() => timestampQuery.timestampOf(persistenceId, sequenceNr))
       case Some(timestampQuery: akka.persistence.query.typed.javadsl.EventTimestampQuery) =>
         import scala.jdk.FutureConverters._
         import scala.jdk.OptionConverters._
-        timestampQuery.timestampOf(persistenceId, sequenceNr).asScala.map(_.toScala)
+        QueryCorrelationId
+          .withCorrelationId(uuid)(() => timestampQuery.timestampOf(persistenceId, sequenceNr))
+          .asScala
+          .map(_.toScala)
       case Some(_) =>
         throw new IllegalArgumentException(
           s"$logPrefix Expected BySlicesSourceProvider to implement EventTimestampQuery when TimestampOffset is used.")
