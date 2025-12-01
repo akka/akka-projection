@@ -10,12 +10,10 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.function.Supplier
 import java.util.function.{ Function => JFunction }
-
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.jdk.FutureConverters._
 import scala.jdk.OptionConverters._
-
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
@@ -23,6 +21,7 @@ import akka.japi.Pair
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.PersistenceQuery
+import akka.persistence.query.QueryCorrelationId
 import akka.persistence.query.javadsl.EventsByTagQuery
 import akka.persistence.query.javadsl.ReadJournal
 import akka.persistence.query.typed.javadsl.CurrentEventsByPersistenceIdTypedQuery
@@ -292,14 +291,18 @@ object EventSourcedProvider {
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
+      val correlationId = QueryCorrelationId.get()
       offsetAsync
         .get()
         .thenComposeAsync(
           { storedOffset =>
-            adjustStartOffset(storedOffset).thenApplyAsync({ startOffset =>
-              eventsBySlicesQuery
-                .eventsBySlices(entityType, minSlice, maxSlice, startOffset.orElse(NoOffset))
-            }, system.executionContext)
+            adjustStartOffset(storedOffset).thenApplyAsync(
+              { startOffset =>
+                QueryCorrelationId.withCorrelationId(correlationId)(() =>
+                  eventsBySlicesQuery
+                    .eventsBySlices(entityType, minSlice, maxSlice, startOffset.orElse(NoOffset)))
+              },
+              system.executionContext)
           },
           system.executionContext)
     }
@@ -363,19 +366,23 @@ object EventSourcedProvider {
 
     override def source(offsetAsync: Supplier[CompletionStage[Optional[Offset]]])
         : CompletionStage[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
+      val correlationId = QueryCorrelationId.get()
       offsetAsync
         .get()
         .thenComposeAsync(
           { storedOffset =>
             adjustStartOffset(storedOffset).thenApplyAsync(
               { startOffset =>
-                eventsBySlicesQuery
-                  .eventsBySlicesStartingFromSnapshots(
-                    entityType,
-                    minSlice,
-                    maxSlice,
-                    startOffset.orElse(NoOffset),
-                    transformSnapshot)
+                QueryCorrelationId
+                  .withCorrelationId(correlationId)(
+                    () =>
+                      eventsBySlicesQuery
+                        .eventsBySlicesStartingFromSnapshots(
+                          entityType,
+                          minSlice,
+                          maxSlice,
+                          startOffset.orElse(NoOffset),
+                          transformSnapshot))
               },
               system.executionContext)
           },
