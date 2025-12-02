@@ -316,7 +316,7 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
             event.level == Level.TRACE && event.message.matches(
               s"""Received event from \\[127.0.0.1] persistenceId \\[${pid.id
                 .replace("|", "\\|")}] with seqNr \\[[123]].*""") && event.message
-              .endsWith("source [BT]")
+              .contains("source [BT]")
           }
           .withOccurrences(3)
           .expect {
