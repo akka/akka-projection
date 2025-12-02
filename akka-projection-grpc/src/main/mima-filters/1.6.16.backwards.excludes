@@ -1,0 +1,2 @@
+# generated protosbuff classes
+ProblemFilters.exclude[Problem]("akka.projection.grpc.internal.proto.*")
