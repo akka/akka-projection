@@ -315,7 +315,7 @@ import scala.concurrent.ExecutionContext
 
       private def replayAll(replayPersistenceIds: Iterable[ReplayPersistenceId]): Unit = {
         replayPersistenceIds.foreach {
-          case r @ ReplayPersistenceId(Some(fromOffset), _, _) if fromOffset.seqNr >= 1 =>
+          case r @ ReplayPersistenceId(Some(fromOffset), _, _, _) if fromOffset.seqNr >= 1 =>
             replay(r)
           case _ =>
           // FIXME seqNr 0 would be to support a mode where we only deliver events after the include filter

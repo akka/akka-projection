@@ -5,17 +5,16 @@
 package akka.projection.eventsourced.scaladsl
 
 import java.time.Instant
-
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
-
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.persistence.query.NoOffset
 import akka.persistence.query.Offset
 import akka.persistence.query.PersistenceQuery
+import akka.persistence.query.QueryCorrelationId
 import akka.persistence.query.scaladsl.EventsByTagQuery
 import akka.persistence.query.scaladsl.ReadJournal
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
@@ -264,11 +263,13 @@ object EventSourcedProvider {
 
     override def source(offset: () => Future[Option[Offset]])
         : Future[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
+      val correlationId = QueryCorrelationId.get()
       for {
         storedOffset <- offset()
         startOffset <- adjustStartOffset(storedOffset)
       } yield {
-        eventsBySlicesQuery.eventsBySlices(entityType, minSlice, maxSlice, startOffset.getOrElse(NoOffset))
+        QueryCorrelationId.withCorrelationId(correlationId)(() =>
+          eventsBySlicesQuery.eventsBySlices(entityType, minSlice, maxSlice, startOffset.getOrElse(NoOffset)))
       }
     }
 
@@ -322,16 +323,19 @@ object EventSourcedProvider {
 
     override def source(offset: () => Future[Option[Offset]])
         : Future[Source[akka.persistence.query.typed.EventEnvelope[Event], NotUsed]] = {
+      val correlationId = QueryCorrelationId.get()
       for {
         storedOffset <- offset()
         startOffset <- adjustStartOffset(storedOffset)
       } yield {
-        eventsBySlicesQuery.eventsBySlicesStartingFromSnapshots(
-          entityType,
-          minSlice,
-          maxSlice,
-          startOffset.getOrElse(NoOffset),
-          transformSnapshot)
+        QueryCorrelationId.withCorrelationId(correlationId)(
+          () =>
+            eventsBySlicesQuery.eventsBySlicesStartingFromSnapshots(
+              entityType,
+              minSlice,
+              maxSlice,
+              startOffset.getOrElse(NoOffset),
+              transformSnapshot))
       }
     }
 
@@ -388,8 +392,8 @@ object EventSourcedProvider {
         persistenceId: String,
         sequenceNr: Long): Future[akka.persistence.query.typed.EventEnvelope[Evt]] =
       readJournal match {
-        case laodEventQuery: LoadEventQuery =>
-          laodEventQuery.loadEnvelope(persistenceId, sequenceNr)
+        case loadEventQuery: LoadEventQuery =>
+          loadEventQuery.loadEnvelope(persistenceId, sequenceNr)
         case _ =>
           Future.failed(
             new IllegalStateException(

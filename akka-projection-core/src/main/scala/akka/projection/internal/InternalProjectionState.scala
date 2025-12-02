@@ -13,13 +13,13 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 import scala.util.control.NonFatal
-
 import akka.Done
 import akka.NotUsed
 import akka.actor.Cancellable
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.LoggingAdapter
+import akka.persistence.query.QueryCorrelationId
 import akka.projection.HandlerRecoveryStrategy
 import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification.VerificationFailure
@@ -422,8 +422,9 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
             handlerLifecycle
               .tryStart()
               .flatMap { _ =>
-                sourceProvider
-                  .source(() => readOffsets())
+                QueryCorrelationId.withCorrelationId(uuid)(() =>
+                  sourceProvider
+                    .source(() => readOffsets()))
               }
           case true =>
             logger.info("Projection [{}] started in paused mode.", projectionId)

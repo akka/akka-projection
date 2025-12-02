@@ -8,7 +8,6 @@ import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
-
 import scala.annotation.nowarn
 import scala.annotation.tailrec
 import scala.collection.immutable
@@ -24,6 +23,7 @@ import akka.event.Logging
 import akka.event.LoggingAdapter
 import akka.persistence.query.DeletedDurableState
 import akka.persistence.query.DurableStateChange
+import akka.persistence.query.QueryCorrelationId
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
@@ -47,6 +47,7 @@ import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.BacklogStatusProjectionState
 import akka.projection.internal.CanTriggerReplay
+import akka.projection.internal.CorrelationId.toCorrelationLogText
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerObserver
@@ -277,18 +278,20 @@ private[projection] object R2dbcProjectionImpl {
                   val offset = extractOffsetPidSeqNr(sourceProvider, envelope)
                   offsetStore.saveOffset(offset)
                 } else {
-                  loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
-                    val offset = extractOffsetPidSeqNr(sourceProvider, loadedEnvelope)
-                    r2dbcExecutor.withConnection("exactly-once handler") { conn =>
-                      // run users handler
-                      val session = new R2dbcSession(conn)
-                      delegate
-                        .process(session, loadedEnvelope)
-                        .flatMap { _ =>
-                          offsetStore.saveOffsetInTx(conn, offset)
-                        }
+                  QueryCorrelationId
+                    .withCorrelationId(offsetStore.uuid)(() => loadEnvelope(envelope, sourceProvider))
+                    .flatMap { loadedEnvelope =>
+                      val offset = extractOffsetPidSeqNr(sourceProvider, loadedEnvelope)
+                      r2dbcExecutor.withConnection("exactly-once handler") { conn =>
+                        // run users handler
+                        val session = new R2dbcSession(conn)
+                        delegate
+                          .process(session, loadedEnvelope)
+                          .flatMap { _ =>
+                            offsetStore.saveOffsetInTx(conn, offset)
+                          }
+                      }
                     }
-                  }
                 }
               case Duplicate =>
                 FutureDone
@@ -361,21 +364,24 @@ private[projection] object R2dbcProjectionImpl {
               if (envelopes.isEmpty) {
                 FutureDone
               } else {
-                Future.sequence(envelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap { loadedEnvelopes =>
-                  val offsets = loadedEnvelopes.iterator.map(extractOffsetPidSeqNr(sourceProvider, _)).toVector
-                  val filteredEnvelopes = loadedEnvelopes.filterNot(isFilteredEvent)
-                  if (filteredEnvelopes.isEmpty) {
-                    offsetStore.saveOffsets(offsets)
-                  } else {
-                    r2dbcExecutor.withConnection("grouped handler") { conn =>
-                      // run users handler
-                      val session = new R2dbcSession(conn)
-                      delegate.process(session, filteredEnvelopes).flatMap { _ =>
-                        offsetStore.saveOffsetsInTx(conn, offsets)
+                Future
+                  .sequence(QueryCorrelationId.withCorrelationId(offsetStore.uuid)(() =>
+                    envelopes.map(env => loadEnvelope(env, sourceProvider))))
+                  .flatMap { loadedEnvelopes =>
+                    val offsets = loadedEnvelopes.iterator.map(extractOffsetPidSeqNr(sourceProvider, _)).toVector
+                    val filteredEnvelopes = loadedEnvelopes.filterNot(isFilteredEvent)
+                    if (filteredEnvelopes.isEmpty) {
+                      offsetStore.saveOffsets(offsets)
+                    } else {
+                      r2dbcExecutor.withConnection("grouped handler") { conn =>
+                        // run users handler
+                        val session = new R2dbcSession(conn)
+                        delegate.process(session, filteredEnvelopes).flatMap { _ =>
+                          offsetStore.saveOffsetsInTx(conn, offsets)
+                        }
                       }
                     }
                   }
-                }
               }
             }
 
@@ -443,18 +449,20 @@ private[projection] object R2dbcProjectionImpl {
                   offsetStore.addInflight(envelope)
                   FutureDone
                 } else {
-                  loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
-                    r2dbcExecutor
-                      .withConnection("at-least-once handler") { conn =>
-                        // run users handler
-                        val session = new R2dbcSession(conn)
-                        delegate.process(session, loadedEnvelope)
-                      }
-                      .map { _ =>
-                        offsetStore.addInflight(loadedEnvelope)
-                        Done
-                      }
-                  }
+                  QueryCorrelationId
+                    .withCorrelationId(offsetStore.uuid)(() => loadEnvelope(envelope, sourceProvider))
+                    .flatMap { loadedEnvelope =>
+                      r2dbcExecutor
+                        .withConnection("at-least-once handler") { conn =>
+                          // run users handler
+                          val session = new R2dbcSession(conn)
+                          delegate.process(session, loadedEnvelope)
+                        }
+                        .map { _ =>
+                          offsetStore.addInflight(loadedEnvelope)
+                          Done
+                        }
+                    }
                 }
               case Duplicate =>
                 FutureDone
@@ -507,14 +515,16 @@ private[projection] object R2dbcProjectionImpl {
                   offsetStore.addInflight(envelope)
                   FutureDone
                 } else {
-                  loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
-                    delegate
-                      .process(loadedEnvelope)
-                      .map { _ =>
-                        offsetStore.addInflight(loadedEnvelope)
-                        Done
-                      }
-                  }
+                  QueryCorrelationId
+                    .withCorrelationId(offsetStore.uuid)(() => loadEnvelope(envelope, sourceProvider))
+                    .flatMap { loadedEnvelope =>
+                      delegate
+                        .process(loadedEnvelope)
+                        .map { _ =>
+                          offsetStore.addInflight(loadedEnvelope)
+                          Done
+                        }
+                    }
                 }
               case Duplicate =>
                 FutureDone
@@ -584,17 +594,20 @@ private[projection] object R2dbcProjectionImpl {
               if (envelopes.isEmpty) {
                 FutureDone
               } else {
-                Future.sequence(envelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap { loadedEnvelopes =>
-                  val offsets = loadedEnvelopes.iterator.map(extractOffsetPidSeqNr(sourceProvider, _)).toVector
-                  val filteredEnvelopes = loadedEnvelopes.filterNot(isFilteredEvent)
-                  if (filteredEnvelopes.isEmpty) {
-                    offsetStore.saveOffsets(offsets)
-                  } else {
-                    delegate.process(filteredEnvelopes).flatMap { _ =>
+                Future
+                  .sequence(QueryCorrelationId.withCorrelationId(offsetStore.uuid)(() =>
+                    envelopes.map(env => loadEnvelope(env, sourceProvider))))
+                  .flatMap { loadedEnvelopes =>
+                    val offsets = loadedEnvelopes.iterator.map(extractOffsetPidSeqNr(sourceProvider, _)).toVector
+                    val filteredEnvelopes = loadedEnvelopes.filterNot(isFilteredEvent)
+                    if (filteredEnvelopes.isEmpty) {
                       offsetStore.saveOffsets(offsets)
+                    } else {
+                      delegate.process(filteredEnvelopes).flatMap { _ =>
+                        offsetStore.saveOffsets(offsets)
+                      }
                     }
                   }
-                }
               }
             }
 
@@ -683,64 +696,67 @@ private[projection] object R2dbcProjectionImpl {
             underlyingProvider match {
               case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked] =>
                 val persistenceId = originalEventEnvelope.persistenceId
-                offsetStore.storedSeqNr(persistenceId).map[ReplayResult[Envelope, ProjectionContext]] { storedSeqNr =>
-                  // stored seq number can be higher when we've detected a seq number reset by not marking as
-                  // duplicate, but it was rejected when seq number != 1 -- trigger replay from 1 in this case
-                  val toSeqNr = originalEventEnvelope.sequenceNr - 1 // replay until the rejected envelope for flows
-                  val fromSeqNr = if (storedSeqNr > toSeqNr) 1 else storedSeqNr + 1
-                  logReplayRejected(logPrefix, originalEventEnvelope, fromSeqNr)
-                  provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
-                    case Some(querySource) =>
-                      val source: Source[(Envelope, ProjectionContext), NotUsed] = querySource
-                        .flatMapConcat { replayedEnvelope =>
-                          import R2dbcOffsetStore.Validation._
-                          offsetStore
-                            .validateSource(replayedEnvelope) // Note: single element stream
-                            .mapConcat {
-                              case Accepted =>
-                                if (isFilteredEvent(replayedEnvelope) && settings.warnAboutFilteredEventsInFlow) {
-                                  log.info(
-                                    "atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.",
-                                    replayedEnvelope)
-                                }
-                                offsetStore.addInflight(replayedEnvelope)
-                                // FIXME: use a new envelope source for replays, for observability?
-                                val envelope = replayedEnvelope.asInstanceOf[Envelope]
-                                val externalContext = originalObserver.beforeProcess(envelope)
-                                Some(
-                                  envelope -> ProjectionContextImpl[Offset, Envelope](
-                                    sourceProvider.extractOffset(envelope),
-                                    envelope,
-                                    originalObserver,
-                                    externalContext,
-                                    offsetStore.uuid))
-                              case Duplicate =>
-                                None
-                              case RejectedSeqNr =>
-                                // this shouldn't happen
-                                throw new RejectedEnvelope(
-                                  s"Replay due to rejected envelope was rejected. PersistenceId [$persistenceId] seqNr [${replayedEnvelope.sequenceNr}].")
-                              case RejectedBacktrackingSeqNr =>
-                                // this shouldn't happen
-                                throw new RejectedEnvelope(
-                                  s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${replayedEnvelope.sequenceNr}].")
-                            }
-                        }
-                        .recover { exc =>
-                          logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
-                          throw exc
-                        }
-                      ReplayedOnRejection[Envelope, ProjectionContext](source)
-                    case None =>
-                      if (triggerReplayIfPossible(
-                            sourceProvider,
-                            persistenceId,
-                            fromSeqNr,
-                            originalEventEnvelope.sequenceNr))
-                        ReplayTriggered
-                      else NotReplayed
+                QueryCorrelationId
+                  .withCorrelationId(offsetStore.uuid)(() => offsetStore.storedSeqNr(persistenceId))
+                  .map[ReplayResult[Envelope, ProjectionContext]] { storedSeqNr =>
+                    // stored seq number can be higher when we've detected a seq number reset by not marking as
+                    // duplicate, but it was rejected when seq number != 1 -- trigger replay from 1 in this case
+                    val toSeqNr = originalEventEnvelope.sequenceNr - 1 // replay until the rejected envelope for flows
+                    val fromSeqNr = if (storedSeqNr > toSeqNr) 1 else storedSeqNr + 1
+                    logReplayRejected(logPrefix, originalEventEnvelope, fromSeqNr)
+                    QueryCorrelationId.withCorrelationId(offsetStore.uuid)(() =>
+                      provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr)) match {
+                      case Some(querySource) =>
+                        val source: Source[(Envelope, ProjectionContext), NotUsed] = querySource
+                          .flatMapConcat { replayedEnvelope =>
+                            import R2dbcOffsetStore.Validation._
+                            offsetStore
+                              .validateSource(replayedEnvelope) // Note: single element stream
+                              .mapConcat {
+                                case Accepted =>
+                                  if (isFilteredEvent(replayedEnvelope) && settings.warnAboutFilteredEventsInFlow) {
+                                    log.info(
+                                      "atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.",
+                                      replayedEnvelope)
+                                  }
+                                  offsetStore.addInflight(replayedEnvelope)
+                                  // FIXME: use a new envelope source for replays, for observability?
+                                  val envelope = replayedEnvelope.asInstanceOf[Envelope]
+                                  val externalContext = originalObserver.beforeProcess(envelope)
+                                  Some(
+                                    envelope -> ProjectionContextImpl[Offset, Envelope](
+                                      sourceProvider.extractOffset(envelope),
+                                      envelope,
+                                      originalObserver,
+                                      externalContext,
+                                      offsetStore.uuid))
+                                case Duplicate =>
+                                  None
+                                case RejectedSeqNr =>
+                                  // this shouldn't happen
+                                  throw new RejectedEnvelope(
+                                    s"Replay due to rejected envelope was rejected. PersistenceId [$persistenceId] seqNr [${replayedEnvelope.sequenceNr}].")
+                                case RejectedBacktrackingSeqNr =>
+                                  // this shouldn't happen
+                                  throw new RejectedEnvelope(
+                                    s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${replayedEnvelope.sequenceNr}].")
+                              }
+                          }
+                          .recover { exc =>
+                            logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
+                            throw exc
+                          }
+                        ReplayedOnRejection[Envelope, ProjectionContext](source)
+                      case None =>
+                        if (triggerReplayIfPossible(
+                              sourceProvider,
+                              persistenceId,
+                              fromSeqNr,
+                              originalEventEnvelope.sequenceNr))
+                          ReplayTriggered
+                        else NotReplayed
+                    }
                   }
-                }
               case _ =>
                 triggerReplayIfPossible(sourceProvider, offsetStore, originalEnvelope).map {
                   case true  => ReplayTriggered
@@ -762,9 +778,11 @@ private[projection] object R2dbcProjectionImpl {
       if (isFilteredEvent(envelope) && settings.warnAboutFilteredEventsInFlow) {
         log.info("atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.", envelope)
       }
-      fastSourceFuture(loadEnvelope(envelope, sourceProvider)).map { loadedEnvelope =>
-        offsetStore.addInflight(loadedEnvelope)
-        (loadedEnvelope, context)
+      fastSourceFuture(
+        QueryCorrelationId.withCorrelationId(offsetStore.uuid)(() => loadEnvelope(envelope, sourceProvider))).map {
+        loadedEnvelope =>
+          offsetStore.addInflight(loadedEnvelope)
+          (loadedEnvelope, context)
       }
     }
 
@@ -933,69 +951,72 @@ private[projection] object R2dbcProjectionImpl {
           underlyingProvider match {
             case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked] =>
               val persistenceId = originalEventEnvelope.persistenceId
-              offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
-                // stored seq number can be higher when we've detected a seq number reset by not marking as
-                // duplicate, but it was rejected when seq number != 1 -- trigger replay from 1 in this case
-                val toSeqNr = originalEventEnvelope.sequenceNr
-                val fromSeqNr = if (storedSeqNr >= toSeqNr) 1 else storedSeqNr + 1
-                logReplayRejected(logPrefix, originalEventEnvelope, fromSeqNr)
-                provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
-                  case Some(querySource) =>
-                    querySource
-                      .mapAsync(1) { envelope =>
-                        import R2dbcOffsetStore.Validation._
-                        offsetStore
-                          .validate(envelope)
-                          .flatMap {
-                            case Accepted =>
-                              accepted(envelope)
-                            case Duplicate =>
-                              FutureDone
-                            case RejectedSeqNr =>
-                              // this shouldn't happen
-                              throw new RejectedEnvelope(
-                                s"Replay due to rejected envelope was rejected. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
-                            case RejectedBacktrackingSeqNr =>
-                              // this shouldn't happen
-                              throw new RejectedEnvelope(
-                                s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
+              QueryCorrelationId
+                .withCorrelationId(offsetStore.uuid)(() => offsetStore.storedSeqNr(persistenceId))
+                .flatMap { storedSeqNr =>
+                  // stored seq number can be higher when we've detected a seq number reset by not marking as
+                  // duplicate, but it was rejected when seq number != 1 -- trigger replay from 1 in this case
+                  val toSeqNr = originalEventEnvelope.sequenceNr
+                  val fromSeqNr = if (storedSeqNr >= toSeqNr) 1 else storedSeqNr + 1
+                  logReplayRejected(logPrefix, originalEventEnvelope, fromSeqNr)
+                  QueryCorrelationId.withCorrelationId(offsetStore.uuid)(() =>
+                    provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr)) match {
+                    case Some(querySource) =>
+                      querySource
+                        .mapAsync(1) { envelope =>
+                          import R2dbcOffsetStore.Validation._
+                          offsetStore
+                            .validate(envelope)
+                            .flatMap {
+                              case Accepted =>
+                                accepted(envelope)
+                              case Duplicate =>
+                                FutureDone
+                              case RejectedSeqNr =>
+                                // this shouldn't happen
+                                throw new RejectedEnvelope(
+                                  s"Replay due to rejected envelope was rejected. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
+                              case RejectedBacktrackingSeqNr =>
+                                // this shouldn't happen
+                                throw new RejectedEnvelope(
+                                  s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
+                            }
+                        }
+                        .runFold(0) { case (acc, _) => acc + 1 }
+                        .map { count =>
+                          val expected = toSeqNr - fromSeqNr + 1
+                          if (count == expected) {
+                            true
+                          } else {
+                            // it's expected to find all events, otherwise fail the replay attempt
+                            logReplayInvalidCount(logPrefix, originalEventEnvelope, fromSeqNr, count, expected)
+                            throwRejectedEnvelopeAfterFailedReplay(sourceProvider, originalEnvelope)
                           }
-                      }
-                      .runFold(0) { case (acc, _) => acc + 1 }
-                      .map { count =>
-                        val expected = toSeqNr - fromSeqNr + 1
-                        if (count == expected) {
-                          true
-                        } else {
-                          // it's expected to find all events, otherwise fail the replay attempt
-                          logReplayInvalidCount(logPrefix, originalEventEnvelope, fromSeqNr, count, expected)
-                          throwRejectedEnvelopeAfterFailedReplay(sourceProvider, originalEnvelope)
                         }
-                      }
-                      .recoverWith { exc =>
-                        if (exc.getMessage.contains("UNIMPLEMENTED") && exc.getMessage.contains(
-                              "CurrentEventsByPersistenceId")) {
-                          logReplayUnimplementedException(logPrefix, originalEventEnvelope, fromSeqNr)
-                          Future.successful(
-                            triggerReplayIfPossible(
-                              sourceProvider,
-                              persistenceId,
-                              fromSeqNr,
-                              originalEventEnvelope.sequenceNr))
-                        } else {
-                          logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
-                          Future.failed(exc)
+                        .recoverWith { exc =>
+                          if (exc.getMessage.contains("UNIMPLEMENTED") && exc.getMessage.contains(
+                                "CurrentEventsByPersistenceId")) {
+                            logReplayUnimplementedException(logPrefix, originalEventEnvelope, fromSeqNr)
+                            Future.successful(
+                              triggerReplayIfPossible(
+                                sourceProvider,
+                                persistenceId,
+                                fromSeqNr,
+                                originalEventEnvelope.sequenceNr))
+                          } else {
+                            logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
+                            Future.failed(exc)
+                          }
                         }
-                      }
-                  case None =>
-                    Future.successful(
-                      triggerReplayIfPossible(
-                        sourceProvider,
-                        persistenceId,
-                        fromSeqNr,
-                        originalEventEnvelope.sequenceNr))
+                    case None =>
+                      Future.successful(
+                        triggerReplayIfPossible(
+                          sourceProvider,
+                          persistenceId,
+                          fromSeqNr,
+                          originalEventEnvelope.sequenceNr))
+                  }
                 }
-              }
 
             case _ =>
               triggerReplayIfPossible(sourceProvider, offsetStore, originalEnvelope)
@@ -1267,7 +1288,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       // need the envelope to be able to call offsetStore.saveOffset
       // FIXME maybe we can cleanup this mess when moving R2dbcProjection to the Akka Projections repository? This is all internal api.
       throw new IllegalStateException(
-        s"[${uuid()}] Unexpected call to saveOffset. It should have called saveOffsetAndReport. Please report bug at https://github.com/akka/akka-projection/issues")
+        s"Correlation [${uuid()}], Unexpected call to saveOffset. It should have called saveOffsetAndReport. Please report bug at https://github.com/akka/akka-projection/issues")
     }
 
     override protected def saveOffsetAndReport(
@@ -1303,7 +1324,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
           .map { case (pid, seqNr) => s"$pid -> $seqNr" }
           .getOrElse("")
         throw throw new AttemptToUseStoppedOffsetStore(
-          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}] [${store.uuid}] attempt to save offset " +
+          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}]${toCorrelationLogText(store.uuid)} attempt to save offset " +
           s"but R2dbcOffsetStore was stopped: [$offset]")
       }
     }
@@ -1354,7 +1375,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
           .flatMap(ctx => extractOffsetPidSeqNr(ctx.offset, ctx.envelope).pidSeqNr)
           .map { case (pid, seqNr) => s"$pid -> $seqNr" }
         throw throw new AttemptToUseStoppedOffsetStore(
-          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}] [${store.uuid}] attempt to save offsets " +
+          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}]${toCorrelationLogText(store.uuid)} attempt to save offsets " +
           s"but R2dbcOffsetStore was stopped: [${offsets.mkString(", ")}]")
       }
     }
@@ -1374,7 +1395,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
         .mappedSource(uuid())
         .mapMaterializedValue { value =>
           log.info(
-            "Starting projection instance {} [{}-{}] [{}]",
+            "Starting projection instance {} [{}-{}], correlation [{}]",
             projectionId.name,
             offsetStore().minSlice,
             offsetStore().maxSlice,
@@ -1395,7 +1416,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     override def stop(): Future[Done] = {
       val store = projectionState.offsetStore()
       log.info(
-        "Stopping projection instance {} [{}-{}] [{}]",
+        "Stopping projection instance {} [{}-{}], correlation [{}]",
         projectionId.name,
         store.minSlice,
         store.maxSlice,
@@ -1411,7 +1432,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       val store = projectionState.offsetStore()
       if (!store.isStopped())
         log.info(
-          "Stopping projection instance forced {} [{}-{}] [{}]",
+          "Stopping projection instance forced {} [{}-{}], correlation [{}]",
           projectionId.name,
           store.minSlice,
           store.maxSlice,
