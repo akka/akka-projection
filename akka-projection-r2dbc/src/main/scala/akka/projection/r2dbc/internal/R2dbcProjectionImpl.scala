@@ -47,7 +47,7 @@ import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.BacklogStatusProjectionState
 import akka.projection.internal.CanTriggerReplay
-import akka.projection.internal.CorrelationId
+import akka.projection.internal.CorrelationId.toCorrelationLogText
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerObserver
@@ -1324,7 +1324,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
           .map { case (pid, seqNr) => s"$pid -> $seqNr" }
           .getOrElse("")
         throw throw new AttemptToUseStoppedOffsetStore(
-          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}]${CorrelationId} attempt to save offset " +
+          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}]${toCorrelationLogText(store.uuid)} attempt to save offset " +
           s"but R2dbcOffsetStore was stopped: [$offset]")
       }
     }
@@ -1375,7 +1375,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
           .flatMap(ctx => extractOffsetPidSeqNr(ctx.offset, ctx.envelope).pidSeqNr)
           .map { case (pid, seqNr) => s"$pid -> $seqNr" }
         throw throw new AttemptToUseStoppedOffsetStore(
-          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}]${CorrelationId.toLogText(store.uuid)} attempt to save offsets " +
+          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}]${toCorrelationLogText(store.uuid)} attempt to save offsets " +
           s"but R2dbcOffsetStore was stopped: [${offsets.mkString(", ")}]")
       }
     }

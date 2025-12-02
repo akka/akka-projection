@@ -9,13 +9,13 @@ import akka.annotation.InternalApi
  * INTERNAL API
  */
 @InternalApi
-object CorrelationId {
+private[akka] object CorrelationId {
   def toLogText(correlationid: Option[String]) = correlationid match {
     case Some(id) => s", correlation [$id]"
     case None     => ""
   }
 
-  def toLogText(correlationid: String) =
+  def toCorrelationLogText(correlationid: String) =
     if (correlationid.isEmpty) correlationid
     else s", correlation [$correlationid]"
 

@@ -270,7 +270,7 @@ private[projection] class R2dbcOffsetStore(
   }
 
   private val logger = LoggerFactory.getLogger(this.getClass)
-  val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]${CorrelationId.toLogText(uuid)}:"
+  val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]${CorrelationId.toCorrelationLogText(uuid)}:"
 
   private val offsetSerialization = new OffsetSerialization(system)
   import offsetSerialization.fromStorageRepresentation
