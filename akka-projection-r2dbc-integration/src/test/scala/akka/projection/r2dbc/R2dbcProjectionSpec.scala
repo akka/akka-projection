@@ -50,9 +50,13 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 import scala.util.control.NonFatal
 
+import akka.actor.typed.Behavior
+import akka.actor.typed.PostStop
+import akka.actor.typed.scaladsl.Behaviors
 import akka.persistence.r2dbc.internal.codec.IdentityAdapter
 import akka.persistence.r2dbc.internal.codec.QueryAdapter
 import akka.persistence.r2dbc.internal.codec.SqlServerQueryAdapter
+import akka.projection.scaladsl.ActorHandler
 
 object R2dbcProjectionSpec {
   final case class Envelope(id: String, offset: Long, message: String)
@@ -1060,6 +1064,64 @@ class R2dbcProjectionSpec
         offsetShouldBe(6L)
       }
 
+    }
+  }
+
+  "A R2DBC projection with actor handler" must {
+
+    "start and stop actor" in {
+      pending // see https://github.com/akka/akka-projection/issues/1393
+
+      val entityId = UUID.randomUUID().toString
+      val projectionId = genRandomProjectionId()
+      implicit val offsetStore = createOffsetStore(projectionId)
+
+      val receiveProbe = createTestProbe[Envelope]()
+      val stopProbe = createTestProbe[Done]()
+
+      case class Req(envelope: Envelope, replyTo: ActorRef[Done])
+
+      val behavior: Behavior[Req] =
+        Behaviors
+          .receiveMessage[Req] {
+            case Req(env, replyTo) =>
+              receiveProbe.ref ! env
+              replyTo ! Done
+              Behaviors.same
+          }
+          .receiveSignal {
+            case (_, PostStop) =>
+              stopProbe.ref ! Done
+              Behaviors.same
+          }
+
+      def actorHandler(): Handler[Envelope] = new ActorHandler[Envelope, Req](behavior) {
+        import akka.actor.typed.scaladsl.AskPattern._
+
+        override def process(actor: ActorRef[Req], envelope: Envelope): Future[Done] = {
+          actor.ask[Done](replyTo => Req(envelope, replyTo))
+        }
+      }
+
+      val projection =
+        R2dbcProjection
+          .atLeastOnceAsync(projectionId, Some(settings), sourceProvider(entityId), () => actorHandler())
+          .withSaveOffset(1, 1.minute)
+
+      val projectionRef = spawn(ProjectionBehavior(projection))
+
+      receiveProbe.receiveMessage().message shouldBe "abc"
+      receiveProbe.receiveMessage().message shouldBe "def"
+      receiveProbe.receiveMessage().message shouldBe "ghi"
+      receiveProbe.receiveMessage().message shouldBe "jkl"
+      receiveProbe.receiveMessage().message shouldBe "mno"
+      receiveProbe.receiveMessage().message shouldBe "pqr"
+
+      projectionRef ! ProjectionBehavior.Stop
+
+      stopProbe.receiveMessage()
+
+      offsetShouldBe(6L)
     }
   }
 
