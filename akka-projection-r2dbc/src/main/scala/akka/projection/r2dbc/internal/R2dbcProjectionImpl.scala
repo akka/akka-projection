@@ -64,8 +64,8 @@ import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.javadsl
 import akka.projection.r2dbc.R2dbcProjectionSettings
-import akka.projection.r2dbc.internal.FastFutureSource.fastFutureSource
-import akka.projection.r2dbc.internal.FastFutureSource.fastSourceFuture
+import akka.projection.internal.FastFutureSource.fastFutureSource
+import akka.projection.internal.FastFutureSource.fastSourceFuture
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.AttemptToUseStoppedOffsetStore
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.RejectedEnvelope
 import akka.projection.r2dbc.internal.R2dbcProjectionImpl.OffsetStoreAccess
@@ -663,6 +663,7 @@ private[projection] object R2dbcProjectionImpl {
   private final case class ReplayedOnRejection[Envelope, Offset](source: Source[(Envelope, Offset), NotUsed])
       extends ReplayResult[Envelope, Offset]
   private case object NotReplayed extends ReplayResult[Nothing, Nothing]
+  private val FutureNotReplayed: Future[ReplayResult[Nothing, Nothing]] = Future.successful(NotReplayed)
 
   private[projection] def adaptedHandlerForFlow[Offset, Envelope](
       sourceProvider: SourceProvider[Offset, Envelope],
@@ -684,7 +685,7 @@ private[projection] object R2dbcProjectionImpl {
           case originalEventEnvelope: EventEnvelope[Any @unchecked]
               if EnvelopeOrigin.fromPubSub(originalEventEnvelope) =>
             // don't replay from pubsub events
-            Future.successful(NotReplayed)
+            FutureNotReplayed
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
             val underlyingProvider = sourceProvider match {
               case adapted: JavaToScalaBySliceSourceProviderAdapter[_, _] => adapted.delegate
@@ -765,12 +766,12 @@ private[projection] object R2dbcProjectionImpl {
             }
           case _ =>
             // no replay support for non typed envelopes
-            Future.successful(NotReplayed)
+            FutureNotReplayed
         }
 
       } else {
         // replayOnRejectedSequenceNumbers is disabled
-        Future.successful(NotReplayed)
+        FutureNotReplayed
       }
     }
 

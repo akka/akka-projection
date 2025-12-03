@@ -5,14 +5,13 @@
 package akka.projection.dynamodb.internal
 
 import java.util.concurrent.atomic.AtomicLong
-
 import scala.annotation.nowarn
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
-
 import akka.Done
+import akka.NotUsed
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.event.Logging
@@ -44,6 +43,8 @@ import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.CanTriggerReplay
 import akka.projection.internal.ExactlyOnce
+import akka.projection.internal.FastFutureSource.fastFutureSource
+import akka.projection.internal.FastFutureSource.fastSourceFuture
 import akka.projection.internal.GroupedHandlerStrategy
 import akka.projection.internal.HandlerObserver
 import akka.projection.internal.HandlerStrategy
@@ -51,7 +52,6 @@ import akka.projection.internal.InternalProjection
 import akka.projection.internal.InternalProjectionState
 import akka.projection.internal.JavaToScalaBySliceSourceProviderAdapter
 import akka.projection.internal.ManagementState
-import akka.projection.internal.ObservableFlowHandler
 import akka.projection.internal.ObservableHandler
 import akka.projection.internal.OffsetStoredByHandler
 import akka.projection.internal.OffsetStrategy
@@ -491,13 +491,12 @@ private[projection] object DynamoDBProjectionImpl {
     }
   }
 
-  private sealed trait ReplayResult
-  private case object ReplayTriggered extends ReplayResult
-  private case object ReplayedOnRejection extends ReplayResult
-  private case object NotReplayed extends ReplayResult
-
-  private val FutureNotReplayed: Future[ReplayResult] = Future.successful(NotReplayed)
-  private val FutureReplayTriggered: Future[ReplayResult] = Future.successful(ReplayTriggered)
+  private sealed trait ReplayResult[+Envelope, +Offset]
+  private case object ReplayTriggered extends ReplayResult[Nothing, Nothing]
+  private final case class ReplayedOnRejection[Envelope, Offset](source: Source[(Envelope, Offset), NotUsed])
+      extends ReplayResult[Envelope, Offset]
+  private case object NotReplayed extends ReplayResult[Nothing, Nothing]
+  private val FutureNotReplayed: Future[ReplayResult[Nothing, Nothing]] = Future.successful(NotReplayed)
 
   private[projection] def adaptedHandlerForFlow[Offset, Envelope](
       sourceProvider: SourceProvider[Offset, Envelope],
@@ -511,7 +510,9 @@ private[projection] object DynamoDBProjectionImpl {
 
     // This is similar to DynamoDBProjectionImpl.replayIfPossible but difficult to extract common parts
     // since this is flow processing
-    def replayIfPossible(originalEnvelope: Envelope, observer: HandlerObserver[Envelope]): Future[ReplayResult] = {
+    def replayIfPossible(
+        originalEnvelope: Envelope,
+        originalObserver: HandlerObserver[Envelope]): Future[ReplayResult[Envelope, ProjectionContext]] = {
       if (offsetStore.settings.replayOnRejectedSequenceNumbers) {
         val logPrefix = offsetStore.logPrefix
         originalEnvelope match {
@@ -519,15 +520,17 @@ private[projection] object DynamoDBProjectionImpl {
               if EnvelopeOrigin.fromPubSub(originalEventEnvelope) =>
             // don't replay from pubsub events
             FutureNotReplayed
+
           case originalEventEnvelope: EventEnvelope[Any @unchecked] if originalEventEnvelope.sequenceNr > 1 =>
             val underlyingProvider = sourceProvider match {
               case adapted: JavaToScalaBySliceSourceProviderAdapter[_, _] => adapted.delegate
               case provider                                               => provider
             }
+
             underlyingProvider match {
               case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked] =>
                 val persistenceId = originalEventEnvelope.persistenceId
-                offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
+                offsetStore.storedSeqNr(persistenceId).map[ReplayResult[Envelope, ProjectionContext]] { storedSeqNr =>
                   // stored seq number can be higher when we've detected a seq number reset by not marking as
                   // duplicate, but it was rejected when seq number != 1 -- trigger replay from 1 in this case
                   val toSeqNr = originalEventEnvelope.sequenceNr - 1 // replay until the rejected envelope for flows
@@ -535,63 +538,54 @@ private[projection] object DynamoDBProjectionImpl {
                   logReplayRejected(logPrefix, originalEventEnvelope, fromSeqNr)
                   provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
                     case Some(querySource) =>
-                      querySource
-                        .mapAsync(1) { envelope =>
+                      val source = querySource
+                        .flatMapConcat { replayedEnvelope =>
                           import DynamoDBOffsetStore.Validation._
                           offsetStore
-                            .validate(envelope)
-                            .map {
+                            .validateSource(replayedEnvelope) // Note: single element stream
+                            .mapConcat {
                               case Accepted =>
-                                if (isFilteredEvent(envelope) && settings.warnAboutFilteredEventsInFlow) {
+                                if (isFilteredEvent(replayedEnvelope) && settings.warnAboutFilteredEventsInFlow) {
                                   log.info(
                                     "atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.",
-                                    envelope)
+                                    replayedEnvelope)
                                 }
-                                offsetStore.addInflight(envelope)
-                                Some(envelope.asInstanceOf[Envelope])
+                                offsetStore.addInflight(replayedEnvelope)
+                                val envelope = replayedEnvelope.asInstanceOf[Envelope]
+                                val externalContext = originalObserver.beforeProcess(envelope)
+                                Some(
+                                  envelope -> ProjectionContextImpl[Offset, Envelope](
+                                    sourceProvider.extractOffset(envelope),
+                                    envelope,
+                                    originalObserver,
+                                    externalContext,
+                                    "")
+                                ) // FIXME pass store.uuid once present
                               case Duplicate =>
                                 None
                               case RejectedSeqNr =>
                                 // this shouldn't happen
                                 throw new RejectedEnvelope(
-                                  s"Replay due to rejected envelope was rejected. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
+                                  s"Replay due to rejected envelope was rejected. PersistenceId [$persistenceId] seqNr [${replayedEnvelope.sequenceNr}].")
                               case RejectedBacktrackingSeqNr =>
                                 // this shouldn't happen
                                 throw new RejectedEnvelope(
-                                  s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
+                                  s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${replayedEnvelope.sequenceNr}].")
                             }
                         }
-                        .collect {
-                          // FIXME: use a new envelope source for replays, for observability?
-                          case Some(env) => ProjectionContextImpl(sourceProvider.extractOffset(env), env)
+                        .recover { exc =>
+                          logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
+                          throw exc
                         }
-                        .via(ObservableFlowHandler(handler.asFlow, observer))
-                        .run()
-                        .map(_ => ReplayedOnRejection: ReplayResult)(ExecutionContext.parasitic)
-                        .recoverWith { exc =>
-                          if (exc.getMessage.contains("UNIMPLEMENTED") && exc.getMessage.contains(
-                                "CurrentEventsByPersistenceId")) {
-                            logReplayUnimplementedException(logPrefix, originalEventEnvelope, fromSeqNr)
-                            Future.successful(
-                              triggerReplayIfPossible(
-                                sourceProvider,
-                                persistenceId,
-                                fromSeqNr,
-                                originalEventEnvelope.sequenceNr))
-                            FutureReplayTriggered
-                          } else {
-                            logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
-                            Future.failed(exc)
-                          }
-                        }
+                      ReplayedOnRejection[Envelope, ProjectionContext](source)
                     case None =>
                       if (triggerReplayIfPossible(
                             sourceProvider,
                             persistenceId,
                             fromSeqNr,
                             originalEventEnvelope.sequenceNr))
-                        FutureReplayTriggered
-                      else FutureNotReplayed
+                        ReplayTriggered
+                      else NotReplayed
                   }
                 }
 
@@ -601,8 +595,10 @@ private[projection] object DynamoDBProjectionImpl {
                   case false => NotReplayed
                 }(ExecutionContext.parasitic)
             }
+
           case _ =>
-            FutureNotReplayed // no replay support for non typed envelopes
+            // no replay support for non typed envelopes
+            FutureNotReplayed
         }
       } else {
         // replayOnRejectedSequenceNumbers is disabled
@@ -613,44 +609,39 @@ private[projection] object DynamoDBProjectionImpl {
     def observer(context: ProjectionContext): HandlerObserver[Envelope] =
       context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]].observer
 
-    def accepted(envelope: Envelope, context: ProjectionContext): Future[Option[(Envelope, ProjectionContext)]] = {
+    def accepted(envelope: Envelope, context: ProjectionContext): Source[(Envelope, ProjectionContext), NotUsed] = {
       if (isFilteredEvent(envelope) && settings.warnAboutFilteredEventsInFlow) {
         log.info("atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.", envelope)
       }
-      loadEnvelope(envelope, sourceProvider).map { loadedEnvelope =>
+      fastSourceFuture(loadEnvelope(envelope, sourceProvider)).map { loadedEnvelope =>
         offsetStore.addInflight(loadedEnvelope)
-        Some((loadedEnvelope, context))
+        (loadedEnvelope, context)
       }
     }
 
     val validate = Flow[(Envelope, ProjectionContext)]
-      .mapAsync(1) {
+      .flatMapConcat[(Envelope, ProjectionContext), NotUsed] {
         case (env, context) =>
           offsetStore
-            .validate(env)
-            .flatMap {
-              case Accepted =>
-                accepted(env, context)
-              case Duplicate =>
-                Future.successful(None)
+            .validateSource(env)
+            .flatMapConcat {
+              case Accepted  => accepted(env, context)
+              case Duplicate => Source.empty
               case RejectedSeqNr =>
-                replayIfPossible(env, observer(context)).flatMap {
+                fastFutureSource(replayIfPossible(env, observer(context)).map {
                   // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
-                  case ReplayedOnRejection => accepted(env, context)
-                  case ReplayTriggered     => Future.successful(None)
-                  case NotReplayed         => Future.successful(None)
-                }
+                  case ReplayedOnRejection(source) => source.concatLazy(accepted(env, context))
+                  case ReplayTriggered             => Source.empty
+                  case NotReplayed                 => Source.empty
+                })
               case RejectedBacktrackingSeqNr =>
-                replayIfPossible(env, observer(context)).flatMap {
+                fastFutureSource(replayIfPossible(env, observer(context)).map {
                   // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
-                  case ReplayedOnRejection => accepted(env, context)
-                  case ReplayTriggered     => Future.successful(None)
-                  case NotReplayed         => throwRejectedEnvelope(sourceProvider, env)
-                }
+                  case ReplayedOnRejection(source) => source.concatLazy(accepted(env, context))
+                  case ReplayTriggered             => Source.empty
+                  case NotReplayed                 => throwRejectedEnvelope(sourceProvider, env)
+                })
             }
-      }
-      .collect {
-        case Some(envelopeAndContext) => envelopeAndContext
       }
 
     FlowWithContext[Envelope, ProjectionContext]

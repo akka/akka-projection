@@ -2,7 +2,7 @@
  * Copyright (C) 2009-2025 Lightbend Inc. <https://akka.io>
  */
 
-package akka.projection.r2dbc.internal
+package akka.projection.internal
 
 import akka.NotUsed
 import akka.annotation.InternalApi
@@ -16,7 +16,8 @@ import scala.util.Success
  * INTERNAL API
  */
 @InternalApi
-private[internal] object FastFutureSource {
+private[akka] object FastFutureSource {
+  // FIXME port these to akka-stream so nothing special is needed here
   def fastSourceFuture[T](future: Future[T]): Source[T, NotUsed] =
     future.value match {
       case Some(Success(validation)) => Source.single(validation)

@@ -42,7 +42,7 @@ import akka.projection.internal.ManagementState
 import akka.projection.internal.OffsetSerialization
 import akka.projection.internal.OffsetSerialization.MultipleOffsets
 import akka.projection.r2dbc.R2dbcProjectionSettings
-import akka.projection.r2dbc.internal.FastFutureSource.fastSourceFuture
+import akka.projection.internal.FastFutureSource.fastSourceFuture
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import io.r2dbc.spi.Connection
