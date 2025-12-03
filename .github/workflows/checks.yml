@@ -31,8 +31,8 @@ jobs:
 
       - name: Cache Coursier cache
         # https://github.com/coursier/cache-action/releases
-        # v6.4.5
-        uses: coursier/cache-action@1ff273bff02a8787bc9f1877d347948af647956d
+        # v7.0.0
+        uses: coursier/cache-action@bebeeb0e6f48ebad66d3783946588ecf43114433
 
       - name: Set up JDK 11
         # https://github.com/coursier/setup-action/releases
@@ -63,8 +63,8 @@ jobs:
 
       - name: Cache Coursier cache
         # https://github.com/coursier/cache-action/releases
-        # v6.4.5
-        uses: coursier/cache-action@1ff273bff02a8787bc9f1877d347948af647956d
+        # v7.0.0
+        uses: coursier/cache-action@bebeeb0e6f48ebad66d3783946588ecf43114433
 
       - name: Set up JDK 11
         # https://github.com/coursier/setup-action/releases
@@ -76,14 +76,11 @@ jobs:
       - name: Compile all code with fatal warnings for Java 11, Scala 2.13 and Scala 3
         run: sbt "clean ; +compile; +Test/compile; +akka-projection-integration/Test/compile"
 
-  check-samples:
-    name: Check Sample Projects
+  setup-samples:
+    name: Setup Sample Projects
     runs-on: Akka-Default
-    env:
-      RUSTFLAGS: -Dwarnings
-      CARGO_TERM_COLOR: always
-      PROTOC_VERSION: 3.23.4
-      SCALA3_VERSION: 3.3.7
+    # builds and publishes projections once for individual parallel sample testing to pick it up in the matrix below
+
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
@@ -100,8 +97,8 @@ jobs:
 
       - name: Cache Coursier cache
         # https://github.com/coursier/cache-action/releases
-        # v6.4.5
-        uses: coursier/cache-action@1ff273bff02a8787bc9f1877d347948af647956d
+        # v7.0.0
+        uses: coursier/cache-action@bebeeb0e6f48ebad66d3783946588ecf43114433
 
       - name: Set up JDK 11
         # https://github.com/coursier/setup-action/releases
@@ -109,6 +106,193 @@ jobs:
         uses: coursier/setup-action@7bde40eee928896f074dbb76d22dd772eed5c65f
         with:
           jvm: temurin:1.11
+
+      - name: Gather version
+        # some cleanup of the sbt output to get the version sbt will use when publishing below
+        run: |-
+          sbt --no-colors "print akka-projection-core/version" | tail -n 1 | tr -d '\n' > ~/.version
+          echo [$(cat ~/.version)]
+          # useful for debugging: hexdump -c ~/.version
+
+      - name: Publish artifacts locally
+        run: |-
+          sbt "set ThisBuild/Compile/packageDoc/publishArtifact := false; +publishLocal; publishM2" -Dakka.no.discipline=true
+
+      - name: Cache published artifacts
+        # https://github.com/actions/cache/releases
+        # v4.3.0
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.ivy2/local
+            ~/.m2/repository
+          key: published-artifacts-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Save version
+        # https://github.com/actions/upload-artifact/releases
+        # v4.3.1
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+        with:
+          name: akka-projection-version
+          path: ~/.version
+          retention-days: 1
+
+  check-samples:
+    name: ${{ matrix.sample.name }}
+    needs: setup-samples
+    runs-on: Akka-Default
+    env:
+      RUSTFLAGS: -Dwarnings
+      CARGO_TERM_COLOR: always
+      PROTOC_VERSION: 3.23.4
+      SCALA3_VERSION: 3.3.7
+    strategy:
+      fail-fast: false
+      matrix:
+        sample:
+          - name: "Test Scala gRPC Shopping Cart"
+            path: "samples/grpc/shopping-cart-service-scala"
+            command: |
+              sbt test -Dakka-projection.version=`cat ~/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; test;" -Dakka-projection.version=`cat ~/.version`
+          - name: "Compile Scala gRPC Analytics"
+            path: "samples/grpc/shopping-analytics-service-scala"
+            command: |
+              sbt Test/compile -Dakka-projection.version=`cat ~/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;"
+          - name: "Test Java gRPC Shopping Cart"
+            path: "samples/grpc/shopping-cart-service-java"
+            command: "mvn test -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+          - name: "Compile Java gRPC Analytics"
+            path: "samples/grpc/shopping-analytics-service-java"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+          - name: "Compile Scala Replicated Shopping Cart"
+            path: "samples/replicated/shopping-cart-service-scala"
+            command: |
+              sbt Test/compile -Dakka-projection.version=`cat ~/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;"
+          - name: "Compile Java Replicated Shopping Cart"
+            path: "samples/replicated/shopping-cart-service-java"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+          - name: "Compile Scala Local Drone Control"
+            path: "samples/grpc/local-drone-control-scala"
+            command: |
+              sbt Test/compile -Dakka-projection.version=`cat ~/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat ~/.version`
+          - name: "Compile Scala Restaurant Drone Deliveries"
+            path: "samples/grpc/restaurant-drone-deliveries-service-scala"
+            command: |
+              sbt compile -Dakka-projection.version=`cat ~/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat ~/.version`
+          - name: "Compile Java Local Drone Control"
+            path: "samples/grpc/local-drone-control-java"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+          - name: "Compile Java Restaurant Drone Deliveries"
+            path: "samples/grpc/restaurant-drone-deliveries-service-java"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+          - name: "Test Scala gRPC IoT Service"
+            path: "samples/grpc/iot-service-scala"
+            command: |
+              sbt test -Dakka-projection.version=`cat ~/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; test;" -Dakka-projection.version=`cat ~/.version`
+          - name: "Compile Java gRPC IoT Service"
+            path: "samples/grpc/iot-service-java"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+
+    steps:
+      - name: Checkout
+        # https://github.com/actions/checkout/releases
+        # v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          fetch-depth: 0
+
+      - name: Checkout GitHub merge
+        if: github.event.pull_request
+        run: |-
+          git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
+          git checkout scratch
+
+      - name: Cache Coursier cache
+        # https://github.com/coursier/cache-action/releases
+        # v7.0.0
+        uses: coursier/cache-action@bebeeb0e6f48ebad66d3783946588ecf43114433
+
+      - name: Set up JDK 11
+        # https://github.com/coursier/setup-action/releases
+        # v1.3.5
+        uses: coursier/setup-action@7bde40eee928896f074dbb76d22dd772eed5c65f
+        with:
+          jvm: temurin:1.11
+
+      - name: Restore published artifacts
+        # https://github.com/actions/cache/releases
+        # v4.3.0
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        with:
+          path: |
+            ~/.ivy2/local
+            ~/.m2/repository
+          key: published-artifacts-${{ github.run_id }}-${{ github.run_attempt }}
+          fail-on-cache-miss: true
+
+      - name: Download version
+        # https://github.com/actions/download-artifact/releases
+        # v4.1.4
+        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        with:
+          name: akka-projection-version
+          path: ~/
+
+      - name: Test sample
+        run: |
+          cd ${{ matrix.sample.path }}
+          ${{ matrix.sample.command }}
+
+  diff-checks:
+    runs-on: Akka-Default
+
+    steps:
+      - name: Checkout
+        # https://github.com/actions/checkout/releases
+        # v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          fetch-depth: 0
+
+      - name: Checkout GitHub merge
+        if: github.event.pull_request
+        run: |-
+          git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
+          git checkout scratch
+
+      - name: "gRPC sample Java charger RES identical impl check"
+        run: "diff samples/grpc/local-drone-control-java/src/main/java/charging/ChargingStation.java samples/grpc/restaurant-drone-deliveries-service-java/src/main/java/charging/ChargingStation.java"
+
+      - name: "gRPC sample Scala charger RES identical impl check"
+        run: "diff samples/grpc/local-drone-control-scala/src/main/scala/charging/ChargingStation.scala samples/grpc/restaurant-drone-deliveries-service-scala/src/main/scala/charging/ChargingStation.scala"
+
+
+  check-rust-sample:
+    runs-on: Akka-Default
+    env:
+      RUSTFLAGS: -Dwarnings
+      CARGO_TERM_COLOR: always
+      PROTOC_VERSION: 3.23.4
+
+    steps:
+      - name: Checkout
+        # https://github.com/actions/checkout/releases
+        # v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          fetch-depth: 0
+
+      - name: Checkout GitHub merge
+        if: github.event.pull_request
+        run: |-
+          git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
+          git checkout scratch
 
       - name: Update Rust
         run: |
@@ -121,124 +305,30 @@ jobs:
         with:
           tool: protoc@${{ env.PROTOC_VERSION }}
 
-      - name: Cache Rust
-        # https://github.com/Swatinem/rust-cache/releases
-        # v2.7.0
-        uses: Swatinem/rust-cache@a95ba195448af2da9b00fb742d14ffaaf3c21f43
-
-      - name: Gather version
-        # some cleanup of the sbt output to get the version sbt will use when publishing below
-        run: |-
-          sbt --no-colors "print akka-projection-core/version" | tail -n 1 | tr -d '\n' > ~/.version
-          echo [$(cat ~/.version)]
-          # useful for debugging: hexdump -c ~/.version
-
-      - name: Publish artifacts locally
-        run: |-
-          sbt "+publishLocal; publishM2"
-
-      - name: Test Scala Projection gRPC sample Shopping Cart
-        run: |-
-          cd samples/grpc/shopping-cart-service-scala
-          sbt test -Dakka-projection.version=`cat ~/.version`
-          sbt "clean; ++${SCALA3_VERSION}!; test;" -Dakka-projection.version=`cat ~/.version`
-
-      - name: Compile Scala Projection gRPC sample Analytics
-        run: |-
-          cd samples/grpc/shopping-analytics-service-scala
-          sbt Test/compile -Dakka-projection.version=`cat ~/.version`
-          sbt "clean; ++${SCALA3_VERSION}!; Test/compile;"
-
-      - name: Compile Java Projection gRPC sample Shopping Cart
-        run: |-
-          cd samples/grpc/shopping-cart-service-java
-          mvn test -nsu -ntp -Dakka-projection.version=`cat ~/.version`
-
-      - name: Compile Java Projection gRPC sample Analytics
-        run: |-
-          cd samples/grpc/shopping-analytics-service-java
-          mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`
-
-      - name: Compile Scala Replicated Event Sourcing over gRPC sample Shopping Cart
-        run: |-
-          cd samples/replicated/shopping-cart-service-scala
-          sbt Test/compile -Dakka-projection.version=`cat ~/.version`
-          sbt "clean; ++${SCALA3_VERSION}!; Test/compile;"
-
-      - name: Compile Java Replicated Event Sourcing over gRPC sample Shopping Cart
-        run: |-
-          cd samples/replicated/shopping-cart-service-java
-          mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`
-
-      - name: Compile Scala Projection gRPC Local Drone Control sample
-        run: |-
-          cd samples/grpc/local-drone-control-scala
-          sbt Test/compile -Dakka-projection.version=`cat ~/.version`
-          sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat ~/.version`
-
-      - name: Compile Scala Projection gRPC Restaurant Drone Deliveries sample
-        run: |-
-          cd samples/grpc/restaurant-drone-deliveries-service-scala
-          sbt compile -Dakka-projection.version=`cat ~/.version`
-          sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat ~/.version`
-
-      - name: Compile Java Projection gRPC Local Drone Control sample
-        run: |-
-          cd samples/grpc/local-drone-control-java
-          mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`
-
-      - name: Compile Java Projection gRPC Restaurant Drone Deliveries sample
-        run: |-
-          cd samples/grpc/restaurant-drone-deliveries-service-java
-          mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`
-
-      - name: Test Scala Projection gRPC IoT service sample
-        run: |-
-          cd samples/grpc/iot-service-scala
-          sbt test -Dakka-projection.version=`cat ~/.version`
-          sbt "clean; ++${SCALA3_VERSION}!; test;" -Dakka-projection.version=`cat ~/.version`
-
-      - name: Compile Java Projection gRPC IoT service sample
-        run: |-
-          cd samples/grpc/iot-service-java
-          mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`
-
-      - name: Test Rust IoT service sample
-        run: |-
+      - name: "Test Rust IoT Service"
+        run: |
           cd samples/grpc/iot-service-rs
           cargo clippy --tests
           cargo fmt -- --check
           cargo test
 
-      - name: gRPC sample Java charger RES identical impl check
-        run: |-
-          diff samples/grpc/local-drone-control-java/src/main/java/charging/ChargingStation.java samples/grpc/restaurant-drone-deliveries-service-java/src/main/java/charging/ChargingStation.java
-
-      - name: gRPC sample Scala charger RES identical impl check
-        run: |-
-          # RES sample should be identical
-          diff samples/grpc/local-drone-control-scala/src/main/scala/charging/ChargingStation.scala samples/grpc/restaurant-drone-deliveries-service-scala/src/main/scala/charging/ChargingStation.scala
-
-      - name: Local drone control sample Scala native image build
-        run: |-
-          cd samples/grpc/local-drone-control-scala
-          sbt nativeImage -Dnative.mode=clustered -Dakka-projection.version=`cat ~/.version`
-          sbt nativeImage -Dakka-projection.version=`cat ~/.version`
-          # This will likely be quite noisy, logging failures to connect to restaurant-drone-deliveries service
-          target/native-image/local-drone-control &
-          DRONE_CONTROL_PID=$!
-          sbt "Test/runMain drones.DroneClientTestApp 127.0.0.1 8080" -Dakka-projection.version=`cat ~/.version`
-          kill -9 $DRONE_CONTROL_PID
-
-      - name: Set up GraalVM 21
-        # https://github.com/coursier/setup-action/releases
-        # v1.3.5
-        uses: coursier/setup-action@7bde40eee928896f074dbb76d22dd772eed5c65f
-        with:
-          jvm: graalvm-community:21.0.2
-
-      - name: Local drone control sample Java native image build
-        run: |-
-          cd samples/grpc/local-drone-control-java
-          mvn -DskipTests=true -Pnative package -nsu -Dakka-projection.version=`cat ~/.version`
-          mvn -DskipTests=true -Pnative -Pclustered package -nsu -Dakka-projection.version=`cat ~/.version`
+  # to have just one required status check for branch protection rules
+  status:
+    name: Status check
+    runs-on: Akka-Default
+    if: always()
+    needs:
+      - check-code-style
+      - check-code-compilation
+      - check-samples
+      - diff-checks
+      - check-rust-sample
+    steps:
+      - name: Check all green
+        run: exit 1
+        if: >-
+          ${{
+            contains(needs.*.result, 'failure') ||
+            contains(needs.*.result, 'cancelled') ||
+            contains(needs.*.result, 'skipped')
+          }}
