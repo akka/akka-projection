@@ -66,6 +66,8 @@ object R2dbcProjectionSettings {
       else d
     }
 
+    val deleteAfterConsumed = config.getDuration("offset-store.delete-after-consumed")
+
     val acceptWhenPreviousTimestampBefore =
       config.getString("offset-store.accept-when-previous-timestamp-before") match {
         case "off" | "none" | "" => None
@@ -87,6 +89,7 @@ object R2dbcProjectionSettings {
       timeWindow,
       backtrackingWindow,
       deleteAfter,
+      deleteAfterConsumed,
       keepNumberOfEntries = 0,
       evictInterval = JDuration.ZERO,
       deleteInterval,
@@ -119,6 +122,7 @@ final class R2dbcProjectionSettings private (
     val timeWindow: JDuration,
     val backtrackingWindow: JDuration,
     val deleteAfter: JDuration,
+    val deleteAfterConsumed: JDuration,
     @deprecated("Not used, evict is only based on time window", "1.6.6")
     val keepNumberOfEntries: Int,
     @deprecated("Not used, evict is not periodic", "1.6.6")
@@ -171,6 +175,12 @@ final class R2dbcProjectionSettings private (
 
   def withDeleteAfter(deleteAfter: JDuration): R2dbcProjectionSettings =
     copy(deleteAfter = deleteAfter)
+
+  def withDeleteAfterConsumed(deleteAfterConsumed: FiniteDuration): R2dbcProjectionSettings =
+    copy(deleteAfterConsumed = deleteAfterConsumed.toJava)
+
+  def withDeleteAfterConsumed(deleteAfterConsumed: JDuration): R2dbcProjectionSettings =
+    copy(deleteAfterConsumed = deleteAfterConsumed)
 
   @deprecated("Not used, evict is only based on time window", "1.6.6")
   def withKeepNumberOfEntries(keepNumberOfEntries: Int): R2dbcProjectionSettings =
@@ -239,6 +249,7 @@ final class R2dbcProjectionSettings private (
       timeWindow: JDuration = timeWindow,
       backtrackingWindow: JDuration = backtrackingWindow,
       deleteAfter: JDuration = deleteAfter,
+      deleteAfterConsumed: JDuration = deleteAfterConsumed,
       deleteInterval: JDuration = deleteInterval,
       adoptInterval: JDuration = adoptInterval,
       logDbCallsExceeding: FiniteDuration = logDbCallsExceeding,
@@ -259,6 +270,7 @@ final class R2dbcProjectionSettings private (
       timeWindow,
       backtrackingWindow,
       deleteAfter,
+      deleteAfterConsumed,
       keepNumberOfEntries,
       evictInterval,
       deleteInterval,
@@ -274,5 +286,5 @@ final class R2dbcProjectionSettings private (
       acceptSequenceNumberResetAfter)
 
   override def toString =
-    s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow, $offsetBatchSize, $customConnectionFactory, &offsetSliceReadParallelism, $offsetSliceReadLimit, $replayOnRejectedSequenceNumbers, $acceptWhenPreviousTimestampBefore, $acceptSequenceNumberResetAfter)"
+    s"R2dbcProjectionSettings($schema, $offsetTable, $timestampOffsetTable, $managementTable, $useConnectionFactory, $timeWindow, $deleteAfter, $deleteAfterConsumed, $deleteInterval, $logDbCallsExceeding, $warnAboutFilteredEventsInFlow, $offsetBatchSize, $customConnectionFactory, &offsetSliceReadParallelism, $offsetSliceReadLimit, $replayOnRejectedSequenceNumbers, $acceptWhenPreviousTimestampBefore, $acceptSequenceNumberResetAfter)"
 }

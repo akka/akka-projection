@@ -321,6 +321,9 @@ private[projection] class R2dbcOffsetStore(
 
   @volatile private var stopped = false
 
+  private def now(): Instant =
+    clock.instant()
+
   @tailrec
   private def scheduleTasks(): Unit = {
     val existingTasks = scheduledTasks.get()
@@ -793,12 +796,10 @@ private[projection] class R2dbcOffsetStore(
           "Offset table has been disabled config 'akka.projection.r2dbc.offset-store.offset-table', " +
           s"but trying to save a non-timestamp offset [$offset]"))
 
-    val now = Instant.now(clock)
-
     // FIXME can we move serialization outside the transaction?
     val storageReps = toStorageRepresentation(projectionId, offset)
 
-    dao.updatePrimitiveOffsetInTx(conn, now, storageReps)
+    dao.updatePrimitiveOffsetInTx(conn, now(), storageReps)
   }
 
   /**
@@ -1144,23 +1145,30 @@ private[projection] class R2dbcOffsetStore(
     val currentState = getState()
     if ((triggerDeletion == null || triggerDeletion == TRUE) && currentState.bySliceSorted.contains(slice)) {
       val latest = currentState.bySliceSorted(slice).last
-      val until = latest.timestamp.minus(settings.deleteAfter)
+      val untilTimestamp = latest.timestamp.minus(settings.deleteAfter)
 
       // note that deleteOldTimestampOffsetSql already has `AND timestamp_offset < ?`,
       // which means that the latest for this slice will not be deleted
-      val result = dao.deleteOldTimestampOffset(slice, until)
+      val result = dao.deleteOldTimestampOffset(slice, untilTimestamp)
       result.failed.foreach { exc =>
         triggerDeletionPerSlice.put(slice, TRUE) // try again next tick
         logger.warn(
-          "{} Failed to delete timestamp offset, slice [{}], until [{}] : {}",
+          "{} Failed to delete timestamp offset, slice [{}], until [{}], until consumed [{}] ago: {}",
           logPrefix,
           slice,
-          until,
+          untilTimestamp,
+          settings.deleteAfterConsumed,
           exc.toString)
       }
       if (logger.isDebugEnabled)
         result.foreach { rows =>
-          logger.debug("{} Deleted [{}] timestamp offset rows, slice [{}], until [{}]", logPrefix, rows, slice, until)
+          logger.debug(
+            "{} Deleted [{}] timestamp offset rows, slice [{}], until [{}], until consumed [{}] ago",
+            logPrefix,
+            rows,
+            slice,
+            untilTimestamp,
+            settings.deleteAfterConsumed)
         }
 
       result
@@ -1339,7 +1347,7 @@ private[projection] class R2dbcOffsetStore(
   def savePaused(paused: Boolean): Future[Done] = {
     checkStopped()
 
-    val update = dao.updateManagementState(paused, Instant.now(clock))
+    val update = dao.updateManagementState(paused, now())
     (if (dialect == SqlServerDialect) {
        // workaround for https://github.com/r2dbc/r2dbc-mssql/pull/290
        update.map(_ => 1)
