@@ -159,95 +159,53 @@ jobs:
         sample:
           - name: "Test Scala gRPC Shopping Cart"
             path: "samples/grpc/shopping-cart-service-scala"
-            type: "scala"
             command: |
               sbt test -Dakka-projection.version=`cat ~/.version`
               sbt "clean; ++${SCALA3_VERSION}!; test;" -Dakka-projection.version=`cat ~/.version`
           - name: "Compile Scala gRPC Analytics"
             path: "samples/grpc/shopping-analytics-service-scala"
-            type: "scala"
             command: |
               sbt Test/compile -Dakka-projection.version=`cat ~/.version`
               sbt "clean; ++${SCALA3_VERSION}!; Test/compile;"
           - name: "Test Java gRPC Shopping Cart"
             path: "samples/grpc/shopping-cart-service-java"
-            type: "java"
             command: "mvn test -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
           - name: "Compile Java gRPC Analytics"
             path: "samples/grpc/shopping-analytics-service-java"
-            type: "java"
             command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
           - name: "Compile Scala Replicated Shopping Cart"
             path: "samples/replicated/shopping-cart-service-scala"
-            type: "scala"
             command: |
               sbt Test/compile -Dakka-projection.version=`cat ~/.version`
               sbt "clean; ++${SCALA3_VERSION}!; Test/compile;"
           - name: "Compile Java Replicated Shopping Cart"
             path: "samples/replicated/shopping-cart-service-java"
-            type: "java"
             command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
           - name: "Compile Scala Local Drone Control"
             path: "samples/grpc/local-drone-control-scala"
-            type: "scala"
             command: |
               sbt Test/compile -Dakka-projection.version=`cat ~/.version`
               sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat ~/.version`
           - name: "Compile Scala Restaurant Drone Deliveries"
             path: "samples/grpc/restaurant-drone-deliveries-service-scala"
-            type: "scala"
             command: |
               sbt compile -Dakka-projection.version=`cat ~/.version`
               sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat ~/.version`
           - name: "Compile Java Local Drone Control"
             path: "samples/grpc/local-drone-control-java"
-            type: "java"
             command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
           - name: "Compile Java Restaurant Drone Deliveries"
             path: "samples/grpc/restaurant-drone-deliveries-service-java"
-            type: "java"
             command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
           - name: "Test Scala gRPC IoT Service"
             path: "samples/grpc/iot-service-scala"
-            type: "scala"
             command: |
               sbt test -Dakka-projection.version=`cat ~/.version`
               sbt "clean; ++${SCALA3_VERSION}!; test;" -Dakka-projection.version=`cat ~/.version`
           - name: "Compile Java gRPC IoT Service"
             path: "samples/grpc/iot-service-java"
-            type: "java"
             command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
-          - name: "Test Rust IoT Service"
-            path: "samples/grpc/iot-service-rs"
-            type: "rust"
-            command: |
-              cargo clippy --tests
-              cargo fmt -- --check
-              cargo test
-          - name: "Check Java Charger RES Implementation"
-            path: "."
-            type: "diff"
-            command: "diff samples/grpc/local-drone-control-java/src/main/java/charging/ChargingStation.java samples/grpc/restaurant-drone-deliveries-service-java/src/main/java/charging/ChargingStation.java"
-          - name: "Check Scala Charger RES Implementation"
-            path: "."
-            type: "diff"
-            command: "diff samples/grpc/local-drone-control-scala/src/main/scala/charging/ChargingStation.scala samples/grpc/restaurant-drone-deliveries-service-scala/src/main/scala/charging/ChargingStation.scala"
-          - name: "Build Scala Native Image"
-            path: "samples/grpc/local-drone-control-scala"
-            type: "scala-native"
-            command: |
-              sbt nativeImage -Dnative.mode=clustered -Dakka-projection.version=`cat ~/.version`
-              sbt nativeImage -Dakka-projection.version=`cat ~/.version`
-              target/native-image/local-drone-control &
-              DRONE_CONTROL_PID=$!
-              sbt "Test/runMain drones.DroneClientTestApp 127.0.0.1 8080" -Dakka-projection.version=`cat ~/.version`
-              kill -9 $DRONE_CONTROL_PID
-          - name: "Build Java Native Image"
-            path: "samples/grpc/local-drone-control-java"
-            type: "java-native"
-            command: |
-              mvn -DskipTests=true -Pnative package -nsu -Dakka-projection.version=`cat ~/.version`
-              mvn -DskipTests=true -Pnative -Pclustered package -nsu -Dakka-projection.version=`cat ~/.version`
+
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
@@ -268,41 +226,13 @@ jobs:
         uses: coursier/cache-action@1ff273bff02a8787bc9f1877d347948af647956d
 
       - name: Set up JDK 11
-        if: matrix.sample.type != 'rust'
         # https://github.com/coursier/setup-action/releases
         # v1.3.5
         uses: coursier/setup-action@7bde40eee928896f074dbb76d22dd772eed5c65f
         with:
           jvm: temurin:1.11
 
-      - name: Set up GraalVM 21
-        if: matrix.sample.type == 'java-native'
-        # https://github.com/coursier/setup-action/releases
-        # v1.3.5
-        uses: coursier/setup-action@7bde40eee928896f074dbb76d22dd772eed5c65f
-        with:
-          jvm: graalvm-community:21.0.2
-
-      - name: Update Rust
-        if: matrix.sample.type == 'rust'
-        run: |
-          rustup update
-
-      - name: Install protoc
-        # https://github.com/taiki-e/install-action/releases
-        # v2.20.3
-        uses: taiki-e/install-action@47d27149ff6b3422864ec504071d5cc7873d642e
-        with:
-          tool: protoc@${{ env.PROTOC_VERSION }}
-
-      - name: Cache Rust
-        if: matrix.sample.type == 'rust'
-        # https://github.com/Swatinem/rust-cache/releases
-        # v2.7.0
-        uses: Swatinem/rust-cache@a95ba195448af2da9b00fb742d14ffaaf3c21f43
-
       - name: Restore published artifacts
-        if: matrix.sample.type != 'diff'
         # https://github.com/actions/cache/releases
         # v4.3.0
         uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
@@ -314,7 +244,6 @@ jobs:
           fail-on-cache-miss: true
 
       - name: Download version
-        if: matrix.sample.type != 'diff'
         # https://github.com/actions/download-artifact/releases
         # v4.1.4
         uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
@@ -322,7 +251,63 @@ jobs:
           name: akka-projection-version
           path: ~/
 
-      - name: Run sample
+      - name: Test sample
         run: |
           cd ${{ matrix.sample.path }}
           ${{ matrix.sample.command }}
+
+  diff-checks:
+    runs-on: Akka-Default
+    # RES sample should be identical
+    steps:
+      - name: "gRPC sample Java charger RES identical impl check"
+        run: "diff samples/grpc/local-drone-control-java/src/main/java/charging/ChargingStation.java samples/grpc/restaurant-drone-deliveries-service-java/src/main/java/charging/ChargingStation.java"
+      - name: "gRPC sample Scala charger RES identical impl check"
+        run: "diff samples/grpc/local-drone-control-scala/src/main/scala/charging/ChargingStation.scala samples/grpc/restaurant-drone-deliveries-service-scala/src/main/scala/charging/ChargingStation.scala"
+
+
+  check-rust-sample:
+    needs: setup-samples
+    runs-on: Akka-Default
+    env:
+      RUSTFLAGS: -Dwarnings
+      CARGO_TERM_COLOR: always
+      PROTOC_VERSION: 3.23.4
+
+    steps:
+      - name: Checkout
+        # https://github.com/actions/checkout/releases
+        # v4.1.1
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        with:
+          fetch-depth: 0
+
+      - name: Checkout GitHub merge
+        if: github.event.pull_request
+        run: |-
+          git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
+          git checkout scratch
+
+      - name: Update Rust
+        run: |
+          rustup update
+
+      - name: Install protoc
+        # https://github.com/taiki-e/install-action/releases
+        # v2.20.3
+        uses: taiki-e/install-action@47d27149ff6b3422864ec504071d5cc7873d642e
+        with:
+          tool: protoc@${{ env.PROTOC_VERSION }}
+
+      - name: Cache Rust
+        # https://github.com/Swatinem/rust-cache/releases
+        # v2.7.0
+        uses: Swatinem/rust-cache@a95ba195448af2da9b00fb742d14ffaaf3c21f43
+
+      - name: "Test Rust IoT Service"
+        run: |
+          cd samples/grpc/iot-service-rs
+          cargo clippy --tests
+          cargo fmt -- --check
+          cargo test
+
