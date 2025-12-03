@@ -26,6 +26,8 @@ object Dependencies {
     val AlpakkaKafkaVersionInDocs = VersionNumber(AlpakkaKafka).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
+
+    val AkkaGrpcVersion = akka.grpc.gen.BuildInfo.version
     val AkkaGrpcVersionInDocs = VersionNumber(akka.grpc.gen.BuildInfo.version).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
