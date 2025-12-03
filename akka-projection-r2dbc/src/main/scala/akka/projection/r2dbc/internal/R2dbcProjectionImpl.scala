@@ -64,8 +64,8 @@ import akka.projection.internal.ProjectionSettings
 import akka.projection.internal.SettingsImpl
 import akka.projection.javadsl
 import akka.projection.r2dbc.R2dbcProjectionSettings
-import akka.projection.r2dbc.internal.FastFutureSource.fastFutureSource
-import akka.projection.r2dbc.internal.FastFutureSource.fastSourceFuture
+import akka.projection.internal.FastFutureSource.fastFutureSource
+import akka.projection.internal.FastFutureSource.fastSourceFuture
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.AttemptToUseStoppedOffsetStore
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.RejectedEnvelope
 import akka.projection.r2dbc.internal.R2dbcProjectionImpl.OffsetStoreAccess
