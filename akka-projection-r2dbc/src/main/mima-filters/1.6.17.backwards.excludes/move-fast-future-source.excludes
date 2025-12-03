@@ -1,0 +1,3 @@
+# internals
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.r2dbc.internal.FastFutureSource")
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.r2dbc.internal.FastFutureSource$")
