@@ -116,7 +116,7 @@ jobs:
 
       - name: Publish artifacts locally
         run: |-
-          sbt "+publishLocal; publishM2" -Dakka.no.discipline=true
+          sbt "set ThisBuild/Compile/packageDoc/publishArtifact := false; +publishLocal; publishM2" -Dakka.no.discipline=true
 
       - name: Cache published artifacts
         # https://github.com/actions/cache/releases
