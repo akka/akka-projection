@@ -275,13 +275,12 @@ jobs:
 
       - name: "gRPC sample Java charger RES identical impl check"
         run: "diff samples/grpc/local-drone-control-java/src/main/java/charging/ChargingStation.java samples/grpc/restaurant-drone-deliveries-service-java/src/main/java/charging/ChargingStation.java"
-        
+
       - name: "gRPC sample Scala charger RES identical impl check"
         run: "diff samples/grpc/local-drone-control-scala/src/main/scala/charging/ChargingStation.scala samples/grpc/restaurant-drone-deliveries-service-scala/src/main/scala/charging/ChargingStation.scala"
 
 
   check-rust-sample:
-    needs: setup-samples
     runs-on: Akka-Default
     env:
       RUSTFLAGS: -Dwarnings
@@ -325,3 +324,23 @@ jobs:
           cargo fmt -- --check
           cargo test
 
+  # to have just one required status check for branch protection rules
+  status:
+    name: Status check
+    runs-on: Akka-Default
+    if: always()
+    needs:
+      - check-code-style
+      - check-code-compilation
+      - check-samples
+      - diff-checks
+      - check-rust-sample
+    steps:
+      - name: Check all green
+        run: exit 1
+        if: >-
+          ${{
+            contains(needs.*.result, 'failure') ||
+            contains(needs.*.result, 'cancelled') ||
+            contains(needs.*.result, 'skipped')
+          }}
