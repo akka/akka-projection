@@ -4,6 +4,7 @@
 
 package akka.projection.r2dbc.internal
 
+import java.time.Duration
 import java.time.Instant
 
 import scala.collection.immutable
@@ -13,7 +14,6 @@ import scala.concurrent.Future
 import io.r2dbc.spi.Connection
 import io.r2dbc.spi.Statement
 import org.slf4j.LoggerFactory
-
 import akka.Done
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
@@ -93,12 +93,19 @@ private[projection] class PostgresOffsetStoreDao(
     """
   }
 
+  private def whereTimestampConsumed(d: Duration): String =
+    if (d.isZero)
+      ""
+    else
+      s"AND timestamp_consumed < CURRENT_TIMESTAMP - INTERVAL '${d.toMillis} ms'"
+
   /**
    * delete less than a timestamp for a given slice
    */
-  protected def deleteOldTimestampOffsetSql(): String =
+  protected def deleteOldTimestampOffsetSql(deleteAfterConsumed: Duration): String =
     sql"""
-    DELETE FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? AND timestamp_offset < ?"""
+    DELETE FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? AND timestamp_offset < ? ${whereTimestampConsumed(
+      deleteAfterConsumed)}"""
 
   protected def bindDeleteOldTimestampOffsetSql(stmt: Statement, slice: Int, until: Instant): Statement = {
     stmt
@@ -345,7 +352,7 @@ private[projection] class PostgresOffsetStoreDao(
 
   override def deleteOldTimestampOffset(slice: Int, until: Instant): Future[Long] = {
     r2dbcExecutor.updateOne("delete old timestamp offset") { conn =>
-      val stmt = conn.createStatement(deleteOldTimestampOffsetSql())
+      val stmt = conn.createStatement(deleteOldTimestampOffsetSql(settings.deleteAfterConsumed))
       bindDeleteOldTimestampOffsetSql(stmt, slice, until)
     }
   }
