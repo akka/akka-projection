@@ -799,14 +799,14 @@ private[projection] object R2dbcProjectionImpl {
                 fastFutureSource(replayIfPossible(env, context).map[Source[(Envelope, ProjectionContext), NotUsed]] {
                   // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
                   case ReplayedOnRejection(source) =>
-                    source.concatLazy(accepted(env, context))
+                    source.concatLazy(Source.lazySource(() => accepted(env, context)))
                   case ReplayTriggered => Source.empty
                   case NotReplayed     => Source.empty
                 })
               case RejectedBacktrackingSeqNr =>
                 fastFutureSource(replayIfPossible(env, context).map[Source[(Envelope, ProjectionContext), NotUsed]] {
                   // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
-                  case ReplayedOnRejection(source) => source.concatLazy(accepted(env, context))
+                  case ReplayedOnRejection(source) => source.concatLazy(Source.lazySource(() => accepted(env, context)))
                   case ReplayTriggered             => Source.empty
                   case NotReplayed                 => throwRejectedEnvelope(sourceProvider, env)
                 })
