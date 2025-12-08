@@ -30,6 +30,7 @@ import akka.projection.AllowSeqNrGapsMetadata
 import akka.projection.BySlicesSourceProvider
 import akka.projection.ProjectionId
 import akka.projection.dynamodb.DynamoDBProjectionSettings
+import akka.projection.internal.CorrelationId
 import akka.projection.internal.FastFutureSource.fastSourceFuture
 import akka.projection.internal.ManagementState
 import akka.stream.scaladsl.Sink
@@ -214,6 +215,8 @@ private[projection] object DynamoDBOffsetStore {
   }
 
   val FutureDone: Future[Done] = Future.successful(Done)
+
+  final class AttemptToUseStoppedOffsetStore(message: String) extends RuntimeException(message)
 }
 
 /**
@@ -222,6 +225,7 @@ private[projection] object DynamoDBOffsetStore {
 @InternalApi
 private[projection] class DynamoDBOffsetStore(
     projectionId: ProjectionId,
+    val uuid: String,
     sourceProvider: Option[BySlicesSourceProvider],
     system: ActorSystem[_],
     val settings: DynamoDBProjectionSettings,
@@ -232,13 +236,13 @@ private[projection] class DynamoDBOffsetStore(
 
   private val persistenceExt = Persistence(system)
 
-  private val (minSlice: Int, maxSlice: Int) = sourceProvider match {
+  val (minSlice: Int, maxSlice: Int) = sourceProvider match {
     case Some(s) => s.minSlice -> s.maxSlice
     case None    => 0 -> (persistenceExt.numberOfSlices - 1)
   }
 
   private val logger = LoggerFactory.getLogger(this.getClass)
-  val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]:"
+  val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]${CorrelationId.toCorrelationLogText(uuid)}:"
 
   private val dao = new OffsetStoreDao(system, settings, projectionId, client)
 
@@ -256,6 +260,8 @@ private[projection] class DynamoDBOffsetStore(
   // needed for at-least-once or other projections where the offset is saved afterwards. Not needed for exactly-once.
   // This can be updated concurrently with CAS retries.
   private val inflight = new AtomicReference(Map.empty[Pid, SeqNr])
+
+  @volatile private var stopped = false
 
   private def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
     sourceProvider match {
@@ -282,20 +288,26 @@ private[projection] class DynamoDBOffsetStore(
 
   // This is used by projection management and returns latest offset
   def getOffset[Offset](): Future[Option[Offset]] = {
-    // FIXME in r2dbc this will reload via readOffset if no state
-    Future.successful(Some(getState().latestOffset).map(_.asInstanceOf[Offset]))
+    getState().latestOffset match {
+      case TimestampOffset.Zero => readOffset(startup = false)
+      case t                    => Future.successful(Some(t.asInstanceOf[Offset]))
+    }
   }
 
   private def dumpState(s: State, flight: Map[Pid, SeqNr]): String = {
     s"$s inFlight [${flight.map { case (pid, seqNr) => s"$pid->$seqNr" }.mkString(",")}]"
   }
 
-  def readOffset[Offset](): Future[Option[Offset]] = {
+  def readOffset[Offset](): Future[Option[Offset]] =
+    readOffset(startup = true)
+
+  def readOffset[Offset](startup: Boolean): Future[Option[Offset]] = {
+    checkStopped()
     // look for TimestampOffset first since that is used by akka-persistence-dynamodb,
     // and then fall back to the other more primitive offset types
     sourceProvider match {
       case Some(_) =>
-        readTimestampOffset().map { offsetBySlice =>
+        readTimestampOffset(startup).map { offsetBySlice =>
           if (offsetBySlice.offsets.isEmpty) None
           else Some(offsetBySlice.asInstanceOf[Offset])
         }(ExecutionContext.parasitic)
@@ -306,7 +318,8 @@ private[projection] class DynamoDBOffsetStore(
     }
   }
 
-  private def readTimestampOffset(): Future[TimestampOffsetBySlice] = {
+  private def readTimestampOffset(startup: Boolean): Future[TimestampOffsetBySlice] = {
+    checkStopped()
     implicit val sys = system // for implicit stream materializer
     val oldState = state.get()
     // retrieve latest timestamp for each slice, and use the earliest
@@ -327,11 +340,13 @@ private[projection] class DynamoDBOffsetStore(
     offsetBySliceFut.map { offsetBySlice =>
       val newState = State(offsetBySlice)
 
-      if (!state.compareAndSet(oldState, newState))
-        throw new IllegalStateException(
-          s"$logPrefix Unexpected concurrent modification of state from readOffset. " +
-          s"${dumpState(oldState, getInflight())}")
-      clearInflight()
+      if (startup) {
+        if (!state.compareAndSet(oldState, newState))
+          throw new IllegalStateException(
+            s"$logPrefix Unexpected concurrent modification of state from readOffset. " +
+            s"${dumpState(oldState, getInflight())}")
+        clearInflight()
+      }
       if (offsetBySlice.isEmpty) {
         logger.debug("{} readTimestampOffset no stored offset", logPrefix)
         TimestampOffsetBySlice.empty
@@ -349,6 +364,7 @@ private[projection] class DynamoDBOffsetStore(
   }
 
   def load(pid: Pid): Future[State] = {
+    checkStopped()
     val oldState = state.get()
     if (oldState.contains(pid))
       Future.successful(oldState)
@@ -368,6 +384,7 @@ private[projection] class DynamoDBOffsetStore(
   }
 
   def load(pids: Set[Pid]): Future[State] = {
+    checkStopped()
     val oldState = state.get()
     val pidsToLoad = pids.filterNot(oldState.contains)
     if (pidsToLoad.isEmpty)
@@ -408,6 +425,7 @@ private[projection] class DynamoDBOffsetStore(
       offsets: IndexedSeq[OffsetPidSeqNr],
       storeSequenceNumbers: IndexedSeq[Record] => Future[Done],
       canBeConcurrent: Boolean): Future[Done] = {
+    checkStopped()
     if (offsets.isEmpty)
       FutureDone
     else if (offsets.head.offset.isInstanceOf[TimestampOffset]) {
@@ -432,6 +450,7 @@ private[projection] class DynamoDBOffsetStore(
       records: IndexedSeq[Record],
       storeSequenceNumbers: IndexedSeq[Record] => Future[Done],
       canBeConcurrent: Boolean): Future[Done] = {
+    checkStopped()
     load(records.iterator.map(_.pid).toSet).flatMap { oldState =>
       val filteredRecords =
         if (records.size <= 1)
@@ -531,6 +550,7 @@ private[projection] class DynamoDBOffsetStore(
   }
 
   @tailrec private def cleanupInflight(newState: State): Unit = {
+    checkStopped()
     val currentInflight = getInflight()
     val newInflight =
       currentInflight.filter {
@@ -551,6 +571,7 @@ private[projection] class DynamoDBOffsetStore(
   }
 
   @tailrec private def clearInflight(): Unit = {
+    checkStopped()
     val currentInflight = getInflight()
     if (!inflight.compareAndSet(currentInflight, Map.empty[Pid, SeqNr]))
       clearInflight() // CAS retry, concurrent update of inflight
@@ -560,6 +581,7 @@ private[projection] class DynamoDBOffsetStore(
    * The stored sequence number for a persistenceId, or 0 if unknown persistenceId.
    */
   def storedSeqNr(pid: Pid): Future[SeqNr] = {
+    checkStopped()
     getState().byPid.get(pid) match {
       case Some(record) => Future.successful(record.seqNr)
       case None =>
@@ -573,6 +595,7 @@ private[projection] class DynamoDBOffsetStore(
 
   def validateAll[Envelope](envelopes: Seq[Envelope]): Future[Seq[(Envelope, Validation)]] = {
     import Validation._
+    checkStopped()
 
     envelopes
       .foldLeft(Future.successful((getInflight(), Vector.empty[(Envelope, Validation)]))) { (acc, envelope) =>
@@ -604,6 +627,7 @@ private[projection] class DynamoDBOffsetStore(
    * already been processed, or there is a gap in sequence numbers that should be rejected.
    */
   def validate[Envelope](envelope: Envelope): Future[Validation] = {
+    checkStopped()
     createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) => validate(recordWithOffset, getInflight())
       case None                   => Validation.FutureAccepted
@@ -622,6 +646,7 @@ private[projection] class DynamoDBOffsetStore(
 
   private def validate(recordWithOffset: RecordWithOffset, currentInflight: Map[Pid, SeqNr]): Future[Validation] = {
     import Validation._
+    checkStopped()
     val pid = recordWithOffset.record.pid
     val seqNr = recordWithOffset.record.seqNr
 
@@ -789,6 +814,7 @@ private[projection] class DynamoDBOffsetStore(
   }
 
   @tailrec final def addInflight[Envelope](envelope: Envelope): Unit = {
+    checkStopped()
     createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) =>
         if (logger.isTraceEnabled)
@@ -821,6 +847,7 @@ private[projection] class DynamoDBOffsetStore(
   }
 
   def isInflight[Envelope](envelope: Envelope): Boolean = {
+    checkStopped()
     createRecordWithOffset(envelope) match {
       case Some(recordWithOffset) =>
         val pid = recordWithOffset.record.pid
@@ -880,10 +907,26 @@ private[projection] class DynamoDBOffsetStore(
     }
   }
 
-  def readManagementState(): Future[Option[ManagementState]] =
+  def readManagementState(): Future[Option[ManagementState]] = {
+    checkStopped()
     dao.readManagementState(minSlice)
+  }
 
-  def savePaused(paused: Boolean): Future[Done] =
+  def savePaused(paused: Boolean): Future[Done] = {
+    checkStopped()
     dao.updateManagementState(minSlice, maxSlice, paused)
+  }
+
+  def stop(): Unit = {
+    stopped = true
+  }
+
+  def isStopped(): Boolean =
+    stopped
+
+  private def checkStopped(): Unit = {
+    if (stopped)
+      throw new AttemptToUseStoppedOffsetStore(s"$logPrefix DynamoDBOffsetStore was stopped")
+  }
 
 }
