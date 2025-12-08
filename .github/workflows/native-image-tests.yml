@@ -39,6 +39,17 @@ jobs:
         with:
           jvm: graalvm-community:21.0.2
 
+      - name: Gather version
+        # some cleanup of the sbt output to get the version sbt will use when publishing below
+        run: |-
+          sbt --no-colors "print akka-projection-core/version" | tail -n 1 | tr -d '\n' > ~/.version
+          echo [$(cat ~/.version)]
+          # useful for debugging: hexdump -c ~/.version
+
+      - name: Publish artifacts locally
+        run: |-
+          sbt "set ThisBuild/Compile/packageDoc/publishArtifact := false; +publishLocal; publishM2" -Dakka.no.discipline=true
+
       - name: "Build and test Scala Native Image"
         run: |
           cd samples/grpc/local-drone-control-scala
