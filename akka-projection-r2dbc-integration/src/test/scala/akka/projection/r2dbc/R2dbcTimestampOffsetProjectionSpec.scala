@@ -2684,6 +2684,9 @@ class R2dbcTimestampOffsetProjectionSpec
             withRepo(_.concatToText(env.persistenceId, env.event))
           }
 
+      val statusProbe = createTestProbe[TestStatusObserver.Status]() // we don't care about this but not optional
+      val beforeEnvelopeProbe = createTestProbe[TestStatusObserver.Before[EventEnvelope[String]]]()
+
       val projection =
         R2dbcProjection
           .atLeastOnceFlow(
@@ -2692,6 +2695,10 @@ class R2dbcTimestampOffsetProjectionSpec
             sourceProvider,
             handler = flowHandler)
           .withSaveOffset(1, 1.minute)
+          .withStatusObserver(
+            new TestStatusObserver[EventEnvelope[String]](
+              statusProbe.ref,
+              beforeEnvelopeProbe = Some(beforeEnvelopeProbe.ref)))
 
       projectionTestKit.run(projection) {
         projectedValueShouldBe("e1|e2|e3|e4|e5|e6")(pid1)
@@ -2714,6 +2721,14 @@ class R2dbcTimestampOffsetProjectionSpec
           slice1 -> expectedRecord1,
           slice2 -> expectedRecord2)
       }
+
+      // this covers that both regular and replay are handed to the observer,
+      // no easy way to cover that the `externalContext` is passed along with the envelope though
+      val observed = beforeEnvelopeProbe.receiveMessages(9)
+      val observedPerPid = observed.map(_.envelope).groupMap(_.persistenceId)(_.event)
+      observedPerPid(pid1).toSet shouldEqual Set("e1", "e2", "e3", "e4", "e5", "e6")
+      observedPerPid(pid2).toSet shouldEqual Set("e1", "e2", "e3")
+
     }
 
     "replay rejected sequence numbers due to clock skew for flow projection" in {
