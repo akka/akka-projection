@@ -4,12 +4,17 @@
 
 package akka.projection.dynamodb.internal
 
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
+
 import scala.annotation.nowarn
+import scala.annotation.tailrec
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.concurrent.duration.FiniteDuration
 import scala.util.control.NonFatal
+
 import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
@@ -19,6 +24,7 @@ import akka.event.LoggingAdapter
 import akka.persistence.dynamodb.internal.EnvelopeOrigin
 import akka.persistence.query.DeletedDurableState
 import akka.persistence.query.DurableStateChange
+import akka.persistence.query.QueryCorrelationId
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
@@ -35,13 +41,16 @@ import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.RunningProjectionManagement
 import akka.projection.StatusObserver
 import akka.projection.dynamodb.DynamoDBProjectionSettings
+import akka.projection.dynamodb.internal.DynamoDBOffsetStore.AttemptToUseStoppedOffsetStore
 import akka.projection.dynamodb.internal.DynamoDBOffsetStore.RejectedEnvelope
+import akka.projection.dynamodb.internal.DynamoDBProjectionImpl.OffsetStoreAccess
 import akka.projection.dynamodb.scaladsl.DynamoDBTransactHandler
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider.LoadEventsByPersistenceIdSourceProvider
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.CanTriggerReplay
+import akka.projection.internal.CorrelationId.toCorrelationLogText
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FastFutureSource.fastFutureSource
 import akka.projection.internal.FastFutureSource.fastSourceFuture
@@ -87,10 +96,79 @@ private[projection] object DynamoDBProjectionImpl {
 
   private[projection] def createOffsetStore(
       projectionId: ProjectionId,
+      uuid: String,
       sourceProvider: Option[BySlicesSourceProvider],
       settings: DynamoDBProjectionSettings,
       client: DynamoDbAsyncClient)(implicit system: ActorSystem[_]) = {
-    new DynamoDBOffsetStore(projectionId, sourceProvider, system, settings, client)
+    new DynamoDBOffsetStore(projectionId, uuid, sourceProvider, system, settings, client)
+  }
+
+  /**
+   * Mutable holder of the DynamoDBOffsetStore
+   */
+  final class OffsetStoreAccess(projectionId: ProjectionId, offsetStoreFactory: String => DynamoDBOffsetStore) {
+
+    private val offsetStoreRef = new AtomicReference[DynamoDBOffsetStore]()
+
+    @tailrec final def offsetStore(): DynamoDBOffsetStore = {
+      offsetStoreRef.get() match {
+        case null =>
+          val uuid = UUID.randomUUID().toString
+          val newStore = offsetStoreFactory(uuid)
+          if (offsetStoreRef.compareAndSet(null, newStore)) {
+            log.info(
+              "Created offset store {} [{}-{}] [{}]",
+              projectionId.name,
+              newStore.minSlice,
+              newStore.maxSlice,
+              newStore.uuid)
+            newStore
+          } else {
+            newStore.stop() // never used, but stop anyway
+            offsetStore() // CAS retry
+          }
+        case os => os
+      }
+    }
+
+    @tailrec final def newOffsetStore(): DynamoDBOffsetStore = {
+      offsetStoreRef.get() match {
+        case null =>
+          val uuid = UUID.randomUUID().toString
+          val newStore = offsetStoreFactory(uuid)
+          if (offsetStoreRef.compareAndSet(null, newStore)) {
+            log.info(
+              "Created offset store {} [{}-{}] [{}]",
+              projectionId.name,
+              newStore.minSlice,
+              newStore.maxSlice,
+              newStore.uuid)
+            newStore
+          } else {
+            newStore.stop() // never used, but stop anyway
+            newOffsetStore() // CAS retry
+          }
+        case existing =>
+          val uuid = UUID.randomUUID().toString
+          val newStore = offsetStoreFactory(uuid)
+          if (offsetStoreRef.compareAndSet(existing, newStore)) {
+            existing.stop()
+            log.info(
+              "Recreated offset store {} [{}-{}] [{}], old incarnation [{}]",
+              projectionId.name,
+              newStore.minSlice,
+              newStore.maxSlice,
+              newStore.uuid,
+              existing.uuid)
+            newStore
+          } else {
+            newStore.stop() // never used, but stop anyway
+            newOffsetStore() // CAS retry
+          }
+      }
+    }
+
+    def uuid(): String = offsetStore().uuid
   }
 
   private val loadEnvelopeCounter = new AtomicLong
@@ -200,14 +278,16 @@ private[projection] object DynamoDBProjectionImpl {
                 offsetStore.addInflight(envelope)
                 FutureDone
               } else {
-                loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
-                  delegate
-                    .process(loadedEnvelope)
-                    .map { _ =>
-                      offsetStore.addInflight(loadedEnvelope)
-                      Done
-                    }
-                }
+                QueryCorrelationId
+                  .withCorrelationId(offsetStore.uuid)(() => loadEnvelope(envelope, sourceProvider))
+                  .flatMap { loadedEnvelope =>
+                    delegate
+                      .process(loadedEnvelope)
+                      .map { _ =>
+                        offsetStore.addInflight(loadedEnvelope)
+                        Done
+                      }
+                  }
               }
             case Duplicate =>
               FutureDone
@@ -258,12 +338,14 @@ private[projection] object DynamoDBProjectionImpl {
                 val offset = extractOffsetPidSeqNr(sourceProvider, envelope)
                 offsetStore.saveOffset(offset)
               } else {
-                loadEnvelope(envelope, sourceProvider).flatMap { loadedEnvelope =>
-                  val offset = extractOffsetPidSeqNr(sourceProvider, loadedEnvelope)
-                  delegate.process(loadedEnvelope).flatMap { writeItems =>
-                    offsetStore.transactSaveOffset(writeItems, offset)
+                QueryCorrelationId
+                  .withCorrelationId(offsetStore.uuid)(() => loadEnvelope(envelope, sourceProvider))
+                  .flatMap { loadedEnvelope =>
+                    val offset = extractOffsetPidSeqNr(sourceProvider, loadedEnvelope)
+                    delegate.process(loadedEnvelope).flatMap { writeItems =>
+                      offsetStore.transactSaveOffset(writeItems, offset)
+                    }
                   }
-                }
               }
             case Duplicate =>
               FutureDone
@@ -331,17 +413,20 @@ private[projection] object DynamoDBProjectionImpl {
               if (envelopes.isEmpty) {
                 FutureDone
               } else {
-                Future.sequence(envelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap { loadedEnvelopes =>
-                  val offsets = loadedEnvelopes.iterator.map(extractOffsetPidSeqNr(sourceProvider, _)).toVector
-                  val filteredEnvelopes = loadedEnvelopes.filterNot(isFilteredEvent)
-                  if (filteredEnvelopes.isEmpty) {
-                    offsetStore.saveOffsets(offsets)
-                  } else {
-                    delegate.process(filteredEnvelopes).flatMap { writeItems =>
-                      offsetStore.transactSaveOffsets(writeItems, offsets)
+                Future
+                  .sequence(QueryCorrelationId.withCorrelationId(offsetStore.uuid)(() =>
+                    envelopes.map(env => loadEnvelope(env, sourceProvider))))
+                  .flatMap { loadedEnvelopes =>
+                    val offsets = loadedEnvelopes.iterator.map(extractOffsetPidSeqNr(sourceProvider, _)).toVector
+                    val filteredEnvelopes = loadedEnvelopes.filterNot(isFilteredEvent)
+                    if (filteredEnvelopes.isEmpty) {
+                      offsetStore.saveOffsets(offsets)
+                    } else {
+                      delegate.process(filteredEnvelopes).flatMap { writeItems =>
+                        offsetStore.transactSaveOffsets(writeItems, offsets)
+                      }
                     }
                   }
-                }
               }
             }
 
@@ -430,17 +515,20 @@ private[projection] object DynamoDBProjectionImpl {
               if (envelopes.isEmpty) {
                 FutureDone
               } else {
-                Future.sequence(envelopes.map(env => loadEnvelope(env, sourceProvider))).flatMap { loadedEnvelopes =>
-                  val offsets = loadedEnvelopes.iterator.map(extractOffsetPidSeqNr(sourceProvider, _)).toVector
-                  val filteredEnvelopes = loadedEnvelopes.filterNot(isFilteredEvent)
-                  if (filteredEnvelopes.isEmpty) {
-                    offsetStore.saveOffsets(offsets)
-                  } else {
-                    delegate.process(filteredEnvelopes).flatMap { _ =>
+                Future
+                  .sequence(QueryCorrelationId.withCorrelationId(offsetStore.uuid)(() =>
+                    envelopes.map(env => loadEnvelope(env, sourceProvider))))
+                  .flatMap { loadedEnvelopes =>
+                    val offsets = loadedEnvelopes.iterator.map(extractOffsetPidSeqNr(sourceProvider, _)).toVector
+                    val filteredEnvelopes = loadedEnvelopes.filterNot(isFilteredEvent)
+                    if (filteredEnvelopes.isEmpty) {
                       offsetStore.saveOffsets(offsets)
+                    } else {
+                      delegate.process(filteredEnvelopes).flatMap { _ =>
+                        offsetStore.saveOffsets(offsets)
+                      }
                     }
                   }
-                }
               }
             }
 
@@ -512,7 +600,7 @@ private[projection] object DynamoDBProjectionImpl {
     // since this is flow processing
     def replayIfPossible(
         originalEnvelope: Envelope,
-        originalObserver: HandlerObserver[Envelope]): Future[ReplayResult[Envelope, ProjectionContext]] = {
+        originalContext: ProjectionContext): Future[ReplayResult[Envelope, ProjectionContext]] = {
       if (offsetStore.settings.replayOnRejectedSequenceNumbers) {
         val logPrefix = offsetStore.logPrefix
         originalEnvelope match {
@@ -527,67 +615,72 @@ private[projection] object DynamoDBProjectionImpl {
               case provider                                               => provider
             }
 
+            val originalObserver = originalContext.asInstanceOf[ProjectionContextImpl[Offset, Envelope]].observer
+
             underlyingProvider match {
               case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked] =>
                 val persistenceId = originalEventEnvelope.persistenceId
-                offsetStore.storedSeqNr(persistenceId).map[ReplayResult[Envelope, ProjectionContext]] { storedSeqNr =>
-                  // stored seq number can be higher when we've detected a seq number reset by not marking as
-                  // duplicate, but it was rejected when seq number != 1 -- trigger replay from 1 in this case
-                  val toSeqNr = originalEventEnvelope.sequenceNr - 1 // replay until the rejected envelope for flows
-                  val fromSeqNr = if (storedSeqNr > toSeqNr) 1 else storedSeqNr + 1
-                  logReplayRejected(logPrefix, originalEventEnvelope, fromSeqNr)
-                  provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
-                    case Some(querySource) =>
-                      val source = querySource
-                        .flatMapConcat { replayedEnvelope =>
-                          import DynamoDBOffsetStore.Validation._
-                          offsetStore
-                            .validateSource(replayedEnvelope) // Note: single element stream
-                            .mapConcat {
-                              case Accepted =>
-                                if (isFilteredEvent(replayedEnvelope) && settings.warnAboutFilteredEventsInFlow) {
-                                  log.info(
-                                    "atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.",
-                                    replayedEnvelope)
+                QueryCorrelationId
+                  .withCorrelationId(offsetStore.uuid)(() => offsetStore.storedSeqNr(persistenceId))
+                  .map[ReplayResult[Envelope, ProjectionContext]] { storedSeqNr =>
+                    // stored seq number can be higher when we've detected a seq number reset by not marking as
+                    // duplicate, but it was rejected when seq number != 1 -- trigger replay from 1 in this case
+                    val toSeqNr = originalEventEnvelope.sequenceNr - 1 // replay until the rejected envelope for flows
+                    val fromSeqNr = if (storedSeqNr > toSeqNr) 1 else storedSeqNr + 1
+                    logReplayRejected(logPrefix, originalEventEnvelope, fromSeqNr)
+                    QueryCorrelationId.withCorrelationId(offsetStore.uuid)(() =>
+                      provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr)) match {
+                      case Some(querySource) =>
+                        val source =
+                          querySource
+                            .flatMapConcat { replayedEnvelope =>
+                              import DynamoDBOffsetStore.Validation._
+                              offsetStore
+                                .validateSource(replayedEnvelope) // Note: single element stream
+                                .mapConcat {
+                                  case Accepted =>
+                                    if (isFilteredEvent(replayedEnvelope) && settings.warnAboutFilteredEventsInFlow) {
+                                      log.info(
+                                        "atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.",
+                                        replayedEnvelope)
+                                    }
+                                    offsetStore.addInflight(replayedEnvelope)
+                                    val envelope = replayedEnvelope.asInstanceOf[Envelope]
+                                    val externalContext = originalObserver.beforeProcess(envelope)
+                                    Some(
+                                      envelope -> ProjectionContextImpl[Offset, Envelope](
+                                        sourceProvider.extractOffset(envelope),
+                                        envelope,
+                                        originalObserver,
+                                        externalContext,
+                                        offsetStore.uuid))
+                                  case Duplicate =>
+                                    None
+                                  case RejectedSeqNr =>
+                                    // this shouldn't happen
+                                    throw new RejectedEnvelope(
+                                      s"Replay due to rejected envelope was rejected. PersistenceId [$persistenceId] seqNr [${replayedEnvelope.sequenceNr}].")
+                                  case RejectedBacktrackingSeqNr =>
+                                    // this shouldn't happen
+                                    throw new RejectedEnvelope(
+                                      s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${replayedEnvelope.sequenceNr}].")
                                 }
-                                offsetStore.addInflight(replayedEnvelope)
-                                val envelope = replayedEnvelope.asInstanceOf[Envelope]
-                                val externalContext = originalObserver.beforeProcess(envelope)
-                                Some(
-                                  envelope -> ProjectionContextImpl[Offset, Envelope](
-                                    sourceProvider.extractOffset(envelope),
-                                    envelope,
-                                    originalObserver,
-                                    externalContext,
-                                    "")
-                                ) // FIXME pass store.uuid once present
-                              case Duplicate =>
-                                None
-                              case RejectedSeqNr =>
-                                // this shouldn't happen
-                                throw new RejectedEnvelope(
-                                  s"Replay due to rejected envelope was rejected. PersistenceId [$persistenceId] seqNr [${replayedEnvelope.sequenceNr}].")
-                              case RejectedBacktrackingSeqNr =>
-                                // this shouldn't happen
-                                throw new RejectedEnvelope(
-                                  s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${replayedEnvelope.sequenceNr}].")
                             }
-                        }
-                        .recover { exc =>
-                          logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
-                          throw exc
-                        }
-                      ReplayedOnRejection[Envelope, ProjectionContext](source)
-                    case None =>
-                      if (triggerReplayIfPossible(
-                            sourceProvider,
-                            persistenceId,
-                            fromSeqNr,
-                            originalEventEnvelope.sequenceNr))
-                        ReplayTriggered
-                      else NotReplayed
+                            .recover { exc =>
+                              logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
+                              throw exc
+                            }
+                        ReplayedOnRejection[Envelope, ProjectionContext](source)
+                      case None =>
+                        if (triggerReplayIfPossible(
+                              sourceProvider,
+                              persistenceId,
+                              fromSeqNr,
+                              originalEventEnvelope.sequenceNr))
+                          ReplayTriggered
+                        else NotReplayed
+                    }
                   }
-                }
 
               case _ =>
                 triggerReplayIfPossible(sourceProvider, offsetStore, originalEnvelope).map {
@@ -606,16 +699,15 @@ private[projection] object DynamoDBProjectionImpl {
       }
     }
 
-    def observer(context: ProjectionContext): HandlerObserver[Envelope] =
-      context.asInstanceOf[ProjectionContextImpl[Offset, Envelope]].observer
-
     def accepted(envelope: Envelope, context: ProjectionContext): Source[(Envelope, ProjectionContext), NotUsed] = {
       if (isFilteredEvent(envelope) && settings.warnAboutFilteredEventsInFlow) {
         log.info("atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.", envelope)
       }
-      fastSourceFuture(loadEnvelope(envelope, sourceProvider)).map { loadedEnvelope =>
-        offsetStore.addInflight(loadedEnvelope)
-        (loadedEnvelope, context)
+      fastSourceFuture(
+        QueryCorrelationId.withCorrelationId(offsetStore.uuid)(() => loadEnvelope(envelope, sourceProvider))).map {
+        loadedEnvelope =>
+          offsetStore.addInflight(loadedEnvelope)
+          (loadedEnvelope, context)
       }
     }
 
@@ -628,14 +720,14 @@ private[projection] object DynamoDBProjectionImpl {
               case Accepted  => accepted(env, context)
               case Duplicate => Source.empty
               case RejectedSeqNr =>
-                fastFutureSource(replayIfPossible(env, observer(context)).map {
+                fastFutureSource(replayIfPossible(env, context).map {
                   // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
                   case ReplayedOnRejection(source) => source.concatLazy(accepted(env, context))
                   case ReplayTriggered             => Source.empty
                   case NotReplayed                 => Source.empty
                 })
               case RejectedBacktrackingSeqNr =>
-                fastFutureSource(replayIfPossible(env, observer(context)).map {
+                fastFutureSource(replayIfPossible(env, context).map {
                   // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
                   case ReplayedOnRejection(source) => source.concatLazy(accepted(env, context))
                   case ReplayTriggered             => Source.empty
@@ -783,69 +875,72 @@ private[projection] object DynamoDBProjectionImpl {
           underlyingProvider match {
             case provider: LoadEventsByPersistenceIdSourceProvider[Any @unchecked] =>
               val persistenceId = originalEventEnvelope.persistenceId
-              offsetStore.storedSeqNr(persistenceId).flatMap { storedSeqNr =>
-                // stored seq number can be higher when we've detected a seq number reset by not marking as
-                // duplicate, but it was rejected when seq number != 1 -- trigger replay from 1 in this case
-                val toSeqNr = originalEventEnvelope.sequenceNr
-                val fromSeqNr = if (storedSeqNr >= toSeqNr) 1 else storedSeqNr + 1
-                logReplayRejected(logPrefix, originalEventEnvelope, fromSeqNr)
-                provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr) match {
-                  case Some(querySource) =>
-                    querySource
-                      .mapAsync(1) { envelope =>
-                        import DynamoDBOffsetStore.Validation._
-                        offsetStore
-                          .validate(envelope)
-                          .flatMap {
-                            case Accepted =>
-                              accepted(envelope)
-                            case Duplicate =>
-                              FutureDone
-                            case RejectedSeqNr =>
-                              // this shouldn't happen
-                              throw new RejectedEnvelope(
-                                s"Replay due to rejected envelope was rejected. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
-                            case RejectedBacktrackingSeqNr =>
-                              // this shouldn't happen
-                              throw new RejectedEnvelope(
-                                s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
+              QueryCorrelationId
+                .withCorrelationId(offsetStore.uuid)(() => offsetStore.storedSeqNr(persistenceId))
+                .flatMap { storedSeqNr =>
+                  // stored seq number can be higher when we've detected a seq number reset by not marking as
+                  // duplicate, but it was rejected when seq number != 1 -- trigger replay from 1 in this case
+                  val toSeqNr = originalEventEnvelope.sequenceNr
+                  val fromSeqNr = if (storedSeqNr >= toSeqNr) 1 else storedSeqNr + 1
+                  logReplayRejected(logPrefix, originalEventEnvelope, fromSeqNr)
+                  QueryCorrelationId.withCorrelationId(offsetStore.uuid)(() =>
+                    provider.currentEventsByPersistenceId(persistenceId, fromSeqNr, toSeqNr)) match {
+                    case Some(querySource) =>
+                      querySource
+                        .mapAsync(1) { envelope =>
+                          import DynamoDBOffsetStore.Validation._
+                          offsetStore
+                            .validate(envelope)
+                            .flatMap {
+                              case Accepted =>
+                                accepted(envelope)
+                              case Duplicate =>
+                                FutureDone
+                              case RejectedSeqNr =>
+                                // this shouldn't happen
+                                throw new RejectedEnvelope(
+                                  s"Replay due to rejected envelope was rejected. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
+                              case RejectedBacktrackingSeqNr =>
+                                // this shouldn't happen
+                                throw new RejectedEnvelope(
+                                  s"Replay due to rejected envelope was rejected. Should not be from backtracking. PersistenceId [$persistenceId] seqNr [${envelope.sequenceNr}].")
+                            }
+                        }
+                        .runFold(0) { case (acc, _) => acc + 1 }
+                        .map { count =>
+                          val expected = toSeqNr - fromSeqNr + 1
+                          if (count == expected) {
+                            true
+                          } else {
+                            // it's expected to find all events, otherwise fail the replay attempt
+                            logReplayInvalidCount(logPrefix, originalEventEnvelope, fromSeqNr, count, expected)
+                            throwRejectedEnvelopeAfterFailedReplay(sourceProvider, originalEnvelope)
                           }
-                      }
-                      .runFold(0) { case (acc, _) => acc + 1 }
-                      .map { count =>
-                        val expected = toSeqNr - fromSeqNr + 1
-                        if (count == expected) {
-                          true
-                        } else {
-                          // it's expected to find all events, otherwise fail the replay attempt
-                          logReplayInvalidCount(logPrefix, originalEventEnvelope, fromSeqNr, count, expected)
-                          throwRejectedEnvelopeAfterFailedReplay(sourceProvider, originalEnvelope)
                         }
-                      }
-                      .recoverWith { exc =>
-                        if (exc.getMessage.contains("UNIMPLEMENTED") && exc.getMessage.contains(
-                              "CurrentEventsByPersistenceId")) {
-                          logReplayUnimplementedException(logPrefix, originalEventEnvelope, fromSeqNr)
-                          Future.successful(
-                            triggerReplayIfPossible(
-                              sourceProvider,
-                              persistenceId,
-                              fromSeqNr,
-                              originalEventEnvelope.sequenceNr))
-                        } else {
-                          logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
-                          Future.failed(exc)
+                        .recoverWith { exc =>
+                          if (exc.getMessage.contains("UNIMPLEMENTED") && exc.getMessage.contains(
+                                "CurrentEventsByPersistenceId")) {
+                            logReplayUnimplementedException(logPrefix, originalEventEnvelope, fromSeqNr)
+                            Future.successful(
+                              triggerReplayIfPossible(
+                                sourceProvider,
+                                persistenceId,
+                                fromSeqNr,
+                                originalEventEnvelope.sequenceNr))
+                          } else {
+                            logReplayException(logPrefix, originalEventEnvelope, fromSeqNr, exc)
+                            Future.failed(exc)
+                          }
                         }
-                      }
-                  case None =>
-                    Future.successful(
-                      triggerReplayIfPossible(
-                        sourceProvider,
-                        persistenceId,
-                        fromSeqNr,
-                        originalEventEnvelope.sequenceNr))
+                    case None =>
+                      Future.successful(
+                        triggerReplayIfPossible(
+                          sourceProvider,
+                          persistenceId,
+                          fromSeqNr,
+                          originalEventEnvelope.sequenceNr))
+                  }
                 }
-              }
 
             case _ =>
               triggerReplayIfPossible(sourceProvider, offsetStore, originalEnvelope)
@@ -976,9 +1071,9 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
     sourceProvider: SourceProvider[Offset, Envelope],
     restartBackoffOpt: Option[RestartSettings],
     val offsetStrategy: OffsetStrategy,
-    handlerStrategy: HandlerStrategy,
+    handlerStrategyFactory: OffsetStoreAccess => HandlerStrategy,
     override val statusObserver: StatusObserver[Envelope],
-    offsetStore: DynamoDBOffsetStore)
+    offsetStoreFactory: String => DynamoDBOffsetStore)
     extends scaladsl.AtLeastOnceProjection[Offset, Envelope]
     with javadsl.AtLeastOnceProjection[Offset, Envelope]
     with scaladsl.ExactlyOnceProjection[Offset, Envelope]
@@ -990,12 +1085,13 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
     with SettingsImpl[DynamoDBProjectionImpl[Offset, Envelope]]
     with InternalProjection {
   import DynamoDBProjectionImpl.extractOffsetPidSeqNr
+  import DynamoDBProjectionImpl.log
 
   private def copy(
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,
       restartBackoffOpt: Option[RestartSettings] = this.restartBackoffOpt,
       offsetStrategy: OffsetStrategy = this.offsetStrategy,
-      handlerStrategy: HandlerStrategy = this.handlerStrategy,
+      handlerStrategyFactory: OffsetStoreAccess => HandlerStrategy = this.handlerStrategyFactory,
       statusObserver: StatusObserver[Envelope] = this.statusObserver): DynamoDBProjectionImpl[Offset, Envelope] =
     new DynamoDBProjectionImpl(
       projectionId,
@@ -1004,9 +1100,9 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
       sourceProvider,
       restartBackoffOpt,
       offsetStrategy,
-      handlerStrategy,
+      handlerStrategyFactory,
       statusObserver,
-      offsetStore)
+      offsetStoreFactory)
 
   type ReadOffset = () => Future[Option[Offset]]
 
@@ -1034,9 +1130,10 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
   override def withGroup(
       groupAfterEnvelopes: Int,
       groupAfterDuration: FiniteDuration): DynamoDBProjectionImpl[Offset, Envelope] =
-    copy(handlerStrategy = handlerStrategy
-      .asInstanceOf[GroupedHandlerStrategy[Envelope]]
-      .copy(afterEnvelopes = Some(groupAfterEnvelopes), orAfterDuration = Some(groupAfterDuration)))
+    copy(handlerStrategyFactory = offsetStore =>
+      handlerStrategyFactory(offsetStore)
+        .asInstanceOf[GroupedHandlerStrategy[Envelope]]
+        .copy(afterEnvelopes = Some(groupAfterEnvelopes), orAfterDuration = Some(groupAfterDuration)))
 
   override def withRecoveryStrategy(
       recoveryStrategy: HandlerRecoveryStrategy): DynamoDBProjectionImpl[Offset, Envelope] = {
@@ -1054,14 +1151,18 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
   override def withStatusObserver(observer: StatusObserver[Envelope]): DynamoDBProjectionImpl[Offset, Envelope] =
     copy(statusObserver = observer)
 
-  private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] =
-    handlerStrategy.actorHandlerInit
+  private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = {
+    // FIXME see https://github.com/akka/akka-projection/issues/1393
+    None
+  }
 
   /**
    * INTERNAL API Return a RunningProjection
    */
-  override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
-    new DynamoDBInternalProjectionState(settingsOrDefaults).newRunningInstance()
+  override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection = {
+    val offsetStoreAccess = new OffsetStoreAccess(projectionId, offsetStoreFactory)
+    new DynamoDBInternalProjectionState(settingsOrDefaults, offsetStoreAccess).newRunningInstance()
+  }
 
   /**
    * INTERNAL API
@@ -1069,20 +1170,31 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
    * This method returns the projection Source mapped with user 'handler' function, but before any sink attached. This
    * is mainly intended to be used by the TestKit allowing it to attach a TestSink to it.
    */
-  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] =
-    new DynamoDBInternalProjectionState(settingsOrDefaults).mappedSource()
+  override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] = {
+    val offsetStoreAccess = new OffsetStoreAccess(projectionId, offsetStoreFactory)
+    new DynamoDBInternalProjectionState(settingsOrDefaults, offsetStoreAccess).mappedSource()
+  }
 
-  private class DynamoDBInternalProjectionState(settings: ProjectionSettings)(implicit val system: ActorSystem[_])
+  private class DynamoDBInternalProjectionState(settings: ProjectionSettings, offsetStoreAccess: OffsetStoreAccess)(
+      implicit val system: ActorSystem[_])
       extends InternalProjectionState[Offset, Envelope](
         projectionId,
         sourceProvider,
         offsetStrategy,
-        handlerStrategy,
+        () => handlerStrategyFactory(offsetStoreAccess),
         statusObserver,
         settings) {
 
     implicit val executionContext: ExecutionContext = system.executionContext
     override val logger: LoggingAdapter = Logging(system.classicSystem, classOf[DynamoDBProjectionImpl[_, _]])
+
+    def offsetStore(): DynamoDBOffsetStore =
+      offsetStoreAccess.offsetStore()
+
+    lazy val managementOffsetStore: DynamoDBOffsetStore =
+      offsetStoreFactory(s"mgmt-${UUID.randomUUID()}")
+
+    def uuid(): String = offsetStore().uuid
 
     private val isExactlyOnceWithSkip: Boolean =
       offsetStrategy match {
@@ -1091,10 +1203,10 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
       }
 
     override def readPaused(): Future[Boolean] =
-      offsetStore.readManagementState().map(_.exists(_.paused))
+      offsetStore().readManagementState().map(_.exists(_.paused))
 
     override def readOffsets(): Future[Option[Offset]] =
-      offsetStore.readOffset()
+      offsetStore().readOffset()
 
     // Called from InternalProjectionState.saveOffsetAndReport
     override def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done] = {
@@ -1110,22 +1222,34 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
       import DynamoDBProjectionImpl.FutureDone
       val envelope = projectionContext.envelope
 
-      if (offsetStore.isInflight(envelope) || isExactlyOnceWithSkip) {
-        val offset = extractOffsetPidSeqNr(projectionContext.offset, envelope)
-        offsetStore
-          .saveOffset(offset)
-          .map { done =>
-            try {
-              statusObserver.offsetProgress(projectionId, envelope)
-            } catch {
-              case NonFatal(_) => // ignore
-            }
-            getTelemetry().onOffsetStored(batchSize)
-            done
-          }
+      val store = offsetStore()
 
+      if (projectionContext.uuid == store.uuid) {
+        if (store.isInflight(envelope) || isExactlyOnceWithSkip) {
+          val offset = extractOffsetPidSeqNr(projectionContext.offset, envelope)
+          store
+            .saveOffset(offset)
+            .map { done =>
+              try {
+                statusObserver.offsetProgress(projectionId, envelope)
+              } catch {
+                case NonFatal(_) => // ignore
+              }
+              getTelemetry().onOffsetStored(batchSize)
+              done
+            }
+
+        } else {
+          FutureDone
+        }
       } else {
-        FutureDone
+        // uuid in context doesn't match current offset store, came from old incarnation
+        val offset = extractOffsetPidSeqNr(projectionContext.offset, envelope).pidSeqNr
+          .map { case (pid, seqNr) => s"$pid -> $seqNr" }
+          .getOrElse("")
+        throw throw new AttemptToUseStoppedOffsetStore(
+          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}]${toCorrelationLogText(store.uuid)} attempt to save offset " +
+          s"but DynamoDBOffsetStore was stopped: [$offset]")
       }
     }
 
@@ -1134,21 +1258,23 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
         batch: Seq[ProjectionContextImpl[Offset, Envelope]]): Future[Done] = {
       import DynamoDBProjectionImpl.FutureDone
 
+      val store = offsetStore()
+
       val acceptedContexts =
         if (isExactlyOnceWithSkip)
           batch.toVector
         else {
           batch.iterator.filter { ctx =>
             val env = ctx.envelope
-            offsetStore.isInflight(env)
+            store.isInflight(env)
           }.toVector
         }
 
       if (acceptedContexts.isEmpty) {
         FutureDone
-      } else {
+      } else if (batch.head.uuid == store.uuid) {
         val offsets = acceptedContexts.map(ctx => extractOffsetPidSeqNr(ctx.offset, ctx.envelope))
-        offsetStore
+        store
           .saveOffsets(offsets)
           .map { done =>
             val batchSize = batch.map { _.groupSize }.sum
@@ -1161,21 +1287,55 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
             getTelemetry().onOffsetStored(batchSize)
             done
           }
+      } else {
+        // uuid in context doesn't match current offset store, came from old incarnation
+        val offsets = batch
+          .flatMap(ctx => extractOffsetPidSeqNr(ctx.offset, ctx.envelope).pidSeqNr)
+          .map { case (pid, seqNr) => s"$pid -> $seqNr" }
+        throw throw new AttemptToUseStoppedOffsetStore(
+          s"${projectionId.name} [${store.minSlice}-${store.maxSlice}]${toCorrelationLogText(store.uuid)} attempt to save offsets " +
+          s"but DynamoDBOffsetStore was stopped: [${offsets.mkString(", ")}]")
       }
     }
 
-    private[projection] def newRunningInstance(): RunningProjection =
-      new DynamoDBRunningProjection(RunningProjection.withBackoff(() => this.mappedSource(), settings), this)
+    private[projection] def newRunningInstance(): RunningProjection = {
+      new DynamoDBRunningProjection(RunningProjection.withBackoff({ () =>
+        offsetStoreAccess.newOffsetStore()
+        this.mappedSource()
+      }, settings), this)
+    }
+
+    override def mappedSource(): Source[Done, Future[Done]] = {
+      super
+        .mappedSource(uuid())
+        .mapMaterializedValue { value =>
+          log.info(
+            "Starting projection instance {} [{}-{}], correlation [{}]",
+            projectionId.name,
+            offsetStore().minSlice,
+            offsetStore().maxSlice,
+            uuid())
+          value
+        }
+    }
   }
 
   private class DynamoDBRunningProjection(source: Source[Done, _], projectionState: DynamoDBInternalProjectionState)(
       implicit system: ActorSystem[_])
       extends RunningProjection
       with RunningProjectionManagement[Offset] {
+    import DynamoDBProjectionImpl.log
 
     private val streamDone = source.run()
 
     override def stop(): Future[Done] = {
+      val store = projectionState.offsetStore()
+      log.info(
+        "Stopping projection instance {} [{}-{}], correlation [{}]",
+        projectionId.name,
+        store.minSlice,
+        store.maxSlice,
+        store.uuid)
       projectionState.killSwitch.shutdown()
       // if the handler is retrying it will be aborted by this,
       // otherwise the stream would not be completed by the killSwitch until after all retries
@@ -1184,13 +1344,21 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
     }
 
     override def forcedStop(): Unit = {
+      val store = projectionState.offsetStore()
+      if (!store.isStopped())
+        log.info(
+          "Stopping projection instance forced {} [{}-{}], correlation [{}]",
+          projectionId.name,
+          store.minSlice,
+          store.maxSlice,
+          store.uuid)
       projectionState.killSwitch.shutdown()
       projectionState.abort.tryFailure(AbortProjectionException)
     }
 
     // RunningProjectionManagement
     override def getOffset(): Future[Option[Offset]] = {
-      offsetStore.getOffset()
+      projectionState.managementOffsetStore.getOffset()
     }
 
     // RunningProjectionManagement
@@ -1205,11 +1373,11 @@ private[projection] class DynamoDBProjectionImpl[Offset, Envelope](
 
     // RunningProjectionManagement
     override def getManagementState(): Future[Option[ManagementState]] =
-      offsetStore.readManagementState()
+      projectionState.managementOffsetStore.readManagementState()
 
     // RunningProjectionManagement
     override def setPaused(paused: Boolean): Future[Done] =
-      offsetStore.savePaused(paused)
+      projectionState.managementOffsetStore.savePaused(paused)
   }
 
 }

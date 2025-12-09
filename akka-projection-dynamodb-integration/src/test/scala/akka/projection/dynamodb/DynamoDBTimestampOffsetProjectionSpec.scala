@@ -354,10 +354,12 @@ class DynamoDBTimestampOffsetProjectionSpec
   private implicit val ec: ExecutionContext = system.executionContext
 
   private val logger = LoggerFactory.getLogger(getClass)
+
   private def createOffsetStore(
       projectionId: ProjectionId,
-      sourceProvider: TestTimestampSourceProvider): DynamoDBOffsetStore =
-    new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      sourceProvider: BySlicesSourceProvider): DynamoDBOffsetStore =
+    new DynamoDBOffsetStore(projectionId, UUID.randomUUID().toString, Some(sourceProvider), system, settings, client)
+
   private val projectionTestKit = ProjectionTestKit(system)
 
   private val repository = new TestRepository()
@@ -726,8 +728,7 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val projectionRef = spawn(
         ProjectionBehavior(DynamoDBProjection
@@ -934,8 +935,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val projectionId = genRandomProjectionId()
       val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val result1 = new StringBuffer()
       val result2 = new StringBuffer()
@@ -1027,8 +1027,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val sourceProvider =
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val projectionRef = spawn(
         ProjectionBehavior(
@@ -1084,8 +1083,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val sourceProvider =
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val projectionRef = spawn(
         ProjectionBehavior(
@@ -1132,8 +1130,7 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       val (sourceProvider, sourceProbe) = createDynamicSourceProvider(allEnvelopes)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val projectionRef = spawn(ProjectionBehavior(DynamoDBProjection
         .atLeastOnce(projectionId, Some(testSettings), sourceProvider, handler = () => new ConcatHandler(repository))))
@@ -1182,8 +1179,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val (sourceProvider, sourceProbe) =
         createDynamicSourceProvider(allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val projectionRef = spawn(ProjectionBehavior(DynamoDBProjection
         .atLeastOnce(projectionId, Some(testSettings), sourceProvider, handler = () => new ConcatHandler(repository))))
@@ -1483,8 +1479,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val sourceProvider =
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val projectionRef = spawn(
         ProjectionBehavior(
@@ -1540,8 +1535,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val sourceProvider =
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val projectionRef = spawn(
         ProjectionBehavior(
@@ -1588,8 +1582,7 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       val sourceProvider = createSourceProvider(envelopes)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val projectionRef = spawn(
         ProjectionBehavior(DynamoDBProjection
@@ -1635,8 +1628,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val sourceProvider =
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val projectionRef = spawn(
         ProjectionBehavior(DynamoDBProjection
@@ -1813,8 +1805,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val sourceProvider =
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val handlerProbe = createTestProbe[String]("calls-to-handler")
 
@@ -1873,8 +1864,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val sourceProvider =
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val handlerProbe = createTestProbe[String]("calls-to-handler")
 
@@ -1923,8 +1913,7 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       val (sourceProvider, sourceProbe) = createDynamicSourceProvider(allEnvelopes)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val handlerProbe = createTestProbe[String]("calls-to-handler")
 
@@ -1982,8 +1971,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val (sourceProvider, sourceProbe) =
         createDynamicSourceProvider(allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val handlerProbe = createTestProbe[String]("calls-to-handler")
 
@@ -2104,8 +2092,7 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val result1 = new StringBuffer()
       val result2 = new StringBuffer()
@@ -2207,8 +2194,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val sourceProvider =
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val results = new ConcurrentHashMap[String, String]()
 
@@ -2277,8 +2263,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val sourceProvider =
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val results = new ConcurrentHashMap[String, String]()
 
@@ -2328,8 +2313,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val sourceProvider =
         createJavaSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val results = new ConcurrentHashMap[String, String]()
 
@@ -2399,8 +2383,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val sourceProvider =
         createJavaSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val results = new ConcurrentHashMap[String, String]()
 
@@ -2460,8 +2443,7 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       val (sourceProvider, sourceProbe) = createDynamicSourceProvider(allEnvelopes)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val results = new ConcurrentHashMap[String, String]()
 
@@ -2525,8 +2507,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val (sourceProvider, sourceProbe) =
         createDynamicSourceProvider(allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val results = new ConcurrentHashMap[String, String]()
 
@@ -2634,8 +2615,7 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val flowHandler =
         FlowWithContext[EventEnvelope[String], ProjectionContext]
@@ -2730,8 +2710,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val sourceProvider =
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       offsetShouldBeEmpty()
 
@@ -2796,8 +2775,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val sourceProvider =
         createSourceProviderWithMoreEnvelopes(envelopes, allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       offsetShouldBeEmpty()
 
@@ -2850,8 +2828,7 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       val (sourceProvider, sourceProbe) = createDynamicSourceProvider(allEnvelopes)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val flowHandler =
         FlowWithContext[EventEnvelope[String], ProjectionContext]
@@ -2909,8 +2886,7 @@ class DynamoDBTimestampOffsetProjectionSpec
       val (sourceProvider, sourceProbe) =
         createDynamicSourceProvider(allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
-      implicit val offsetStore: DynamoDBOffsetStore =
-        new DynamoDBOffsetStore(projectionId, Some(sourceProvider), system, settings, client)
+      implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       val flowHandler =
         FlowWithContext[EventEnvelope[String], ProjectionContext]

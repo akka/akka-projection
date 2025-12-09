@@ -12,7 +12,9 @@ import akka.projection.BySlicesSourceProvider
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.dynamodb.DynamoDBProjectionSettings
+import akka.projection.dynamodb.internal.DynamoDBOffsetStore
 import akka.projection.dynamodb.internal.DynamoDBProjectionImpl
+import akka.projection.dynamodb.internal.DynamoDBProjectionImpl.OffsetStoreAccess
 import akka.projection.internal.AtLeastOnce
 import akka.projection.internal.ExactlyOnce
 import akka.projection.internal.FlowHandlerStrategy
@@ -51,15 +53,17 @@ object DynamoDBProjection {
     val dynamodbSettings = settings.getOrElse(DynamoDBProjectionSettings(system))
     val client = ClientProvider(system).clientFor(dynamodbSettings.useClient)
 
-    val offsetStore =
-      DynamoDBProjectionImpl.createOffsetStore(
-        projectionId,
-        timestampOffsetBySlicesSourceProvider(sourceProvider),
-        dynamodbSettings,
-        client)
+    val offsetStoreFactory: String => DynamoDBOffsetStore =
+      uuid =>
+        DynamoDBProjectionImpl.createOffsetStore(
+          projectionId,
+          uuid,
+          timestampOffsetBySlicesSourceProvider(sourceProvider),
+          dynamodbSettings,
+          client)
 
-    val adaptedHandler =
-      DynamoDBProjectionImpl.adaptedHandlerForAtLeastOnce(sourceProvider, handler, offsetStore)(
+    def adaptedHandler(storeAccess: OffsetStoreAccess) =
+      DynamoDBProjectionImpl.adaptedHandlerForAtLeastOnce(sourceProvider, handler, storeAccess.offsetStore())(
         system.executionContext,
         system)
 
@@ -70,9 +74,9 @@ object DynamoDBProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
-      handlerStrategy = SingleHandlerStrategy(adaptedHandler),
+      handlerStrategyFactory = storeAccess => SingleHandlerStrategy(adaptedHandler(storeAccess)),
       NoopStatusObserver,
-      offsetStore)
+      offsetStoreFactory)
   }
 
   /**
@@ -91,15 +95,17 @@ object DynamoDBProjection {
     val dynamodbSettings = settings.getOrElse(DynamoDBProjectionSettings(system))
     val client = ClientProvider(system).clientFor(dynamodbSettings.useClient)
 
-    val offsetStore =
-      DynamoDBProjectionImpl.createOffsetStore(
-        projectionId,
-        timestampOffsetBySlicesSourceProvider(sourceProvider),
-        dynamodbSettings,
-        client)
+    val offsetStoreFactory: String => DynamoDBOffsetStore =
+      uuid =>
+        DynamoDBProjectionImpl.createOffsetStore(
+          projectionId,
+          uuid,
+          timestampOffsetBySlicesSourceProvider(sourceProvider),
+          dynamodbSettings,
+          client)
 
-    val adaptedHandler =
-      DynamoDBProjectionImpl.adaptedHandlerForExactlyOnce(sourceProvider, handler, offsetStore)(
+    def adaptedHandler(storeAccess: OffsetStoreAccess) =
+      DynamoDBProjectionImpl.adaptedHandlerForExactlyOnce(sourceProvider, handler, storeAccess.offsetStore())(
         system.executionContext,
         system)
 
@@ -110,9 +116,9 @@ object DynamoDBProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = ExactlyOnce(),
-      handlerStrategy = SingleHandlerStrategy(adaptedHandler),
+      handlerStrategyFactory = storeAccess => SingleHandlerStrategy(adaptedHandler(storeAccess)),
       NoopStatusObserver,
-      offsetStore)
+      offsetStoreFactory)
   }
 
   /**
@@ -135,15 +141,17 @@ object DynamoDBProjection {
     val dynamodbSettings = settings.getOrElse(DynamoDBProjectionSettings(system))
     val client = ClientProvider(system).clientFor(dynamodbSettings.useClient)
 
-    val offsetStore =
-      DynamoDBProjectionImpl.createOffsetStore(
-        projectionId,
-        timestampOffsetBySlicesSourceProvider(sourceProvider),
-        dynamodbSettings,
-        client)
+    val offsetStoreFactory: String => DynamoDBOffsetStore =
+      uuid =>
+        DynamoDBProjectionImpl.createOffsetStore(
+          projectionId,
+          uuid,
+          timestampOffsetBySlicesSourceProvider(sourceProvider),
+          dynamodbSettings,
+          client)
 
-    val adaptedHandler =
-      DynamoDBProjectionImpl.adaptedHandlerForExactlyOnceGrouped(sourceProvider, handler, offsetStore)(
+    def adaptedHandler(storeAccess: OffsetStoreAccess) =
+      DynamoDBProjectionImpl.adaptedHandlerForExactlyOnceGrouped(sourceProvider, handler, storeAccess.offsetStore())(
         system.executionContext,
         system)
 
@@ -154,9 +162,9 @@ object DynamoDBProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = ExactlyOnce(),
-      handlerStrategy = GroupedHandlerStrategy(adaptedHandler),
+      handlerStrategyFactory = storeAccess => GroupedHandlerStrategy(adaptedHandler(storeAccess)),
       NoopStatusObserver,
-      offsetStore)
+      offsetStoreFactory)
   }
 
   /**
@@ -179,15 +187,17 @@ object DynamoDBProjection {
     val dynamodbSettings = settings.getOrElse(DynamoDBProjectionSettings(system))
     val client = ClientProvider(system).clientFor(dynamodbSettings.useClient)
 
-    val offsetStore =
-      DynamoDBProjectionImpl.createOffsetStore(
-        projectionId,
-        timestampOffsetBySlicesSourceProvider(sourceProvider),
-        dynamodbSettings,
-        client)
+    val offsetStoreFactory: String => DynamoDBOffsetStore =
+      uuid =>
+        DynamoDBProjectionImpl.createOffsetStore(
+          projectionId,
+          uuid,
+          timestampOffsetBySlicesSourceProvider(sourceProvider),
+          dynamodbSettings,
+          client)
 
-    val adaptedHandler =
-      DynamoDBProjectionImpl.adaptedHandlerForAtLeastOnceGrouped(sourceProvider, handler, offsetStore)(
+    def adaptedHandler(storeAccess: OffsetStoreAccess) =
+      DynamoDBProjectionImpl.adaptedHandlerForAtLeastOnceGrouped(sourceProvider, handler, storeAccess.offsetStore())(
         system.executionContext,
         system)
 
@@ -198,9 +208,9 @@ object DynamoDBProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = OffsetStoredByHandler(),
-      handlerStrategy = GroupedHandlerStrategy(adaptedHandler),
+      handlerStrategyFactory = storeAccess => GroupedHandlerStrategy(adaptedHandler(storeAccess)),
       NoopStatusObserver,
-      offsetStore)
+      offsetStoreFactory)
   }
 
   /**
@@ -234,15 +244,21 @@ object DynamoDBProjection {
     val dynamodbSettings = settings.getOrElse(DynamoDBProjectionSettings(system))
     val client = ClientProvider(system).clientFor(dynamodbSettings.useClient)
 
-    val offsetStore =
-      DynamoDBProjectionImpl.createOffsetStore(
-        projectionId,
-        timestampOffsetBySlicesSourceProvider(sourceProvider),
-        dynamodbSettings,
-        client)
+    val offsetStoreFactory: String => DynamoDBOffsetStore =
+      uuid =>
+        DynamoDBProjectionImpl.createOffsetStore(
+          projectionId,
+          uuid,
+          timestampOffsetBySlicesSourceProvider(sourceProvider),
+          dynamodbSettings,
+          client)
 
-    val adaptedHandler =
-      DynamoDBProjectionImpl.adaptedHandlerForFlow(sourceProvider, handler, offsetStore, dynamodbSettings)(system)
+    def adaptedHandler(storeAccess: OffsetStoreAccess) =
+      DynamoDBProjectionImpl.adaptedHandlerForFlow(
+        sourceProvider,
+        handler,
+        storeAccess.offsetStore(),
+        dynamodbSettings)(system)
 
     new DynamoDBProjectionImpl(
       projectionId,
@@ -251,9 +267,9 @@ object DynamoDBProjection {
       sourceProvider,
       restartBackoffOpt = None,
       offsetStrategy = AtLeastOnce(),
-      handlerStrategy = FlowHandlerStrategy(adaptedHandler),
+      handlerStrategyFactory = storeAccess => FlowHandlerStrategy(adaptedHandler(storeAccess)),
       NoopStatusObserver,
-      offsetStore)
+      offsetStoreFactory)
   }
 
   private def timestampOffsetBySlicesSourceProvider(

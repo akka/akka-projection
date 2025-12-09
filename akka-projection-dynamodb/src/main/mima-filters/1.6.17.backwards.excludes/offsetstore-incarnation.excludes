@@ -1,0 +1,2 @@
+# internals
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.dynamodb.internal.DynamoDBProjectionImpl#DynamoDBInternalProjectionState.this")

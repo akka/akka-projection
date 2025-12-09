@@ -70,7 +70,6 @@ import akka.projection.r2dbc.internal.R2dbcOffsetStore.AttemptToUseStoppedOffset
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.RejectedEnvelope
 import akka.projection.r2dbc.internal.R2dbcProjectionImpl.OffsetStoreAccess
 import akka.projection.r2dbc.internal.R2dbcProjectionImpl.extractOffsetPidSeqNr
-import akka.projection.r2dbc.internal.R2dbcProjectionImpl.log
 import akka.projection.r2dbc.scaladsl.R2dbcHandler
 import akka.projection.r2dbc.scaladsl.R2dbcSession
 import akka.projection.scaladsl
@@ -1160,6 +1159,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
     with javadsl.AtLeastOnceFlowProjection[Offset, Envelope]
     with SettingsImpl[R2dbcProjectionImpl[Offset, Envelope]]
     with InternalProjection {
+  import R2dbcProjectionImpl.log
 
   private def copy(
       settingsOpt: Option[ProjectionSettings] = this.settingsOpt,

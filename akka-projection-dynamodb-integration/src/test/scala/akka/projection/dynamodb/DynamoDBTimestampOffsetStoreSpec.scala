@@ -106,6 +106,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       eventTimestampQueryClock: TestClock = clock) =
     new DynamoDBOffsetStore(
       projectionId,
+      UUID.randomUUID().toString,
       Some(new TestTimestampSourceProvider(0, persistenceExt.numberOfSlices - 1, eventTimestampQueryClock)),
       system,
       customSettings,
@@ -473,6 +474,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       val offsetStore0 =
         new DynamoDBOffsetStore(
           projectionId0,
+          UUID.randomUUID().toString,
           Some(new TestTimestampSourceProvider(0, persistenceExt.numberOfSlices - 1, clock)),
           system,
           settings,
@@ -494,6 +496,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       val offsetStore1 =
         new DynamoDBOffsetStore(
           projectionId1,
+          UUID.randomUUID().toString,
           Some(new TestTimestampSourceProvider(0, 511, clock)),
           system,
           settings,
@@ -506,6 +509,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       val offsetStore2 =
         new DynamoDBOffsetStore(
           projectionId2,
+          UUID.randomUUID().toString,
           Some(new TestTimestampSourceProvider(512, 1023, clock)),
           system,
           settings,
@@ -1225,12 +1229,14 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       val projectionId3 = ProjectionId(projectionId1.name, "512-1023")
       val offsetStore1 = new DynamoDBOffsetStore(
         projectionId1,
+        UUID.randomUUID().toString,
         Some(new TestTimestampSourceProvider(512, 767, clock)),
         system,
         settings,
         client)
       val offsetStore2 = new DynamoDBOffsetStore(
         projectionId2,
+        UUID.randomUUID().toString,
         Some(new TestTimestampSourceProvider(768, 1023, clock)),
         system,
         settings,
@@ -1256,6 +1262,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       // after downscaling
       val offsetStore3 = new DynamoDBOffsetStore(
         projectionId3,
+        UUID.randomUUID().toString,
         Some(new TestTimestampSourceProvider(512, 1023, clock)),
         system,
         settings,
@@ -1312,6 +1319,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       def offsetStore(minSlice: Int, maxSlice: Int) =
         new DynamoDBOffsetStore(
           ProjectionId(projectionName, s"$minSlice-$maxSlice"),
+          UUID.randomUUID().toString,
           Some(new TestTimestampSourceProvider(minSlice, maxSlice, eventTimestampQueryClock)),
           system,
           settings,
