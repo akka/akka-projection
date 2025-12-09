@@ -218,13 +218,11 @@ private[projection] object R2dbcOffsetStore {
   object Validation {
     case object Accepted extends Validation
     case object Duplicate extends Validation
-    case object RejectedSeqNr extends Validation
-    case object RejectedBacktrackingSeqNr extends Validation
+    final case class RejectedSeqNr(previousSeqNr: SeqNr) extends Validation
+    final case class RejectedBacktrackingSeqNr(previousSeqNr: SeqNr) extends Validation
 
     val FutureAccepted: Future[Validation] = Future.successful(Accepted)
     val FutureDuplicate: Future[Validation] = Future.successful(Duplicate)
-    val FutureRejectedSeqNr: Future[Validation] = Future.successful(RejectedSeqNr)
-    val FutureRejectedBacktrackingSeqNr: Future[Validation] = Future.successful(RejectedBacktrackingSeqNr)
     val SourceAccepted: Source[Validation, NotUsed] = Source.single(Accepted)
 
     def acceptReset(candidate: Record, reference: Record, acceptAfter: JDuration): Boolean =
@@ -914,6 +912,12 @@ private[projection] class R2dbcOffsetStore(
               recordWithOffset.offset)
         }
 
+        def rejectedPrevSeqNr: SeqNr = {
+          // prevSeqNr can be higher than seqNr when we've detected a seq number reset by not marking as
+          // duplicate, but it was rejected when seq number != 1 -- trigger replay from 1 in this case
+          if (prevSeqNr >= seqNr) 0L else prevSeqNr
+        }
+
         if (prevSeqNr > 0) {
           // expecting seqNr to be +1 of previously known
           val ok = seqNr == prevSeqNr + 1
@@ -941,14 +945,13 @@ private[projection] class R2dbcOffsetStore(
             // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
             // and SourceProvider supports it.
             logUnexpected()
-            FutureRejectedSeqNr
+            Future.successful(RejectedSeqNr(rejectedPrevSeqNr))
           } else {
             // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
             // and SourceProvider supports it.
             // Otherwise this will result in projection restart (with normal configuration).
             logUnexpected()
-            // This will result in projection restart (with normal configuration)
-            FutureRejectedBacktrackingSeqNr
+            Future.successful(RejectedBacktrackingSeqNr(rejectedPrevSeqNr))
           }
         } else if (seqNr == 1) {
           // always accept first event if no other event for that pid has been seen
@@ -957,7 +960,9 @@ private[projection] class R2dbcOffsetStore(
           // always accept starting from snapshots when there was no previous event seen
           FutureAccepted
         } else {
-          validateEventTimestamp(currentState, recordWithOffset)
+          // no offset stored or inFlight for for this persistence id, continue validation by looking at timestamp
+          // of previous event
+          validateEventTimestamp(currentState, recordWithOffset, prevSeqNr)
         }
       } else {
         // strictSeqNr == false is for durable state where each revision might not be visible
@@ -979,7 +984,10 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
-  private def validateEventTimestamp(currentState: State, recordWithOffset: RecordWithOffset) = {
+  private def validateEventTimestamp(
+      currentState: State,
+      recordWithOffset: RecordWithOffset,
+      prevSeqNr: SeqNr): Future[Validation] = {
     import Validation._
     val pid = recordWithOffset.record.pid
     val seqNr = recordWithOffset.record.seqNr
@@ -1014,7 +1022,7 @@ private[projection] class R2dbcOffsetStore(
             seqNr,
             pid,
             recordWithOffset.offset)
-          RejectedSeqNr
+          RejectedSeqNr(prevSeqNr)
         } else if (recordWithOffset.fromBacktracking) {
           // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
           // and SourceProvider supports it.
@@ -1028,7 +1036,7 @@ private[projection] class R2dbcOffsetStore(
             previousTimestamp,
             acceptBefore.fold("none")(_.toString),
             slice)
-          RejectedBacktrackingSeqNr
+          RejectedBacktrackingSeqNr(prevSeqNr)
         } else {
           // This may happen rather frequently when using `publish-events`, after reconnecting and such.
           logger.debug(
@@ -1040,7 +1048,7 @@ private[projection] class R2dbcOffsetStore(
           // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
           // and SourceProvider supports it.
           // Backtracking will emit missed event again.
-          RejectedSeqNr
+          RejectedSeqNr(prevSeqNr)
         }
       case None =>
         // previous not found, could have been deleted
