@@ -275,7 +275,8 @@ import akka.projection.internal.CorrelationId
                   env.persistenceId,
                   env.sequenceNr,
                   env.slice,
-                  ProtobufProtocolConversions.offsetToProtoOffset(env.offset)))))
+                  ProtobufProtocolConversions.offsetToProtoOffset(env.offset),
+                  env.source))))
         case _ =>
           import system.executionContext
           transformAndEncodeEvent(producerSource.transformation, env, wireSerialization(producerSource))
@@ -307,7 +308,8 @@ import akka.projection.internal.CorrelationId
                       env.persistenceId,
                       env.sequenceNr,
                       env.slice,
-                      ProtobufProtocolConversions.offsetToProtoOffset(env.offset))))
+                      ProtobufProtocolConversions.offsetToProtoOffset(env.offset),
+                      env.source)))
             }
       }
     }

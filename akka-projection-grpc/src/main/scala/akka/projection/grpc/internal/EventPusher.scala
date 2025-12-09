@@ -146,7 +146,8 @@ private[akka] object EventPusher {
                         persistenceId = envelopeWithMetadata.persistenceId,
                         seqNr = envelopeWithMetadata.sequenceNr,
                         slice = envelopeWithMetadata.slice,
-                        offset = offsetToProtoOffset(envelopeWithMetadata.offset)))),
+                        offset = offsetToProtoOffset(envelopeWithMetadata.offset),
+                        envelopeWithMetadata.source))),
                       projectionContext)
                 }
             }

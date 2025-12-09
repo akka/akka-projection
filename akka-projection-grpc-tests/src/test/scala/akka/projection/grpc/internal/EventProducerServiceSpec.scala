@@ -167,7 +167,7 @@ object EventProducerServiceSpec {
       pid.entityTypeHint,
       slice,
       filtered = false,
-      source = "",
+      source = source,
       tags)
 
     if (source == "BT")
@@ -310,6 +310,8 @@ class EventProducerServiceSpec
       testPublisher.sendNext(env1)
       val env2 = createEnvelope(nextPid(entityType1), 2L, "e-2", tags = Set("tag-a", "tag-b"))
       testPublisher.sendNext(env2)
+      val env1b = createEnvelope(nextPid(entityType1), 1L, "e-1", source = "BT")
+      testPublisher.sendNext(env1b)
 
       val out1 = probe.expectNext()
       out1.getEvent.persistenceId shouldBe env1.persistenceId
@@ -319,6 +321,12 @@ class EventProducerServiceSpec
       out2.getEvent.persistenceId shouldBe env2.persistenceId
       out2.getEvent.seqNr shouldBe env2.sequenceNr
       out2.getEvent.tags.toSet shouldBe Set("tag-a", "tag-b")
+
+      val out3 = probe.expectNext()
+      out3.getEvent.persistenceId shouldBe env1b.persistenceId
+      out3.getEvent.seqNr shouldBe env1b.sequenceNr
+      out3.getEvent.source shouldBe "BT"
+      out3.getEvent.payload shouldBe None
     }
 
     "emit filtered events" in {
@@ -339,23 +347,43 @@ class EventProducerServiceSpec
       // will be filtered by the transformation
       val env2 = createEnvelope(pid, 2L, "e-2*")
       testPublisher.sendNext(env2)
-      val env3 = createEnvelope(pid, 2L, "e-2")
+      val env3 = createEnvelope(pid, 3L, "e-3")
       testPublisher.sendNext(env3)
+      val env4 = createEnvelope(pid, 4L, "e-4", source = "PS")
+      testPublisher.sendNext(env4)
+      // will be filtered by the transformation
+      val env5 = createEnvelope(pid, 5L, "e-5*", source = "PS")
+      testPublisher.sendNext(env5)
 
       val out1 = probe.expectNext()
       out1.message.isEvent shouldBe true
       out1.getEvent.persistenceId shouldBe env1.persistenceId
       out1.getEvent.seqNr shouldBe env1.sequenceNr
+      out1.getEvent.source shouldBe ""
 
       val out2 = probe.expectNext()
       out2.message.isFilteredEvent shouldBe true
       out2.getFilteredEvent.persistenceId shouldBe env2.persistenceId
       out2.getFilteredEvent.seqNr shouldBe env2.sequenceNr
+      out2.getFilteredEvent.source shouldBe ""
 
       val out3 = probe.expectNext()
       out3.message.isEvent shouldBe true
       out3.getEvent.persistenceId shouldBe env3.persistenceId
       out3.getEvent.seqNr shouldBe env3.sequenceNr
+      out3.getEvent.source shouldBe ""
+
+      val out4 = probe.expectNext()
+      out4.message.isEvent shouldBe true
+      out4.getEvent.persistenceId shouldBe env4.persistenceId
+      out4.getEvent.seqNr shouldBe env4.sequenceNr
+      out4.getEvent.source shouldBe "PS"
+
+      val out5 = probe.expectNext()
+      out5.message.isFilteredEvent shouldBe true
+      out5.getFilteredEvent.persistenceId shouldBe env5.persistenceId
+      out5.getFilteredEvent.seqNr shouldBe env5.sequenceNr
+      out5.getFilteredEvent.source shouldBe "PS"
     }
 
     "intercept and fail requests" in {
