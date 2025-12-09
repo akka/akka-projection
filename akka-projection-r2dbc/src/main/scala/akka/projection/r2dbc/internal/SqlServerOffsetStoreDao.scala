@@ -108,7 +108,7 @@ private[projection] class SqlServerOffsetStoreDao(
       .bind("@projectionKey", projectionId.key)
   }
 
-  private def whereTimestampConsumed(d: Duration): String =
+  override protected def whereTimestampConsumed(d: Duration): String =
     if (d.isZero)
       ""
     else

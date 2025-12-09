@@ -93,7 +93,7 @@ private[projection] class PostgresOffsetStoreDao(
     """
   }
 
-  private def whereTimestampConsumed(d: Duration): String =
+  protected def whereTimestampConsumed(d: Duration): String =
     if (d.isZero)
       ""
     else
