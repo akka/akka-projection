@@ -245,12 +245,6 @@ The handler could send to a Kafka topic or integrate with something else.
 There are several examples of such `Handler` in the @ref:[documentation for Cassandra Projections](cassandra.md#handler).
 Same type of handlers can be used with `R2dbcProjection` instead of `CassandraProjection`.
 
-### Actor handler
-
-A good alternative for advanced state management is to implement the handler as an
-@extref:[actor](akka:typed/actors.html) which is described in
-@ref:[Processing with Actor](actor.md).
-
 ### Flow handler
 
 An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes,
@@ -282,7 +276,6 @@ The supported offset types of the `R2dbcProjection` are:
 ## Publish events for lower latency
 
 See @extref:[eventsBySlices documentation](akka-persistence-r2dbc:query.html#publish-events-for-lower-latency-of-eventsbyslices).
-
 
 ## Multiple plugins
 
@@ -323,3 +316,22 @@ Scala
 
 Java
 :  @@snip [Example.java](/akka-projection-r2dbc/src/test/java/jdocs/home/projection/R2dbcProjectionDocExample.java){#customConnectionFactory}
+
+## Offset deletion
+
+Deletion of timestamp offsets is configured with:
+
+@@snip [conf](/akka-projection-r2dbc/src/test/scala/docs/home/projection/R2dbcProjectionDocExample.scala){#delete-config}
+
+The deletion criteria is a combination of `delete-after` and `delete-after-consumed`.
+Delete when offset timestamp (event timestamp) is older than `delete-after` and the timestamp when the projection
+consumed the event is older than `delete-after-consumed`.
+
+When rebuilding a projection from old events it is best to keep all offsets during the rebuild phase. This is handled
+by the `delete-after-consumed`. The offsets can also be useful after a rebuild to confirm that all events have been
+processed.
+
+For compatibility with older versions the default for `delete-after` is 1 day, but if database storage size isn't a
+concern it is more efficient and safer to keep offsets for a longer time, such as 10 days.
+
+To disable offset deletion, and keep all offsets, you can set `delete-interval = off`. 

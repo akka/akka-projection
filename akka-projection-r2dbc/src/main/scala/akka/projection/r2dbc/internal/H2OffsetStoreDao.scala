@@ -4,6 +4,8 @@
 
 package akka.projection.r2dbc.internal
 
+import java.time.Duration
+
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.persistence.r2dbc.internal.R2dbcExecutor
@@ -30,6 +32,12 @@ private[projection] final class H2OffsetStoreDao(
       KEY(projection_name, projection_key)
       VALUES (?,?,?,?,?,?)
      """
+
+  override protected def whereTimestampConsumed(d: Duration): String =
+    if (d.isZero)
+      ""
+    else
+      s"AND timestamp_consumed < CURRENT_TIMESTAMP - interval '${d.toMillis.toDouble / 1000}' second"
 
   override protected def createUpdateManagementStateSql(): String =
     sql"""

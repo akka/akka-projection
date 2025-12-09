@@ -296,11 +296,6 @@ invoked concurrently, which is not how it is intended to be used. Each projectio
 instance.
 @@@
 
-### Actor handler
-
-A good alternative for advanced state management is to implement the handler as an
-@extref:[actor](akka:typed/actors.html) which is described in @ref:[Processing with Actor](actor.md).
-
 ### Flow handler
 
 An Akka Streams `FlowWithContext` can be used instead of a handler for processing the envelopes, which is described in

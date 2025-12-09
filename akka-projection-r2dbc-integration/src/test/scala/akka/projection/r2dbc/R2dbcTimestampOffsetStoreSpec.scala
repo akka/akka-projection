@@ -1179,6 +1179,7 @@ class R2dbcTimestampOffsetStoreSpec
       val deleteSettings = settings
         .withTimeWindow(100.seconds)
         .withDeleteAfter(100.seconds)
+        .withDeleteAfterConsumed(Duration.Zero)
       import deleteSettings._
       val offsetStore = createOffsetStore(projectionId, deleteSettings)
 
@@ -1236,6 +1237,7 @@ class R2dbcTimestampOffsetStoreSpec
       val deleteSettings = settings
         .withTimeWindow(100.seconds)
         .withDeleteAfter(100.seconds)
+        .withDeleteAfterConsumed(Duration.Zero)
       import deleteSettings._
       val offsetStore = createOffsetStore(projectionId, deleteSettings)
 
@@ -1301,6 +1303,7 @@ class R2dbcTimestampOffsetStoreSpec
       val deleteSettings = settings
         .withTimeWindow(JDuration.ofSeconds(deleteAfter))
         .withDeleteAfter(JDuration.ofSeconds(deleteAfter))
+        .withDeleteAfterConsumed(Duration.Zero)
         .withDeleteInterval(JDuration.ofHours(1)) // don't run the scheduled deletes
       val offsetStore = createOffsetStore(projectionId, deleteSettings)
 
@@ -1333,6 +1336,7 @@ class R2dbcTimestampOffsetStoreSpec
         settings
           .withTimeWindow(10.seconds)
           .withDeleteAfter(100.seconds)
+          .withDeleteAfterConsumed(Duration.Zero)
           .withDeleteInterval(JDuration.ofMillis(500))
       import deleteSettings._
       val offsetStore = createOffsetStore(projectionId, deleteSettings)
@@ -1372,6 +1376,7 @@ class R2dbcTimestampOffsetStoreSpec
       val deleteSettings = settings
         .withTimeWindow(100.seconds)
         .withDeleteAfter(100.seconds)
+        .withDeleteAfterConsumed(Duration.Zero)
       val offsetStore = createOffsetStore(projectionId, deleteSettings)
 
       import deleteSettings.deleteAfter
@@ -1436,6 +1441,7 @@ class R2dbcTimestampOffsetStoreSpec
       val deleteSettings = settings
         .withTimeWindow(100.seconds)
         .withDeleteAfter(100.seconds)
+        .withDeleteAfterConsumed(Duration.Zero)
       val offsetStore = createOffsetStore(projectionId, deleteSettings)
 
       import deleteSettings.deleteAfter
@@ -1529,6 +1535,77 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.getState().byPid.keySet shouldBe Set(p8, p9, p10, p11, p12)
       offsetStore.readOffset().futureValue // reload from database
       offsetStore.getState().byPid.keySet shouldBe Set(p8, p9, p10, p11, p12)
+    }
+
+    "delete old records but not until consumed time is old enough" in {
+      val projectionId = genRandomProjectionId()
+      val deleteSettings = settings
+        .withTimeWindow(100.seconds)
+        .withDeleteAfter(100.seconds)
+        .withDeleteAfterConsumed(3.seconds) // delete-after-consumed is important for this test
+      import deleteSettings._
+      val offsetStore = createOffsetStore(projectionId, deleteSettings)
+
+      val startTime = TestClock.nowMicros().instant()
+      val t0 = startTime.minusSeconds(3600) // first event, one hour ago
+      log.debug("First event time [{}], start time [{}]", t0, startTime)
+
+      // these pids have the same slice 645, otherwise it will keep one for each slice
+      val p1 = "p500"
+      val p2 = "p621"
+      val p3 = "p742"
+      val p4 = "p863"
+      val p5 = "p984"
+      val p6 = "p3080"
+      val p7 = "p4290"
+      val p8 = "p20180"
+
+      offsetStore.saveOffset(OffsetPidSeqNr(TimestampOffset(t0, Map(p1 -> 1L)), p1, 1L)).futureValue
+      offsetStore
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(t0.plusSeconds(1), Map(p2 -> 1L)), p2, 1L))
+        .futureValue
+      offsetStore
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(t0.plusSeconds(2), Map(p3 -> 1L)), p3, 1L))
+        .futureValue
+      offsetStore
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(t0.plusSeconds(3), Map(p4 -> 1L)), p4, 1L))
+        .futureValue
+      clock.tick(JDuration.ofMillis(1))
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0
+      offsetStore.readOffset().futureValue // this will load from database
+      offsetStore.getState().size shouldBe 4
+
+      offsetStore
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(t0.plus(deleteAfter.minusSeconds(2)), Map(p5 -> 1L)), p5, 1L))
+        .futureValue
+      offsetStore
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(t0.plus(deleteAfter.minusSeconds(1)), Map(p6 -> 1L)), p6, 1L))
+        .futureValue
+      clock.tick(JDuration.ofMillis(1))
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0
+      offsetStore.readOffset().futureValue // this will load from database
+      offsetStore.getState().size shouldBe 6
+
+      offsetStore
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(t0.plus(deleteAfter.plusSeconds(1)), Map(p7 -> 1L)), p7, 1L))
+        .futureValue
+      offsetStore
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(t0.plus(deleteAfter.plusSeconds(3)), Map(p8 -> 1L)), p8, 1L))
+        .futureValue
+      // the first 3 offset timestamps are old enough for deletion, but consumed time has not elapsed
+      (System.currentTimeMillis() - startTime.toEpochMilli) should be < deleteAfterConsumed.toMillis
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 0
+      // Note that the consumed timestamp is created from the database.
+      // There is a risk of clock skew between database clock and local clock in this test,
+      // but hopefully good enough with 1 s margin.
+      Thread.sleep(deleteAfterConsumed.toMillis - (System.currentTimeMillis() - startTime.toEpochMilli) + 1000)
+      // now old enough, but must also trigger some activity in the slice
+      offsetStore
+        .saveOffset(OffsetPidSeqNr(TimestampOffset(t0.plus(deleteAfter.plusSeconds(3)), Map(p8 -> 2L)), p8, 2L))
+        .futureValue
+      offsetStore.deleteOldTimestampOffsets().futureValue shouldBe 3
+      offsetStore.readOffset().futureValue // this will load from database
+      offsetStore.getState().byPid.keySet shouldBe Set(p4, p5, p6, p7, p8)
     }
 
     "set offset" in {
@@ -1664,7 +1741,7 @@ class R2dbcTimestampOffsetStoreSpec
           UUID.randomUUID().toString,
           Some(new TestTimestampSourceProvider(minSlice, maxSlice, clock)),
           system,
-          settings.withTimeWindow(10.seconds).withDeleteAfter(10.seconds),
+          settings.withTimeWindow(10.seconds).withDeleteAfter(10.seconds).withDeleteAfterConsumed(Duration.Zero),
           r2dbcExecutor)
 
       // two projections at higher scale

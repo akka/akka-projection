@@ -4,10 +4,10 @@
 
 package akka.projection.r2dbc.internal
 
+import java.time.Duration
 import java.time.Instant
 
 import io.r2dbc.spi.Statement
-
 import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.persistence.r2dbc.internal.R2dbcExecutor
@@ -108,18 +108,22 @@ private[projection] class SqlServerOffsetStoreDao(
       .bind("@projectionKey", projectionId.key)
   }
 
-  override protected def deleteOldTimestampOffsetSql(): String = {
-    s"DELETE FROM $timestampOffsetTable WHERE slice = @slice AND projection_name = @projectionName AND timestamp_offset < @timestampOffset"
+  override protected def whereTimestampConsumed(d: Duration): String =
+    if (d.isZero)
+      ""
+    else
+      s"AND timestamp_consumed < DATEADD(MILLISECOND, -${settings.deleteAfterConsumed.toMillis}, GETDATE())"
+
+  override protected def deleteOldTimestampOffsetSql(deleteAfterConsumed: Duration): String = {
+    s"DELETE FROM $timestampOffsetTable WHERE slice = @slice AND projection_name = @projectionName AND " +
+    s"timestamp_offset < @timestampOffset AND timestamp_consumed < @timestampConsumed ${whereTimestampConsumed(deleteAfterConsumed)}"
   }
 
   override protected def bindDeleteOldTimestampOffsetSql(stmt: Statement, slice: Int, until: Instant): Statement = {
-
     stmt
       .bind("@slice", slice)
       .bind("@projectionName", projectionId.name)
       .bindTimestamp("@timestampOffset", until)
-
-    stmt
   }
 
 }

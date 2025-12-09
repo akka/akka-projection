@@ -293,4 +293,17 @@ object R2dbcProjectionDocExample {
     //#customConnectionFactory
   }
 
+  object OffsetDeletionConfig {
+    val config =
+      """
+      //#delete-config
+      akka.projection.r2dbc.offset-store {
+        delete-interval = 1 hour
+        delete-after = 10 days
+        delete-after-consumed = 9 days
+      }
+      //#delete-config
+      """
+  }
+
 }
