@@ -91,7 +91,8 @@ object ReplicationSettings {
       // no system config to get defaults from, repeating config file defaults
       edgeReplicationDeliveryRetries = 3,
       edgeReplicationDeliveryMinBackoff = 250.millis,
-      edgeReplicationDeliveryMaxBackoff = 5.seconds)
+      edgeReplicationDeliveryMaxBackoff = 5.seconds,
+      eventOriginFilterEnabled = true)
   }
 
   /**
@@ -153,7 +154,8 @@ object ReplicationSettings {
       edgeReplicationDeliveryMinBackoff =
         replicationConfig.getDuration("edge-replication-delivery-min-backoff").toScala,
       edgeReplicationDeliveryMaxBackoff =
-        replicationConfig.getDuration("edge-replication-delivery-max-backoff").toScala)
+        replicationConfig.getDuration("edge-replication-delivery-max-backoff").toScala,
+      eventOriginFilterEnabled = config.getBoolean("event-origin-filter-enabled"))
   }
 
 }
@@ -177,7 +179,8 @@ final class ReplicationSettings[Command] private (
     val initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria],
     val edgeReplicationDeliveryRetries: Int,
     val edgeReplicationDeliveryMinBackoff: FiniteDuration,
-    val edgeReplicationDeliveryMaxBackoff: FiniteDuration) {
+    val edgeReplicationDeliveryMaxBackoff: FiniteDuration,
+    val eventOriginFilterEnabled: Boolean) {
 
   require(
     !otherReplicas.exists(_.replicaId == selfReplicaId),
@@ -275,6 +278,9 @@ final class ReplicationSettings[Command] private (
   def withEdgeReplicationDeliveryMaxBackoff(maxBackoff: FiniteDuration): ReplicationSettings[Command] =
     copy(edgeReplicationDeliveryMaxBackoff = maxBackoff)
 
+  def withEventOriginFilterEnabled(enabled: Boolean): ReplicationSettings[Command] =
+    copy(eventOriginFilterEnabled = enabled)
+
   private def copy(
       selfReplicaId: ReplicaId = selfReplicaId,
       entityTypeKey: EntityTypeKey[Command] = entityTypeKey,
@@ -292,7 +298,8 @@ final class ReplicationSettings[Command] private (
       initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria] = initialConsumerFilter,
       edgeReplicationDeliveryRetries: Int = edgeReplicationDeliveryRetries,
       edgeReplicationDeliveryMinBackoff: FiniteDuration = edgeReplicationDeliveryMinBackoff,
-      edgeReplicationDeliveryMaxBackoff: FiniteDuration = edgeReplicationDeliveryMaxBackoff) =
+      edgeReplicationDeliveryMaxBackoff: FiniteDuration = edgeReplicationDeliveryMaxBackoff,
+      eventOriginFilterEnabled: Boolean = eventOriginFilterEnabled) =
     new ReplicationSettings[Command](
       selfReplicaId,
       entityTypeKey,
@@ -309,7 +316,8 @@ final class ReplicationSettings[Command] private (
       initialConsumerFilter,
       edgeReplicationDeliveryRetries,
       edgeReplicationDeliveryMinBackoff,
-      edgeReplicationDeliveryMaxBackoff)
+      edgeReplicationDeliveryMaxBackoff,
+      eventOriginFilterEnabled)
 
   override def toString = s"ReplicationSettings($selfReplicaId, $entityTypeKey, $streamId, $otherReplicas)"
 

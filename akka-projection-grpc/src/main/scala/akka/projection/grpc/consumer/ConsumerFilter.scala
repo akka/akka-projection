@@ -232,6 +232,15 @@ object ConsumerFilter extends ExtensionId[ConsumerFilter] {
     override def canEqual(that: Any): Boolean = that.isInstanceOf[ReplayWithFilter]
   }
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] final case class Ack(
+      val streamId: String,
+      val originPersistenceId: String,
+      val originSeqNr: Long)
+      extends SubscriberCommand
+
   sealed trait FilterCriteria
   sealed trait RemoveCriteria extends FilterCriteria
 
