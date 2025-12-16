@@ -487,15 +487,15 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.addInflight(env2)
       // but not when gap
       val envP4SeqNr4 = createEnvelope(p4, 4L, startTime.plusMillis(3), "e4-4")
-      offsetStore.validate(envP4SeqNr4).futureValue shouldBe RejectedSeqNr
+      offsetStore.validate(envP4SeqNr4).futureValue shouldBe RejectedSeqNr(2)
       // hard reject when gap from backtracking
-      offsetStore.validate(backtrackingEnvelope(envP4SeqNr4)).futureValue shouldBe RejectedBacktrackingSeqNr
+      offsetStore.validate(backtrackingEnvelope(envP4SeqNr4)).futureValue shouldBe RejectedBacktrackingSeqNr(2)
       // reject filtered event when gap
-      offsetStore.validate(filteredEnvelope(envP4SeqNr4)).futureValue shouldBe RejectedSeqNr
+      offsetStore.validate(filteredEnvelope(envP4SeqNr4)).futureValue shouldBe RejectedSeqNr(2)
       // hard reject when filtered event with gap from backtracking
       offsetStore
         .validate(backtrackingEnvelope(filteredEnvelope(envP4SeqNr4)))
-        .futureValue shouldBe RejectedBacktrackingSeqNr
+        .futureValue shouldBe RejectedBacktrackingSeqNr(2)
       // and not if later already inflight, seqNr 2 was accepted
       offsetStore.validate(createEnvelope(p4, 1L, startTime.plusMillis(1), "e4-1")).futureValue shouldBe Duplicate
 
@@ -529,8 +529,8 @@ class R2dbcTimestampOffsetStoreSpec
 
       // reject unknown
       val env7 = createEnvelope(p5, 7L, startTime.plusMillis(8), "e5-7")
-      offsetStore.validate(env7).futureValue shouldBe RejectedSeqNr
-      offsetStore.validate(backtrackingEnvelope(env7)).futureValue shouldBe RejectedBacktrackingSeqNr
+      offsetStore.validate(env7).futureValue shouldBe RejectedSeqNr(0)
+      offsetStore.validate(backtrackingEnvelope(env7)).futureValue shouldBe RejectedBacktrackingSeqNr(0)
       // but ok when previous is old (offset has been deleted but slice is known)
       eventTimestampQueryClock.setInstant(startTime.minus(settings.deleteAfter.plusSeconds(1)))
       val env8 = createEnvelope(p5, 7L, startTime.plusMillis(5), "e5-7")
@@ -544,13 +544,13 @@ class R2dbcTimestampOffsetStoreSpec
 
       // reject unknown filtered
       val env10 = filteredEnvelope(createEnvelope(p6, 7L, startTime.plusMillis(10), "e6-7"))
-      offsetStore.validate(env10).futureValue shouldBe RejectedSeqNr
+      offsetStore.validate(env10).futureValue shouldBe RejectedSeqNr(0)
       // hard reject when unknown from backtracking
-      offsetStore.validate(backtrackingEnvelope(env10)).futureValue shouldBe RejectedBacktrackingSeqNr
+      offsetStore.validate(backtrackingEnvelope(env10)).futureValue shouldBe RejectedBacktrackingSeqNr(0)
       // hard reject when unknown filtered event from backtracking
       offsetStore
         .validate(backtrackingEnvelope(filteredEnvelope(env10)))
-        .futureValue shouldBe RejectedBacktrackingSeqNr
+        .futureValue shouldBe RejectedBacktrackingSeqNr(0)
 
       // it's keeping the inflight that are not in the "stored" state
       offsetStore.getInflight() shouldBe Map(p1 -> 4L, p3 -> 8L, p4 -> 2L, p5 -> 8L)
@@ -575,8 +575,8 @@ class R2dbcTimestampOffsetStoreSpec
       // reject unknown
       val pid1 = "p1"
       val env1 = createEnvelope(pid1, 7L, startTime.plusMillis(8), "e1-7")
-      offsetStore.validate(env1).futureValue shouldBe RejectedSeqNr
-      offsetStore.validate(backtrackingEnvelope(env1)).futureValue shouldBe RejectedBacktrackingSeqNr
+      offsetStore.validate(env1).futureValue shouldBe RejectedSeqNr(0)
+      offsetStore.validate(backtrackingEnvelope(env1)).futureValue shouldBe RejectedBacktrackingSeqNr(0)
       // but if there was a stored offset (maybe evicted)
       val slice = persistenceExt.sliceForPersistenceId(pid1)
       r2dbcExecutor
@@ -615,8 +615,8 @@ class R2dbcTimestampOffsetStoreSpec
       // reject unknown
       val offset1 = TimestampOffset(startTime.plusMillis(8), Map(p1 -> 7L))
       val env1 = createEnvelope(p1, 7L, offset1.timestamp, "e1-7")
-      offsetStore.validate(env1).futureValue shouldBe RejectedSeqNr
-      offsetStore.validate(backtrackingEnvelope(env1)).futureValue shouldBe RejectedBacktrackingSeqNr
+      offsetStore.validate(env1).futureValue shouldBe RejectedSeqNr(0)
+      offsetStore.validate(backtrackingEnvelope(env1)).futureValue shouldBe RejectedBacktrackingSeqNr(0)
       // but accepted if timestamp of previous sequence number is before accept-when-previous-timestamp-before,
       // even when there are no previously stored offsets
       eventTimestampQueryClock.setInstant(startTime.minusSeconds(3600).minusMillis(1))
@@ -653,7 +653,7 @@ class R2dbcTimestampOffsetStoreSpec
       // simulate envelope processing error by not adding envelope2 to inflight
 
       // seqNr 3 is not accepted, still waiting for seqNr 2
-      offsetStore.validate(envelope3).futureValue shouldBe RejectedSeqNr
+      offsetStore.validate(envelope3).futureValue shouldBe RejectedSeqNr(1)
 
       // offer seqNr 2 once again
       offsetStore.validate(envelope2).futureValue shouldBe Accepted
@@ -746,9 +746,9 @@ class R2dbcTimestampOffsetStoreSpec
       offsetStore.validateAll(List(env1, env2, env3, env4, env5)).futureValue shouldBe List(
         env1 -> Accepted,
         env2 -> Accepted,
-        env3 -> RejectedSeqNr,
+        env3 -> RejectedSeqNr(2),
         env4 -> Accepted,
-        env5 -> RejectedSeqNr)
+        env5 -> RejectedSeqNr(5))
 
     }
 
@@ -828,8 +828,8 @@ class R2dbcTimestampOffsetStoreSpec
       val t2 = startTime.plusSeconds(20)
       val offset2 = TimestampOffset(t2, Map("p1" -> 10L))
       val env2 = createEnvelope("p1", 10L, offset2.timestamp, "reset-1")
-      offsetStore.validate(env2).futureValue shouldBe RejectedSeqNr
-      offsetStore.validate(backtrackingEnvelope(env2)).futureValue shouldBe RejectedBacktrackingSeqNr
+      offsetStore.validate(env2).futureValue shouldBe RejectedSeqNr(0)
+      offsetStore.validate(backtrackingEnvelope(env2)).futureValue shouldBe RejectedBacktrackingSeqNr(0)
     }
 
     "accept new revisions for durable state" in {
@@ -1971,13 +1971,13 @@ class R2dbcTimestampOffsetStoreSpec
       clock.setInstant(latestTime.minus(settings.deleteAfter.minusSeconds(1)))
       offsetStore2
         .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
-        .futureValue shouldBe RejectedBacktrackingSeqNr
+        .futureValue shouldBe RejectedBacktrackingSeqNr(0)
 
       // still rejected if timestamp of previous seqNr is before delete-until timestamp for latest (different slice)
       clock.setInstant(latestTime.minus(settings.deleteAfter.plusSeconds(1)))
       offsetStore2
         .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
-        .futureValue shouldBe RejectedBacktrackingSeqNr
+        .futureValue shouldBe RejectedBacktrackingSeqNr(0)
 
       // add an offset for the slice under test
       val latestTime2 = time(20)
@@ -1990,7 +1990,7 @@ class R2dbcTimestampOffsetStoreSpec
       clock.setInstant(latestTime2.minus(settings.deleteAfter.minusSeconds(1)))
       offsetStore2
         .validate(backtrackingEnvelope(createEnvelope(p2, 4L, latestTime.minusSeconds(20), "event4")))
-        .futureValue shouldBe RejectedBacktrackingSeqNr
+        .futureValue shouldBe RejectedBacktrackingSeqNr(0)
 
       // accepted if timestamp of previous seqNr is before delete-until timestamp for this slice
       clock.setInstant(latestTime2.minus(settings.deleteAfter.plusSeconds(1)))
