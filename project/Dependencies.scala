@@ -40,7 +40,7 @@ object Dependencies {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
 
-    val AkkaPersistenceDynamodb = "2.0.10"
+    val AkkaPersistenceDynamodb = "2.0.11"
     val AkkaPersistenceDynamodbVersionInDocs = VersionNumber(AkkaPersistenceDynamodb).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
