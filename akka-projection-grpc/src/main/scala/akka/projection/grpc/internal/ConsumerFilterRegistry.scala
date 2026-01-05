@@ -18,6 +18,7 @@ import akka.actor.typed.ActorRef
 import akka.actor.typed.Behavior
 import akka.actor.typed.scaladsl.ActorContext
 import akka.actor.typed.scaladsl.Behaviors
+import akka.actor.typed.pubsub.Topic
 import akka.annotation.InternalApi
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.ConsumerFilter.ConsumerFilterSettings
@@ -37,9 +38,19 @@ import akka.util.Timeout
 
   private final case class Subscriber(streamId: String, ref: ActorRef[SubscriberCommand])
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] final case class PubSubAck(
+      streamId: String,
+      originPersistenceId: String,
+      originSeqNr: Long)
+      extends InternalCommand
+
   def apply(settings: ConsumerFilterSettings): Behavior[Command] = {
     Behaviors.setup { context =>
-      new ConsumerFilterRegistry(context, settings).behavior(Map.empty, Map.empty)
+      val ackTopic = context.spawn(Topic[ConsumerFilterRegistry.PubSubAck]("projectionGrpcAcks"), "ackTopic")
+      new ConsumerFilterRegistry(context, settings, ackTopic).behavior(Map.empty, Map.empty)
     }
 
   }
@@ -51,9 +62,12 @@ import akka.util.Timeout
  */
 @InternalApi private[akka] class ConsumerFilterRegistry(
     context: ActorContext[ConsumerFilter.Command],
-    settings: ConsumerFilterSettings) {
+    settings: ConsumerFilterSettings,
+    ackTopic: ActorRef[Topic.Command[ConsumerFilterRegistry.PubSubAck]]) {
   import ConsumerFilter._
   import ConsumerFilterRegistry._
+
+  ackTopic ! Topic.Subscribe(context.self)
 
   private def behavior(
       subscribers: Map[Subscriber, immutable.Seq[FilterCriteria]],
@@ -104,7 +118,7 @@ import akka.util.Timeout
     Behaviors
       .receiveMessage {
         case ack: Ack =>
-          publishToSubscribers(ack)
+          ackTopic ! Topic.Publish(PubSubAck(ack.streamId, ack.originPersistenceId, ack.originSeqNr))
           Behaviors.same
 
         case Subscribe(streamId, initCriteria, subscriberRef) =>
@@ -153,6 +167,10 @@ import akka.util.Timeout
         case internalCommand: InternalCommand =>
           // extra match for compiler exhaustiveness check
           internalCommand match {
+            case pubSubAck: PubSubAck =>
+              publishToSubscribers(Ack(pubSubAck.streamId, pubSubAck.originPersistenceId, pubSubAck.originSeqNr))
+              Behaviors.same
+
             case FilterUpdated(streamId, criteria) =>
               val newSubscribers = publishUpdatedFilterToSubscribers(streamId, criteria)
               behavior(newSubscribers, stores)

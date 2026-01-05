@@ -32,12 +32,14 @@ import scalapb.GeneratedMessage
     with BaseSerializer {
   private val ConsumerFilterStoreStateManifest = "A"
   private val ConsumerFilterKeyManifest = "B"
+  private val PubSubAckManifest = "C"
 
   private final val CompressionBufferSize = 1024 * 4
 
   private val replicatedDataSerializer = new ReplicatedDataSerializer(system)
 
   override def manifest(obj: AnyRef): String = obj match {
+    case _: ConsumerFilterRegistry.PubSubAck           => PubSubAckManifest
     case _: DdataConsumerFilterStore.State             => ConsumerFilterStoreStateManifest
     case _: DdataConsumerFilterStore.ConsumerFilterKey => ConsumerFilterKeyManifest
     case _ =>
@@ -45,6 +47,7 @@ import scalapb.GeneratedMessage
   }
 
   override def toBinary(obj: AnyRef): Array[Byte] = obj match {
+    case ack: ConsumerFilterRegistry.PubSubAck           => ackToBinary(ack)
     case state: DdataConsumerFilterStore.State           => compress(stateToProto(state))
     case key: DdataConsumerFilterStore.ConsumerFilterKey => replicatedDataSerializer.keyIdToBinary(key.id)
     case _ =>
@@ -52,12 +55,22 @@ import scalapb.GeneratedMessage
   }
 
   override def fromBinary(bytes: Array[Byte], manifest: String): AnyRef = manifest match {
+    case PubSubAckManifest                => ackFromBinary(bytes)
     case ConsumerFilterStoreStateManifest => stateFromBinary(decompress(bytes))
     case ConsumerFilterKeyManifest =>
       DdataConsumerFilterStore.ConsumerFilterKey(replicatedDataSerializer.keyIdFromBinary(bytes))
     case _ =>
       throw new NotSerializableException(
         s"Unimplemented deserialization of message with manifest [$manifest] in [${getClass.getName}]")
+  }
+
+  private def ackToBinary(ack: ConsumerFilterRegistry.PubSubAck): Array[Byte] = {
+    proto.PubSubAck(ack.streamId, ack.originPersistenceId, ack.originSeqNr).toByteArray
+  }
+
+  private def ackFromBinary(bytes: Array[Byte]): ConsumerFilterRegistry.PubSubAck = {
+    val ack = proto.PubSubAck.parseFrom(bytes)
+    ConsumerFilterRegistry.PubSubAck(ack.streamId, ack.persistenceId, ack.seqNr)
   }
 
   private def orsetToBytes(orset: ORSet[_]): ByteString = {

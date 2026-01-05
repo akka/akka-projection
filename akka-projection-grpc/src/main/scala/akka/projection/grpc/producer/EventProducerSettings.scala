@@ -25,7 +25,8 @@ object EventProducerSettings {
       replayParallelism = config.getInt("filter.replay-parallelism"),
       topicTagPrefix = config.getString("filter.topic-tag-prefix"),
       keepAliveInterval = config.getDuration("keep-alive-interval").toScala,
-      akkaSerializationOnly = false)
+      akkaSerializationOnly = false,
+      maxAckCacheEntries = config.getInt("max-ack-cache-entries"))
   }
 
   /** Java API */
@@ -43,7 +44,8 @@ final class EventProducerSettings private (
     val replayParallelism: Int,
     val topicTagPrefix: String,
     val keepAliveInterval: FiniteDuration,
-    val akkaSerializationOnly: Boolean) {
+    val akkaSerializationOnly: Boolean,
+    val maxAckCacheEntries: Int) {
   require(transformationParallelism >= 1, "Configuration property [transformation-parallelism] must be >= 1.")
   require(replayParallelism >= 1, "Configuration property [replay-parallelism] must be >= 1.")
 
@@ -58,7 +60,8 @@ final class EventProducerSettings private (
       replayParallelism,
       topicTagPrefix,
       keepAliveInterval,
-      akkaSerializationOnly = true)
+      akkaSerializationOnly = true,
+      maxAckCacheEntries)
   }
 
 }

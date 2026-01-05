@@ -155,7 +155,7 @@ object ReplicationSettings {
         replicationConfig.getDuration("edge-replication-delivery-min-backoff").toScala,
       edgeReplicationDeliveryMaxBackoff =
         replicationConfig.getDuration("edge-replication-delivery-max-backoff").toScala,
-      eventOriginFilterEnabled = config.getBoolean("event-origin-filter-enabled"))
+      eventOriginFilterEnabled = replicationConfig.getBoolean("event-origin-filter-enabled"))
   }
 
 }

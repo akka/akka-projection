@@ -238,16 +238,18 @@ private[akka] object ReplicationImpl {
 
                     case Some(replicatedEventMetadata) =>
                       val replicationId = ReplicationId.fromString(envelope.persistenceId)
-                      val destinationReplicaId = replicationId.withReplica(settings.selfReplicaId)
+                      val destinationReplicationId = replicationId.withReplica(settings.selfReplicaId)
+                      val originReplicationId = replicationId.withReplica(replicatedEventMetadata.originReplica)
                       val entityRef =
-                        entityRefFactory(destinationReplicaId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
+                        entityRefFactory(destinationReplicationId.entityId).asInstanceOf[EntityRef[PublishedEvent]]
                       if (log.isTraceEnabled) {
                         log.trace(
-                          "[{}] forwarding event originating on replica [{}] to [{}] (origin seq_nr [{}]): [{}]",
+                          "[{}] forwarding event from replica [{}] to [{}], origin [{}], origin seq_nr [{}]: [{}]",
                           projectionKey,
-                          replicatedEventMetadata.originReplica,
-                          destinationReplicaId.persistenceId.id,
-                          envelope.sequenceNr,
+                          remoteReplica.replicaId,
+                          destinationReplicationId.persistenceId.id,
+                          originReplicationId.persistenceId.id,
+                          replicatedEventMetadata.originSequenceNr,
                           replicatedEventMetadata.version)
                       }
                       val askResult = entityRef.ask[Done](replyTo =>
@@ -265,14 +267,28 @@ private[akka] object ReplicationImpl {
 
                       askResult.failed.foreach(error =>
                         log.warn(
-                          s"Failing replication stream [$projectionName/$projectionKey] from [${remoteReplica.replicaId.id}], event pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]",
+                          s"Failing replication stream [$projectionName/$projectionKey] from [${remoteReplica.replicaId}], event pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]",
                           error))
 
-                      askResult.map { _ =>
-                        // FIXME don't lookup extension each time
-                        ConsumerFilter(system).ref ! ConsumerFilter
-                          .Ack(settings.streamId, envelope.persistenceId, replicatedEventMetadata.originSequenceNr)
-                        Done
+                      askResult.map {
+                        _ =>
+                          val originReplicationId = replicationId.withReplica(replicatedEventMetadata.originReplica)
+                          if (log.isTraceEnabled) {
+                            log.trace(
+                              "[{}] Sending ack of event from replica [{}], origin [{}], origin seq_nr [{}]",
+                              projectionKey,
+                              remoteReplica.replicaId,
+                              originReplicationId.persistenceId.id,
+                              replicatedEventMetadata.originSequenceNr)
+                          }
+
+                          // FIXME don't lookup extension each time
+                          ConsumerFilter(system).ref ! ConsumerFilter
+                            .Ack(
+                              settings.streamId,
+                              originReplicationId.persistenceId.id,
+                              replicatedEventMetadata.originSequenceNr)
+                          Done
                       }
 
                     case unexpected =>

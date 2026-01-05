@@ -33,3 +33,9 @@ message SeqNrMap {
   bytes orset_keys = 1;
   repeated Entry entries = 2;
 }
+
+message PubSubAck {
+  string stream_id = 1;
+  string persistence_id = 2;
+  int64 seq_nr = 3;
+}
