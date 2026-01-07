@@ -113,11 +113,8 @@ private[akka] object ReplicationImpl {
                 version = VersionVector(settings.selfReplicaId.id, env.sequenceNr),
                 concurrent = false))
           })
-    val eps =
-      if (settings.eventOriginFilterEnabled)
-        epsBase.withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
-      else
-        epsBase
+    val eps = epsBase.withReplicatedEventOriginFilter(
+      new EventOriginFilter(settings.selfReplicaId, settings.eventOriginFilterEnabled))
 
     val sharding = ClusterSharding(system)
     sharding.init(replicatedEntity.entity)
@@ -393,7 +390,7 @@ private[akka] object ReplicationImpl {
       settings.streamId,
       Transformation.identity,
       settings.eventProducerSettings.withAkkaSerializationOnly())
-      .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId))
+      .withReplicatedEventOriginFilter(new EventOriginFilter(settings.selfReplicaId, settings.eventOriginFilterEnabled))
       .withReplicatedEventMetadataTransformation(env =>
         if (env.metadata[ReplicatedEventMetadata].isDefined) None
         else {
