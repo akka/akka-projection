@@ -401,12 +401,10 @@ import akka.util.RecencyList
                   val ackOriginSeqNr = ack.getOriginEvent.seqNr
                   if (log.isTraceEnabled())
                     log.trace(
-                      "Stream [{}]: Ack origin persistenceId [{}], seqNr [{}] ({})",
+                      "Stream [{}]: Ack origin persistenceId [{}], seqNr [{}]",
                       logPrefix,
                       ackOriginPid,
-                      ackOriginSeqNr,
-                      ackCache.get(ackOriginPid) // FIXME remove this param
-                    )
+                      ackOriginSeqNr)
                   val cachedSeqNr = ackCache.getOrElse(ackOriginPid, 0L)
                   if (ackOriginSeqNr > cachedSeqNr) {
                     ackCache = ackCache.updated(ackOriginPid, ackOriginSeqNr)
