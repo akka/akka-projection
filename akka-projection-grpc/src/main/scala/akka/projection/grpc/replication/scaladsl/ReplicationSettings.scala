@@ -134,6 +134,10 @@ object ReplicationSettings {
     // global config only for some things
     val replicationConfig = system.settings.config.getConfig("akka.projection.grpc.replication")
 
+    println(
+      s"# enabled ${replicationConfig.getBoolean("event-origin-filter-enabled")} ${replicationConfig.getString("event-origin-filter-enabled")}"
+    ) // FIXME
+
     new ReplicationSettings[Command](
       selfReplicaId = selfReplicaId,
       entityTypeKey = entityTypeKey,
