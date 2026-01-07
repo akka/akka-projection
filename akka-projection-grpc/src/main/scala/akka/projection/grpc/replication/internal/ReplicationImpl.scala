@@ -216,6 +216,8 @@ private[akka] object ReplicationImpl {
         val projectionKey = s"${sliceRange.min}-${sliceRange.max}"
         val projectionId = ProjectionId(projectionName, projectionKey)
 
+        val consumerFilter = ConsumerFilter(system).ref
+
         val replicationFlow
             : FlowWithContext[EventEnvelope[AnyRef], ProjectionContext, Done, ProjectionContext, NotUsed] =
           FlowWithContext[EventEnvelope[AnyRef], ProjectionContext]
@@ -270,26 +272,28 @@ private[akka] object ReplicationImpl {
                           s"Failing replication stream [$projectionName/$projectionKey] from [${remoteReplica.replicaId}], event pid [${envelope.persistenceId}], seq_nr [${envelope.sequenceNr}]",
                           error))
 
-                      askResult.map {
-                        _ =>
-                          val originReplicationId = replicationId.withReplica(replicatedEventMetadata.originReplica)
-                          if (log.isTraceEnabled) {
-                            log.trace(
-                              "[{}] Sending ack of event from replica [{}], origin [{}], origin seq_nr [{}]",
-                              projectionKey,
-                              remoteReplica.replicaId,
-                              originReplicationId.persistenceId.id,
-                              replicatedEventMetadata.originSequenceNr)
-                          }
+                      if (settings.eventOriginFilterEnabled) {
+                        askResult
+                      } else {
+                        askResult.map {
+                          _ =>
+                            val originReplicationId = replicationId.withReplica(replicatedEventMetadata.originReplica)
+                            if (log.isTraceEnabled) {
+                              log.trace(
+                                "[{}] Sending ack of event from replica [{}], origin [{}], origin seq_nr [{}]",
+                                projectionKey,
+                                remoteReplica.replicaId,
+                                originReplicationId.persistenceId.id,
+                                replicatedEventMetadata.originSequenceNr)
+                            }
 
-                          // FIXME don't lookup extension each time
-                          // FIXME config to disable? same as origin-filter-enabled?
-                          ConsumerFilter(system).ref ! ConsumerFilter
-                            .Ack(
-                              settings.streamId,
-                              originReplicationId.persistenceId.id,
-                              replicatedEventMetadata.originSequenceNr)
-                          Done
+                            consumerFilter ! ConsumerFilter
+                              .Ack(
+                                settings.streamId,
+                                originReplicationId.persistenceId.id,
+                                replicatedEventMetadata.originSequenceNr)
+                            Done
+                        }
                       }
 
                     case unexpected =>
