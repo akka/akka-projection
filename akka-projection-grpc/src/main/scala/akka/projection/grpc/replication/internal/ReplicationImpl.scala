@@ -174,7 +174,7 @@ private[akka] object ReplicationImpl {
     val sliceRanges = Persistence(system).sliceRanges(remoteReplica.numberOfConsumers)
 
     val grpcQuerySettings = {
-      val s = GrpcQuerySettings(settings.streamId)
+      val s = GrpcQuerySettings(settings.streamId).withFromReplica(remoteReplica.replicaId)
       val s2 =
         if (settings.initialConsumerFilter.isEmpty) s else s.withInitialConsumerFilter(settings.initialConsumerFilter)
       remoteReplica.additionalQueryRequestMetadata match {
@@ -283,6 +283,7 @@ private[akka] object ReplicationImpl {
                           }
 
                           // FIXME don't lookup extension each time
+                          // FIXME config to disable? same as origin-filter-enabled?
                           ConsumerFilter(system).ref ! ConsumerFilter
                             .Ack(
                               settings.streamId,
