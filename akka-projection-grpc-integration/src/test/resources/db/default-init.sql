@@ -98,14 +98,14 @@ CREATE TABLE IF NOT EXISTS akka_projection_management (
 -- For Replicated Event Sourcing over gRPC tests
 
 CREATE TABLE IF NOT EXISTS event_journal_DCA(
-                                            slice INT NOT NULL,
-                                            entity_type VARCHAR(255) NOT NULL,
+    slice INT NOT NULL,
+    entity_type VARCHAR(255) NOT NULL,
     persistence_id VARCHAR(255) NOT NULL,
     seq_nr BIGINT NOT NULL,
     db_timestamp timestamp with time zone NOT NULL,
 
-                               event_ser_id INTEGER NOT NULL,
-                               event_ser_manifest VARCHAR(255) NOT NULL,
+    event_ser_id INTEGER NOT NULL,
+    event_ser_manifest VARCHAR(255) NOT NULL,
     event_payload BYTEA NOT NULL,
 
     deleted BOOLEAN DEFAULT FALSE NOT NULL,
@@ -122,14 +122,14 @@ CREATE TABLE IF NOT EXISTS event_journal_DCA(
 CREATE INDEX IF NOT EXISTS event_journal_slice_DCA_idx ON event_journal_DCA(slice, entity_type, db_timestamp, seq_nr);
 
 CREATE TABLE IF NOT EXISTS event_journal_DCB(
-                                                slice INT NOT NULL,
-                                                entity_type VARCHAR(255) NOT NULL,
+    slice INT NOT NULL,
+    entity_type VARCHAR(255) NOT NULL,
     persistence_id VARCHAR(255) NOT NULL,
     seq_nr BIGINT NOT NULL,
     db_timestamp timestamp with time zone NOT NULL,
 
-                               event_ser_id INTEGER NOT NULL,
-                               event_ser_manifest VARCHAR(255) NOT NULL,
+    event_ser_id INTEGER NOT NULL,
+    event_ser_manifest VARCHAR(255) NOT NULL,
     event_payload BYTEA NOT NULL,
 
     deleted BOOLEAN DEFAULT FALSE NOT NULL,
@@ -146,14 +146,14 @@ CREATE TABLE IF NOT EXISTS event_journal_DCB(
 CREATE INDEX IF NOT EXISTS event_journal_slice_DCB_idx ON event_journal_DCB(slice, entity_type, db_timestamp, seq_nr);
 
 CREATE TABLE IF NOT EXISTS event_journal_DCC(
-                                                slice INT NOT NULL,
-                                                entity_type VARCHAR(255) NOT NULL,
+    slice INT NOT NULL,
+    entity_type VARCHAR(255) NOT NULL,
     persistence_id VARCHAR(255) NOT NULL,
     seq_nr BIGINT NOT NULL,
     db_timestamp timestamp with time zone NOT NULL,
 
-                               event_ser_id INTEGER NOT NULL,
-                               event_ser_manifest VARCHAR(255) NOT NULL,
+    event_ser_id INTEGER NOT NULL,
+    event_ser_manifest VARCHAR(255) NOT NULL,
     event_payload BYTEA NOT NULL,
 
     deleted BOOLEAN DEFAULT FALSE NOT NULL,
@@ -170,14 +170,14 @@ CREATE TABLE IF NOT EXISTS event_journal_DCC(
 CREATE INDEX IF NOT EXISTS event_journal_slice_DCC_idx ON event_journal_DCC(slice, entity_type, db_timestamp, seq_nr);
 
 CREATE TABLE IF NOT EXISTS event_journal_DCD(
-                                                slice INT NOT NULL,
-                                                entity_type VARCHAR(255) NOT NULL,
+    slice INT NOT NULL,
+    entity_type VARCHAR(255) NOT NULL,
     persistence_id VARCHAR(255) NOT NULL,
     seq_nr BIGINT NOT NULL,
     db_timestamp timestamp with time zone NOT NULL,
 
-                               event_ser_id INTEGER NOT NULL,
-                               event_ser_manifest VARCHAR(255) NOT NULL,
+    event_ser_id INTEGER NOT NULL,
+    event_ser_manifest VARCHAR(255) NOT NULL,
     event_payload BYTEA NOT NULL,
 
     deleted BOOLEAN DEFAULT FALSE NOT NULL,
@@ -193,15 +193,39 @@ CREATE TABLE IF NOT EXISTS event_journal_DCD(
     );
 CREATE INDEX IF NOT EXISTS event_journal_slice_DCD_idx ON event_journal_DCD(slice, entity_type, db_timestamp, seq_nr);
 
-CREATE TABLE IF NOT EXISTS event_journal_EdgeA(
-                                                slice INT NOT NULL,
-                                                entity_type VARCHAR(255) NOT NULL,
+CREATE TABLE IF NOT EXISTS event_journal_DCE(
+    slice INT NOT NULL,
+    entity_type VARCHAR(255) NOT NULL,
     persistence_id VARCHAR(255) NOT NULL,
     seq_nr BIGINT NOT NULL,
     db_timestamp timestamp with time zone NOT NULL,
 
-                               event_ser_id INTEGER NOT NULL,
-                               event_ser_manifest VARCHAR(255) NOT NULL,
+    event_ser_id INTEGER NOT NULL,
+    event_ser_manifest VARCHAR(255) NOT NULL,
+    event_payload BYTEA NOT NULL,
+
+    deleted BOOLEAN DEFAULT FALSE NOT NULL,
+    writer VARCHAR(255) NOT NULL,
+    adapter_manifest VARCHAR(255),
+    tags TEXT ARRAY,
+
+    meta_ser_id INTEGER,
+    meta_ser_manifest VARCHAR(255),
+    meta_payload BYTEA,
+
+    PRIMARY KEY(persistence_id, seq_nr)
+);
+CREATE INDEX IF NOT EXISTS event_journal_slice_DCE_idx ON event_journal_DCE(slice, entity_type, db_timestamp, seq_nr);
+
+CREATE TABLE IF NOT EXISTS event_journal_EdgeA(
+    slice INT NOT NULL,
+    entity_type VARCHAR(255) NOT NULL,
+    persistence_id VARCHAR(255) NOT NULL,
+    seq_nr BIGINT NOT NULL,
+    db_timestamp timestamp with time zone NOT NULL,
+
+    event_ser_id INTEGER NOT NULL,
+    event_ser_manifest VARCHAR(255) NOT NULL,
     event_payload BYTEA NOT NULL,
 
     deleted BOOLEAN DEFAULT FALSE NOT NULL,
@@ -273,6 +297,20 @@ CREATE TABLE IF NOT EXISTS akka_projection_timestamp_offset_store_DCD (
     PRIMARY KEY(slice, projection_name, timestamp_offset, persistence_id, seq_nr)
 );
 
+CREATE TABLE IF NOT EXISTS akka_projection_timestamp_offset_store_DCE (
+    projection_name VARCHAR(255) NOT NULL,
+    projection_key VARCHAR(255) NOT NULL,
+    slice INT NOT NULL,
+    persistence_id VARCHAR(255) NOT NULL,
+    seq_nr BIGINT NOT NULL,
+    -- timestamp_offset is the db_timestamp of the original event
+    timestamp_offset timestamp with time zone NOT NULL,
+    -- timestamp_consumed is when the offset was stored
+    -- the consumer lag is timestamp_consumed - timestamp_offset
+    timestamp_consumed timestamp with time zone NOT NULL,
+    PRIMARY KEY(slice, projection_name, timestamp_offset, persistence_id, seq_nr)
+);
+
 
 CREATE TABLE IF NOT EXISTS akka_projection_timestamp_offset_store_EdgeA (
     projection_name VARCHAR(255) NOT NULL,
@@ -285,5 +323,5 @@ CREATE TABLE IF NOT EXISTS akka_projection_timestamp_offset_store_EdgeA (
     -- timestamp_consumed is when the offset was stored
     -- the consumer lag is timestamp_consumed - timestamp_offset
     timestamp_consumed timestamp with time zone NOT NULL,
-                                     PRIMARY KEY(slice, projection_name, timestamp_offset, persistence_id, seq_nr)
-    );
+    PRIMARY KEY(slice, projection_name, timestamp_offset, persistence_id, seq_nr)
+);

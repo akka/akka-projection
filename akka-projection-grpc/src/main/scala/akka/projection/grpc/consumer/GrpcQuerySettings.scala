@@ -9,9 +9,11 @@ import akka.grpc.scaladsl.Metadata
 import akka.grpc.scaladsl.MetadataBuilder
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import com.typesafe.config.Config
-
 import scala.collection.immutable
 import scala.jdk.CollectionConverters._
+
+import akka.annotation.InternalApi
+import akka.persistence.typed.ReplicaId
 
 object GrpcQuerySettings {
 
@@ -46,7 +48,7 @@ object GrpcQuerySettings {
             .build())
     }
 
-    new GrpcQuerySettings(streamId, additionalHeaders, Vector.empty)
+    new GrpcQuerySettings(streamId, additionalHeaders, Vector.empty, None)
   }
 
   /**
@@ -67,7 +69,11 @@ object GrpcQuerySettings {
    * @param streamId The stream id to consume. It is exposed by the producing side.
    */
   def apply(streamId: String): GrpcQuerySettings = {
-    new GrpcQuerySettings(streamId, additionalRequestMetadata = None, initialConsumerFilter = Vector.empty)
+    new GrpcQuerySettings(
+      streamId,
+      additionalRequestMetadata = None,
+      initialConsumerFilter = Vector.empty,
+      fromReplica = None)
   }
 
   /**
@@ -76,14 +82,19 @@ object GrpcQuerySettings {
    * @param streamId The stream id to consume. It is exposed by the producing side.
    */
   def create(streamId: String): GrpcQuerySettings = {
-    new GrpcQuerySettings(streamId, additionalRequestMetadata = None, initialConsumerFilter = Vector.empty)
+    new GrpcQuerySettings(
+      streamId,
+      additionalRequestMetadata = None,
+      initialConsumerFilter = Vector.empty,
+      fromReplica = None)
   }
 }
 
 final class GrpcQuerySettings private (
     val streamId: String,
     val additionalRequestMetadata: Option[Metadata],
-    val initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria]) {
+    val initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria],
+    val fromReplica: Option[ReplicaId]) {
   require(
     streamId != "",
     "streamId must be an id exposed by the producing side but was undefined on the consuming side.")
@@ -110,10 +121,17 @@ final class GrpcQuerySettings private (
       initialConsumerFilter: java.util.List[ConsumerFilter.FilterCriteria]): GrpcQuerySettings =
     copy(initialConsumerFilter = initialConsumerFilter.asScala.toVector)
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def withFromReplica(replica: ReplicaId): GrpcQuerySettings =
+    copy(fromReplica = Option(replica))
+
   private def copy(
       streamId: String = streamId,
       additionalRequestMetadata: Option[Metadata] = additionalRequestMetadata,
-      initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria] = initialConsumerFilter): GrpcQuerySettings =
-    new GrpcQuerySettings(streamId, additionalRequestMetadata, initialConsumerFilter)
+      initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria] = initialConsumerFilter,
+      fromReplica: Option[ReplicaId] = fromReplica): GrpcQuerySettings =
+    new GrpcQuerySettings(streamId, additionalRequestMetadata, initialConsumerFilter, fromReplica)
 
 }

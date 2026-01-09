@@ -13,7 +13,7 @@ import akka.projection.grpc.internal.proto.ReplicaInfo
 /**
  * INTERNAL API
  */
-@InternalApi private[akka] class EventOriginFilter(selfReplicaId: ReplicaId) {
+@InternalApi private[akka] class EventOriginFilter(selfReplicaId: ReplicaId, enabled: Boolean) {
 
   def createFilter(consumerReplicaInfo: ReplicaInfo): EventEnvelope[_] => Boolean = {
     // For edge topologies, like star topologies, an edge replica is not connected
@@ -24,10 +24,19 @@ import akka.projection.grpc.internal.proto.ReplicaInfo
     // because the consumer will receive them directly from the other replica.
     // Events originating from the consumer replica itself are excluded (break the cycle).
     // Events originating from the producer replica are always included.
-    val exclude: Set[ReplicaId] =
-      consumerReplicaInfo.otherReplicaIds.map(ReplicaId.apply).toSet ++
-      (if (consumerReplicaInfo.replicaId == "") Nil else List(ReplicaId(consumerReplicaInfo.replicaId))) -
-      selfReplicaId
+    val exclude: Set[ReplicaId] = {
+      if (enabled) {
+        consumerReplicaInfo.otherReplicaIds.map(ReplicaId.apply).toSet ++
+        (if (consumerReplicaInfo.replicaId == "") Nil else List(ReplicaId(consumerReplicaInfo.replicaId))) -
+        selfReplicaId
+      } else {
+        // disabled, but still exclude events originating from the consumer replica itself (break the cycle)
+        if (consumerReplicaInfo.replicaId == "")
+          Set.empty
+        else
+          Set(ReplicaId(consumerReplicaInfo.replicaId))
+      }
+    }
 
     { envelope =>
       // eventMetadata is not included in backtracking envelopes.

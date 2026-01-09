@@ -254,7 +254,7 @@ class EventProducerServiceSpec
           evt
       },
     EventProducerSource(entityType6, streamId6, transformation, settings)
-      .withReplicatedEventOriginFilter(new EventOriginFilter(ReplicaId("replica1"))),
+      .withReplicatedEventOriginFilter(new EventOriginFilter(ReplicaId("replica1"), enabled = true)),
     EventProducerSource(entityType7, streamId7, transformation, settings)
       .withReplicatedEventMetadataTransformation(
         env =>

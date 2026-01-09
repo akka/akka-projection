@@ -51,6 +51,7 @@ class ConsumerSerializerSpec extends ScalaTestWithActorTestKit with AnyWordSpecL
   "ConsumerSerializer" must {
 
     Seq(
+      "ack" -> ConsumerFilterRegistry.PubSubAck("stream1", "pid1", 17L),
       "empty ConsumerFilterStore.State" -> DdataConsumerFilterStore.State.empty,
       "ConsumerFilterStore.State with filter" -> DdataConsumerFilterStore.State.empty.updated(filter1)(node1),
       "ConsumerFilterStore.State with filter updated from two nodes" -> DdataConsumerFilterStore.State.empty

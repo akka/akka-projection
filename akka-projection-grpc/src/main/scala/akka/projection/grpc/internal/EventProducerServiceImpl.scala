@@ -205,7 +205,8 @@ import akka.projection.internal.CorrelationId
               producerFilter = producerSource.producerFilter,
               eventOriginFilter,
               topicTagPrefix = producerSource.settings.topicTagPrefix,
-              replayParallelism = producerSource.settings.replayParallelism))
+              replayParallelism = producerSource.settings.replayParallelism,
+              maxAckCacheEntries = producerSource.settings.maxAckCacheEntries))
           .join(Flow.fromSinkAndSource(Sink.ignore, events))
 
       eventsFlow.via(transformEnvelopeToStreamOut(producerSource, init.replicaInfo, correlationId))
@@ -261,7 +262,7 @@ import akka.projection.internal.CorrelationId
         case Some(FilteredPayload) =>
           if (log.isTraceEnabled)
             log.trace(
-              "Filtered event, due to origin, from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}{}",
+              "Filtered event from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}{}",
               env.persistenceId,
               env.sequenceNr,
               env.offset,

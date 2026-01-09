@@ -313,9 +313,8 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       val projection =
         LoggingTestKit
           .custom { event =>
-            event.level == Level.TRACE && event.message.matches(
-              s"""Received event from \\[127.0.0.1] persistenceId \\[${pid.id
-                .replace("|", "\\|")}] with seqNr \\[[123]].*""") && event.message
+            event.level == Level.TRACE && event.message.matches(s""".*Received event, persistenceId \\[${pid.id
+              .replace("|", "\\|")}], seqNr \\[[123]].*""") && event.message
               .contains("source [BT]")
           }
           .withOccurrences(3)

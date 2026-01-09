@@ -13,6 +13,7 @@ import scala.concurrent.Promise
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.persistence.FilteredPayload
 import akka.persistence.Persistence
 import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset
@@ -77,14 +78,17 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
   private def createRESEnvelope(
       pid: PersistenceId,
       seqNr: Long,
+      originPid: PersistenceId,
+      originSeqNr: Long,
       evt: String,
       tags: Set[String] = Set.empty): EventEnvelope[Any] = {
     val replicationId = ReplicationId.fromString(pid.id)
+    val originReplicaId = ReplicationId.fromString(originPid.id).replicaId
     createEnvelope(pid, seqNr, evt, tags).withMetadata(
       ReplicatedEventMetadata(
-        replicationId.replicaId,
-        seqNr,
-        VersionVector.empty + replicationId.replicaId.id,
+        originReplicaId,
+        originSeqNr,
+        VersionVector.empty.updated(replicationId.replicaId.id, seqNr).updated(originReplicaId.id, originSeqNr),
         concurrent = true))
   }
 
@@ -141,7 +145,8 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
             producerFilter = initProducerFilter,
             replicatedEventOriginFilter = _ => true,
             topicTagPrefix = producerSettings.topicTagPrefix,
-            replayParallelism = producerSettings.replayParallelism))
+            replayParallelism = producerSettings.replayParallelism,
+            maxAckCacheEntries = producerSettings.maxAckCacheEntries))
         .join(Flow.fromSinkAndSource(Sink.ignore, envSource))
     private val streamIn: Source[StreamIn, TestPublisher.Probe[StreamIn]] = TestSource()
 
@@ -156,6 +161,11 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
 
   private def replayPersistenceId(pid: String, fromSeqNr: Long, filterAfterSeqNr: Long = Long.MaxValue) =
     ReplayPersistenceId(Some(PersistenceIdSeqNr(pid, fromSeqNr)), filterAfterSeqNr)
+
+  private def streamInAck(pid: String, seqNr: Long): StreamIn =
+    StreamIn(
+      StreamIn.Message.Ack(akka.projection.grpc.internal.proto
+        .Ack(Some(PersistenceIdSeqNr(pid, seqNr)))))
 
   "FilterStage" must {
     "emit EventEnvelope" in new Setup {
@@ -287,24 +297,31 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
 
     "replay from ReplayReq with RES ReplicaId" in new Setup {
       // some more envelopes
+      lazy val replicationId = ReplicationId(entityType, "a", ReplicaId("A"))
       override lazy val allEnvelopes = Vector(
-        createRESEnvelope(ReplicationId(entityType, "a", ReplicaId("A")).persistenceId, 1, "a1"),
-        createRESEnvelope(ReplicationId(entityType, "a", ReplicaId("B")).persistenceId, 1, "b1"),
-        createRESEnvelope(ReplicationId(entityType, "a", ReplicaId("A")).persistenceId, 2, "a2"))
+        createRESEnvelope(replicationId.persistenceId, 10, replicationId.persistenceId, 10, "a10"),
+        createRESEnvelope(
+          replicationId.persistenceId,
+          11,
+          replicationId.withReplica(ReplicaId("B")).persistenceId,
+          1,
+          "b1"),
+        createRESEnvelope(replicationId.persistenceId, 12, replicationId.persistenceId, 12, "a12"))
 
       envPublisher.sendNext(allEnvelopes.last)
       outProbe.request(10)
-      outProbe.expectNext().event shouldBe "a2"
+      outProbe.expectNext().event shouldBe "a12"
 
-      inPublisher.sendNext(streamInReplayReq(ReplicationId(entityType, "a", ReplicaId("A")).persistenceId.id, 1L))
+      inPublisher.sendNext(streamInReplayReq(replicationId.persistenceId.id, 1L))
       // it will not emit replayed event until there is some progress from the ordinary envSource, probably ok
-      envPublisher.sendNext(createRESEnvelope(PersistenceId(entityType, "e"), 1, "e1"))
+      envPublisher.sendNext(createEnvelope(PersistenceId(entityType, "e"), 1, "e1"))
       outProbe.expectNext().event shouldBe "e1"
-      outProbe.expectNext().event shouldBe "a1"
-      outProbe.expectNext().event shouldBe "a2"
+      outProbe.expectNext().event shouldBe "a10"
+      outProbe.expectNext().event shouldBe "b1"
+      outProbe.expectNext().event shouldBe "a12"
 
       // but ignored if it's a request for another replicaId
-      inPublisher.sendNext(streamInReplayReq(ReplicationId(entityType, "a", ReplicaId("B")).persistenceId.id, 1L))
+      inPublisher.sendNext(streamInReplayReq(replicationId.withReplica(ReplicaId("B")).persistenceId.id, 1L))
       outProbe.expectNoMessage()
     }
 
@@ -359,6 +376,41 @@ class FilterStageSpec extends ScalaTestWithActorTestKit("""
       outProbe.expectNext().event shouldBe "d2"
       outProbe.expectNext().event shouldBe "d3"
       outProbe.expectNoMessage() // d4 and d5 filtered out
+    }
+
+    "filter acked events" in new Setup {
+      lazy val replicationId = ReplicationId(entityType, "a", ReplicaId("A"))
+      override lazy val allEnvelopes = Vector(
+        createRESEnvelope(replicationId.persistenceId, 10, replicationId.persistenceId, 10, "a10"),
+        createRESEnvelope(
+          replicationId.persistenceId,
+          11,
+          replicationId.withReplica(ReplicaId("B")).persistenceId,
+          1,
+          "b1"),
+        createRESEnvelope(
+          replicationId.persistenceId,
+          12,
+          replicationId.withReplica(ReplicaId("B")).persistenceId,
+          2,
+          "b2"),
+        createRESEnvelope(
+          replicationId.persistenceId,
+          13,
+          replicationId.withReplica(ReplicaId("B")).persistenceId,
+          3,
+          "b3"),
+        createRESEnvelope(replicationId.persistenceId, 14, replicationId.persistenceId, 14, "a14"))
+
+      inPublisher.sendNext(streamInAck(replicationId.withReplica(ReplicaId("B")).persistenceId.id, 2))
+
+      allEnvelopes.foreach(envPublisher.sendNext)
+      outProbe.request(10)
+      outProbe.expectNext().event shouldBe "a10"
+      outProbe.expectNext().event shouldBe FilteredPayload
+      outProbe.expectNext().event shouldBe FilteredPayload
+      outProbe.expectNext().event shouldBe "b3"
+      outProbe.expectNext().event shouldBe "a14"
     }
 
   }

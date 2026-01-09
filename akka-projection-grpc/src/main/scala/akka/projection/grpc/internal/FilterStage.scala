@@ -8,6 +8,7 @@ import scala.util.Failure
 import scala.util.Success
 import scala.util.Try
 import scala.util.matching.Regex
+
 import akka.NotUsed
 import akka.annotation.InternalApi
 import akka.persistence.FilteredPayload
@@ -34,8 +35,9 @@ import akka.stream.stage.GraphStageLogic
 import akka.stream.stage.InHandler
 import akka.stream.stage.OutHandler
 import org.slf4j.LoggerFactory
-
 import scala.concurrent.ExecutionContext
+
+import akka.util.RecencyList
 
 /**
  * INTERNAL API
@@ -161,7 +163,8 @@ import scala.concurrent.ExecutionContext
     val producerFilter: EventEnvelope[Any] => Boolean,
     replicatedEventOriginFilter: EventEnvelope[_] => Boolean,
     topicTagPrefix: String,
-    replayParallelism: Int)
+    replayParallelism: Int,
+    maxAckCacheEntries: Int)
     extends GraphStage[BidiShape[StreamIn, NotUsed, EventEnvelope[Any], EventEnvelope[Any]]] {
   import ProtobufProtocolConversions._
 
@@ -188,6 +191,9 @@ import scala.concurrent.ExecutionContext
         case Success(replayEnv) => onReplay(replayEnv)
         case Failure(exc)       => failStage(exc)
       }
+
+      private var ackCache = Map.empty[String, Long]
+      private val ackCacheRecencyList = RecencyList.emptyWithNanoClock[String]
 
       private var replicaId: Option[ReplicaId] = None
 
@@ -389,6 +395,25 @@ import scala.concurrent.ExecutionContext
         new InHandler {
           override def onPush(): Unit = {
             grab(inReq) match {
+              case StreamIn(StreamIn.Message.Ack(ack), _) =>
+                if (maxAckCacheEntries > 0) {
+                  val ackOriginPid = ack.getOriginEvent.persistenceId
+                  val ackOriginSeqNr = ack.getOriginEvent.seqNr
+                  if (log.isTraceEnabled())
+                    log.trace(
+                      "Stream [{}]: Ack origin persistenceId [{}], seqNr [{}]",
+                      logPrefix,
+                      ackOriginPid,
+                      ackOriginSeqNr)
+                  val cachedSeqNr = ackCache.getOrElse(ackOriginPid, 0L)
+                  if (ackOriginSeqNr > cachedSeqNr) {
+                    ackCache = ackCache.updated(ackOriginPid, ackOriginSeqNr)
+                    ackCacheRecencyList.update(ackOriginPid)
+                    if (ackCache.size > maxAckCacheEntries)
+                      ackCacheRecencyList.removeLeastRecent().foreach(ackCache -= _)
+                  }
+                }
+
               case StreamIn(StreamIn.Message.Filter(filterReq), _) =>
                 log.debug("Stream [{}]: Filter update requested [{}]", logPrefix, filterReq.criteria)
                 updateFilter(filterReq.criteria)
@@ -425,12 +450,32 @@ import scala.concurrent.ExecutionContext
             val env = grab(inEnv)
             val pid = env.persistenceId
 
+            def alreadyAcked(): Boolean = {
+              env.metadata[ReplicatedEventMetadata] match {
+                case Some(replicatedEventMetadata) =>
+                  val replicationId = ReplicationId.fromString(env.persistenceId)
+                  val originReplicationId = replicationId.withReplica(replicatedEventMetadata.originReplica)
+                  val cachedSeqNr = ackCache.getOrElse(originReplicationId.persistenceId.id, 0L)
+                  val result = cachedSeqNr >= replicatedEventMetadata.originSequenceNr
+                  if (result && log.isTraceEnabled())
+                    log.trace(
+                      "Stream [{}]: Filter acked event, origin persistenceId [{}], origin seqNr [{}]",
+                      logPrefix,
+                      originReplicationId.persistenceId.id,
+                      replicatedEventMetadata.originSequenceNr)
+                  result
+                case None => false
+              }
+            }
+
             // replicaId is used for validation of replay requests, to avoid replay for other replicas
             if (replicaId.isEmpty && env.metadata[ReplicatedEventMetadata].isDefined)
               replicaId = Some(ReplicationId.fromString(pid).replicaId)
 
             if (producerFilter(env) && filter.matches(env)) {
-              if (replicatedEventOriginFilter(env)) {
+              if (alreadyAcked()) {
+                push(outEnv, env.withEvent(FilteredPayload)) // FilteredPayload will be transformed to FilteredEvent
+              } else if (replicatedEventOriginFilter(env)) {
                 // Note that the producer filter has higher priority - if a producer decides to filter events out the consumer
                 // can never include them
                 log.trace("Stream [{}]: Push event persistenceId [{}], seqNr [{}]", logPrefix, pid, env.sequenceNr)
