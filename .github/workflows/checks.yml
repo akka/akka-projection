@@ -76,6 +76,9 @@ jobs:
       - name: Compile all code with fatal warnings for Java 11, Scala 2.13 and Scala 3
         run: sbt "clean ; +compile; +Test/compile; +akka-projection-integration/Test/compile"
 
+      - name: "Check sample library versions in sync"
+        run: sbt "allVersionSyncChecks"
+
   setup-samples:
     name: Setup Sample Projects
     runs-on: Akka-Default
