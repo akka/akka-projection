@@ -73,7 +73,7 @@ object Dependencies {
     val akkaPersistenceR2dbcState =
       "com.lightbend.akka" %% "akka-persistence-r2dbc" % Versions.AkkaPersistenceR2dbc
 
-    val h2 = "com.h2database" % "h2" % "2.2.224" % Provided // EPL 1.0
+    val h2 = "com.h2database" % "h2" % "2.3.232" % Provided // EPL 1.0
     val r2dbcH2 = "io.r2dbc" % "r2dbc-h2" % "1.0.0.RELEASE" % Provided // ApacheV2
 
     val r2dbcSqlServer = "io.r2dbc" % "r2dbc-mssql" % "1.0.2.RELEASE" % Provided // ApacheV2
@@ -106,7 +106,7 @@ object Dependencies {
     val scalatestJUnit = "org.scalatestplus" %% "junit-4-13" % (Versions.scalaTest + ".0") % sbt.Test
     val junit = "junit" % "junit" % Versions.junit % sbt.Test
 
-    val h2Driver = "com.h2database" % "h2" % "2.2.224" % sbt.Test
+    val h2Driver = "com.h2database" % "h2" % "2.3.232" % sbt.Test
     val postgresDriver = "org.postgresql" % "postgresql" % "42.7.1" % sbt.Test
     val mysqlDriver = "com.mysql" % "mysql-connector-j" % "8.2.0" % sbt.Test
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % sbt.Test
