@@ -54,5 +54,11 @@
       "typeReachable": "akka.cluster.ddata.typed.scaladsl.DistributedData"
     },
     "name": "akka.cluster.ddata.typed.scaladsl.DistributedData"
+  },
+  {
+    "condition": {
+      "typeReachable": "akka.cluster.ddata.typed.scaladsl.DistributedData"
+    },
+    "name": "akka.projection.grpc.internal.ConsumerFilterRegistry$PubSubAck"
   }
 ]
