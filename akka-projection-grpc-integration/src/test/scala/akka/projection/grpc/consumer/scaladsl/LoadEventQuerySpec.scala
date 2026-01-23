@@ -46,6 +46,7 @@ class LoadEventQuerySpec(testContainerConf: TestContainerConf)
   private implicit val ec: ExecutionContext = system.executionContext
   private val entityType = nextEntityType()
   private val streamId = "stream_id_" + entityType
+  private val streamIdFromSnapshot = "stream_id_from_snapshot" + entityType
 
   protected override def afterAll(): Unit = {
     super.afterAll()
@@ -56,8 +57,10 @@ class LoadEventQuerySpec(testContainerConf: TestContainerConf)
 
     val replyProbe = createTestProbe[Done]()
     val pid = nextPid(entityType)
+    val pid2 = nextPid(entityType)
 
     lazy val entity = spawn(TestEntity(pid))
+    lazy val entity2 = spawn(TestEntity(pid2))
 
     lazy val grpcReadJournal = GrpcReadJournal(
       GrpcQuerySettings(streamId),
@@ -65,6 +68,14 @@ class LoadEventQuerySpec(testContainerConf: TestContainerConf)
         .connectToServiceAt("127.0.0.1", testContainerConf.grpcPort)
         .withTls(false),
       protobufDescriptors = Nil)
+
+    lazy val grpcReadJournalFromSnapshot = GrpcReadJournal(
+      GrpcQuerySettings(streamIdFromSnapshot),
+      GrpcClientSettings
+        .connectToServiceAt("127.0.0.1", testContainerConf.grpcPort)
+        .withTls(false),
+      protobufDescriptors = Nil)
+
   }
 
   override protected def beforeAll(): Unit = {
@@ -79,9 +90,12 @@ class LoadEventQuerySpec(testContainerConf: TestContainerConf)
       })
 
     val eventProducerSource = EventProducerSource(entityType, streamId, transformation, EventProducerSettings(system))
+    val eventProducerSourceFromSnapshot =
+      EventProducerSource(entityType, streamIdFromSnapshot, transformation, EventProducerSettings(system))
+        .withStartingFromSnapshots[Any, Any](identity)
 
     val eventProducerService =
-      EventProducer.grpcServiceHandler(eventProducerSource)
+      EventProducer.grpcServiceHandler(Set(eventProducerSource, eventProducerSourceFromSnapshot))
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(eventProducerService)
@@ -111,6 +125,23 @@ class LoadEventQuerySpec(testContainerConf: TestContainerConf)
         .loadEnvelope[String](pid.id, sequenceNr = 2L)
         .futureValue
         .event shouldBe "B"
+    }
+
+    "load event when StartingFromSnapshots" in new TestFixture {
+      entity2 ! TestEntity.Persist("c")
+      entity2 ! TestEntity.Persist("d")
+      entity2 ! TestEntity.Ping(replyProbe.ref)
+      replyProbe.receiveMessage()
+
+      grpcReadJournalFromSnapshot
+        .loadEnvelope[String](pid2.id, sequenceNr = 1L)
+        .futureValue
+        .event shouldBe "C"
+
+      grpcReadJournalFromSnapshot
+        .loadEnvelope[String](pid2.id, sequenceNr = 2L)
+        .futureValue
+        .event shouldBe "D"
     }
 
     "load filtered event" in new TestFixture {

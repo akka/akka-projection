@@ -52,16 +52,24 @@ class EventTimestampQuerySpec(testContainerConf: TestContainerConf)
   private implicit val ec: ExecutionContext = system.executionContext
   private val entityType = nextEntityType()
   private val streamId = "stream_id_" + entityType
+  private val streamIdFromSnapshot = "stream_id_from_snapshot" + entityType
 
   class TestFixture {
     val pid = nextPid(entityType)
+    val pid2 = nextPid(entityType)
 
     val replyProbe = createTestProbe[Done]()
 
     lazy val entity = spawn(TestEntity(pid))
+    lazy val entity2 = spawn(TestEntity(pid2))
 
     lazy val grpcReadJournal = GrpcReadJournal(
       GrpcQuerySettings(streamId),
+      GrpcClientSettings.fromConfig(system.settings.config.getConfig("akka.projection.grpc.consumer.client")),
+      protobufDescriptors = Nil)
+
+    lazy val grpcReadJournalFromSnapshot = GrpcReadJournal(
+      GrpcQuerySettings(streamIdFromSnapshot),
       GrpcClientSettings.fromConfig(system.settings.config.getConfig("akka.projection.grpc.consumer.client")),
       protobufDescriptors = Nil)
 
@@ -73,9 +81,12 @@ class EventTimestampQuerySpec(testContainerConf: TestContainerConf)
 
     val eventProducerSource =
       EventProducerSource(entityType, streamId, Transformation.identity, EventProducerSettings(system))
+    val eventProducerSourceFromSnapshot =
+      EventProducerSource(entityType, streamIdFromSnapshot, Transformation.identity, EventProducerSettings(system))
+        .withStartingFromSnapshots[Any, Any](identity)
 
     val eventProducerService =
-      EventProducer.grpcServiceHandler(eventProducerSource)
+      EventProducer.grpcServiceHandler(Set(eventProducerSource, eventProducerSourceFromSnapshot))
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(eventProducerService)
@@ -108,6 +119,26 @@ class EventTimestampQuerySpec(testContainerConf: TestContainerConf)
 
       if (timestampB != timestampA)
         timestampB.isAfter(timestampA) shouldBe true
+    }
+
+    "lookup event timestamp when StartingFromSnapshots" in new TestFixture {
+      entity2 ! TestEntity.Persist("C")
+      entity2 ! TestEntity.Persist("D")
+      entity2 ! TestEntity.Ping(replyProbe.ref)
+      replyProbe.receiveMessage()
+
+      val timestampC =
+        grpcReadJournal.timestampOf(pid2.id, sequenceNr = 1L).futureValue.get
+      val expectedTimestampC = readJournal.timestampOf(pid2.id, sequenceNr = 1L).futureValue.get
+      timestampC shouldBe expectedTimestampC
+
+      val timestampD =
+        grpcReadJournal.timestampOf(pid2.id, sequenceNr = 2L).futureValue.get
+      val expectedTimestampD = readJournal.timestampOf(pid2.id, sequenceNr = 2L).futureValue.get
+      timestampD shouldBe expectedTimestampD
+
+      if (timestampD != timestampC)
+        timestampD.isAfter(timestampC) shouldBe true
     }
 
     "handle missing event as None" in new TestFixture {

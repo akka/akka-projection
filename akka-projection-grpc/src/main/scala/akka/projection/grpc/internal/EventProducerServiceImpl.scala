@@ -316,6 +316,22 @@ import akka.projection.internal.CorrelationId
     }
   }
 
+  private def getEventTimestampQuery(streamId: String): EventTimestampQuery = {
+    eventsBySlicesPerStreamId.get(streamId) match {
+      case Some(q: EventTimestampQuery) => q
+      case Some(other) =>
+        throw new UnsupportedOperationException(s"eventTimestamp not supported by [${other.getClass.getName}]")
+      case None =>
+        eventsBySlicesStartingFromSnapshotsPerStreamId.get(streamId) match {
+          case Some(q: EventTimestampQuery) => q
+          case Some(other) =>
+            throw new UnsupportedOperationException(s"eventTimestamp not supported by [${other.getClass.getName}]")
+          case None =>
+            throw new IllegalArgumentException(s"No events by slices query defined for stream id [$streamId]")
+        }
+    }
+  }
+
   override def eventTimestamp(req: EventTimestampRequest, metadata: Metadata): Future[EventTimestampResponse] = {
     intercept(req.streamId, metadata).flatMap { _ =>
       val producerSource = streamIdToSourceMap(req.streamId)
@@ -325,17 +341,28 @@ import akka.projection.internal.CorrelationId
           s"Persistence id is for a type of entity that is not available for consumption (expected type " +
           s" in persistence id for stream id [${req.streamId}] is [${producerSource.entityType}] but was [$entityTypeFromPid])"))
       }
-      eventsBySlicesPerStreamId(req.streamId) match {
-        case q: EventTimestampQuery =>
-          import system.executionContext
-          q.timestampOf(req.persistenceId, req.seqNr).map {
-            case Some(instant) => EventTimestampResponse(Some(Timestamp(instant)))
-            case None          => EventTimestampResponse.defaultInstance
-          }
-        case other =>
-          Future.failed(
-            new UnsupportedOperationException(s"eventTimestamp not supported by [${other.getClass.getName}]"))
+      val q = getEventTimestampQuery(req.streamId)
+      import system.executionContext
+      q.timestampOf(req.persistenceId, req.seqNr).map {
+        case Some(instant) => EventTimestampResponse(Some(Timestamp(instant)))
+        case None          => EventTimestampResponse.defaultInstance
       }
+    }
+  }
+
+  private def getLoadEventQuery(streamId: String): LoadEventQuery = {
+    eventsBySlicesPerStreamId.get(streamId) match {
+      case Some(q: LoadEventQuery) => q
+      case Some(other) =>
+        throw new UnsupportedOperationException(s"loadEvent not supported by [${other.getClass.getName}]")
+      case None =>
+        eventsBySlicesStartingFromSnapshotsPerStreamId.get(streamId) match {
+          case Some(q: LoadEventQuery) => q
+          case Some(other) =>
+            throw new UnsupportedOperationException(s"loadEvent not supported by [${other.getClass.getName}]")
+          case None =>
+            throw new IllegalArgumentException(s"No events by slices query defined for stream id [$streamId]")
+        }
     }
   }
 
@@ -347,77 +374,90 @@ import akka.projection.internal.CorrelationId
         throw new GrpcServiceException(Status.INVALID_ARGUMENT.withDescription(
           s"Persistence id is for a type of entity that is not available for consumption (expected type " +
           s" in persistence id for stream id [${req.streamId}] is [${producerSource.entityType}] but was [$entityTypeFromPid])"))
-      eventsBySlicesPerStreamId(req.streamId) match {
-        case q: LoadEventQuery =>
-          import system.executionContext
-          QueryCorrelationId
-            .withCorrelationId(req.correlationId)(() => q.loadEnvelope[Any](req.persistenceId, req.seqNr))
-            .map { env =>
-              producerSource.replicatedEventMetadataTransformation(env) match {
-                case None           => env
-                case Some(metadata) => env.withMetadata(metadata)
+      val q = getLoadEventQuery(req.streamId)
+      import system.executionContext
+      QueryCorrelationId
+        .withCorrelationId(req.correlationId)(() => q.loadEnvelope[Any](req.persistenceId, req.seqNr))
+        .map { env =>
+          producerSource.replicatedEventMetadataTransformation(env) match {
+            case None           => env
+            case Some(metadata) => env.withMetadata(metadata)
+          }
+        }
+        .flatMap { env =>
+          val eventOriginFilter: EventEnvelope[_] => Boolean =
+            producerSource.replicatedEventOriginFilter
+              .flatMap(f => req.replicaInfo.map(f.createFilter))
+              .getOrElse((_: EventEnvelope[_]) => true)
+          if (eventOriginFilter(env)) {
+            transformAndEncodeEvent(producerSource.transformation, env, wireSerialization(producerSource))
+              .map {
+                case Some(event) =>
+                  if (log.isTraceEnabled)
+                    log.trace(
+                      "Loaded event from persistenceId [{}] with seqNr [{}], offset [{}]{}",
+                      env.persistenceId,
+                      env.sequenceNr,
+                      env.offset,
+                      CorrelationId.toLogText(req.correlationId))
+                  LoadEventResponse(LoadEventResponse.Message.Event(event))
+                case None =>
+                  if (log.isTraceEnabled)
+                    log.trace(
+                      "Filtered loaded event from persistenceId [{}] with seqNr [{}], offset [{}]{}",
+                      env.persistenceId,
+                      env.sequenceNr,
+                      env.offset,
+                      CorrelationId.toLogText(req.correlationId))
+                  LoadEventResponse(LoadEventResponse.Message.FilteredEvent(FilteredEvent(
+                    persistenceId = env.persistenceId,
+                    seqNr = env.sequenceNr,
+                    slice = env.slice,
+                    offset = ProtobufProtocolConversions.offsetToProtoOffset(env.offset),
+                    source = env.source)))
               }
-            }
-            .flatMap { env =>
-              val eventOriginFilter: EventEnvelope[_] => Boolean =
-                producerSource.replicatedEventOriginFilter
-                  .flatMap(f => req.replicaInfo.map(f.createFilter))
-                  .getOrElse((_: EventEnvelope[_]) => true)
-              if (eventOriginFilter(env)) {
-                transformAndEncodeEvent(producerSource.transformation, env, wireSerialization(producerSource))
-                  .map {
-                    case Some(event) =>
-                      if (log.isTraceEnabled)
-                        log.trace(
-                          "Loaded event from persistenceId [{}] with seqNr [{}], offset [{}]{}",
-                          env.persistenceId,
-                          env.sequenceNr,
-                          env.offset,
-                          CorrelationId.toLogText(req.correlationId))
-                      LoadEventResponse(LoadEventResponse.Message.Event(event))
-                    case None =>
-                      if (log.isTraceEnabled)
-                        log.trace(
-                          "Filtered loaded event from persistenceId [{}] with seqNr [{}], offset [{}]{}",
-                          env.persistenceId,
-                          env.sequenceNr,
-                          env.offset,
-                          CorrelationId.toLogText(req.correlationId))
-                      LoadEventResponse(LoadEventResponse.Message.FilteredEvent(FilteredEvent(
-                        persistenceId = env.persistenceId,
-                        seqNr = env.sequenceNr,
-                        slice = env.slice,
-                        offset = ProtobufProtocolConversions.offsetToProtoOffset(env.offset),
-                        source = env.source)))
-                  }
-              } else {
-                if (log.isTraceEnabled)
-                  log.trace(
-                    "Filtered loaded event, due to origin, from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
+          } else {
+            if (log.isTraceEnabled)
+              log.trace(
+                "Filtered loaded event, due to origin, from persistenceId [{}] with seqNr [{}], offset [{}], source [{}]{}",
+                env.persistenceId,
+                env.sequenceNr,
+                env.offset,
+                env.source,
+                CorrelationId.toLogText(req.correlationId))
+            Future.successful(
+              LoadEventResponse(
+                LoadEventResponse.Message.FilteredEvent(
+                  FilteredEvent(
                     env.persistenceId,
                     env.sequenceNr,
-                    env.offset,
-                    env.source,
-                    CorrelationId.toLogText(req.correlationId))
-                Future.successful(
-                  LoadEventResponse(
-                    LoadEventResponse.Message.FilteredEvent(
-                      FilteredEvent(
-                        env.persistenceId,
-                        env.sequenceNr,
-                        env.slice,
-                        ProtobufProtocolConversions.offsetToProtoOffset(env.offset),
-                        source = env.source))))
-              }
-            }
-            .recoverWith {
-              case e: NoSuchElementException =>
-                log.warn(e.getMessage)
-                Future.failed(new GrpcServiceException(Status.NOT_FOUND.withDescription(e.getMessage)))
-            }
-        case other =>
-          Future.failed(new UnsupportedOperationException(s"loadEvent not supported by [${other.getClass.getName}]"))
-      }
+                    env.slice,
+                    ProtobufProtocolConversions.offsetToProtoOffset(env.offset),
+                    source = env.source))))
+          }
+        }
+        .recoverWith {
+          case e: NoSuchElementException =>
+            log.warn(e.getMessage)
+            Future.failed(new GrpcServiceException(Status.NOT_FOUND.withDescription(e.getMessage)))
+        }
+    }
+  }
+
+  private def getLatestEventTimestampQuery(streamId: String): LatestEventTimestampQuery = {
+    eventsBySlicesPerStreamId.get(streamId) match {
+      case Some(q: LatestEventTimestampQuery) => q
+      case Some(other) =>
+        throw new UnsupportedOperationException(s"latestEventTimestamp not supported by [${other.getClass.getName}]")
+      case None =>
+        eventsBySlicesStartingFromSnapshotsPerStreamId.get(streamId) match {
+          case Some(q: LatestEventTimestampQuery) => q
+          case Some(other) =>
+            throw new UnsupportedOperationException(
+              s"latestEventTimestamp not supported by [${other.getClass.getName}]")
+          case None =>
+            throw new IllegalArgumentException(s"No events by slices query defined for stream id [$streamId]")
+        }
     }
   }
 
@@ -426,20 +466,15 @@ import akka.projection.internal.CorrelationId
       metadata: Metadata): Future[LatestEventTimestampResponse] = {
     intercept(req.streamId, metadata).flatMap { _ =>
       val producerSource = streamIdToSourceMap(req.streamId)
-      eventsBySlicesPerStreamId(req.streamId) match {
-        case q: LatestEventTimestampQuery =>
-          import system.executionContext
-          QueryCorrelationId
-            .withCorrelationId(req.correlationId)(() =>
-              q.latestEventTimestamp(producerSource.entityType, req.sliceMin, req.sliceMax))
-            .map {
-              case Some(instant) => LatestEventTimestampResponse(Some(Timestamp(instant)))
-              case None          => LatestEventTimestampResponse.defaultInstance
-            }
-        case other =>
-          Future.failed(
-            new UnsupportedOperationException(s"latestEventTimestamp not supported by [${other.getClass.getName}]"))
-      }
+      val q = getLatestEventTimestampQuery(req.streamId)
+      import system.executionContext
+      QueryCorrelationId
+        .withCorrelationId(req.correlationId)(() =>
+          q.latestEventTimestamp(producerSource.entityType, req.sliceMin, req.sliceMax))
+        .map {
+          case Some(instant) => LatestEventTimestampResponse(Some(Timestamp(instant)))
+          case None          => LatestEventTimestampResponse.defaultInstance
+        }
     }
   }
 

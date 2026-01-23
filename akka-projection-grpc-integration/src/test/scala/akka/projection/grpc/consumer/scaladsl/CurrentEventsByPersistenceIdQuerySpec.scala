@@ -44,6 +44,7 @@ class CurrentEventsByPersistenceIdQuerySpec(testContainerConf: TestContainerConf
   private implicit val ec: ExecutionContext = system.executionContext
   private val entityType = nextEntityType()
   private val streamId = "stream_id_" + entityType
+  private val streamIdFromSnapshot = "stream_id_from_snapshot" + entityType
 
   protected override def afterAll(): Unit = {
     super.afterAll()
@@ -63,6 +64,13 @@ class CurrentEventsByPersistenceIdQuerySpec(testContainerConf: TestContainerConf
         .connectToServiceAt("127.0.0.1", testContainerConf.grpcPort)
         .withTls(false),
       protobufDescriptors = Nil)
+
+    lazy val grpcReadJournalFromSnapshot = GrpcReadJournal(
+      GrpcQuerySettings(streamIdFromSnapshot),
+      GrpcClientSettings
+        .connectToServiceAt("127.0.0.1", testContainerConf.grpcPort)
+        .withTls(false),
+      protobufDescriptors = Nil)
   }
 
   override protected def beforeAll(): Unit = {
@@ -77,9 +85,12 @@ class CurrentEventsByPersistenceIdQuerySpec(testContainerConf: TestContainerConf
       })
 
     val eventProducerSource = EventProducerSource(entityType, streamId, transformation, EventProducerSettings(system))
+    val eventProducerSourceFromSnapshot =
+      EventProducerSource(entityType, streamIdFromSnapshot, transformation, EventProducerSettings(system))
+        .withStartingFromSnapshots[Any, Any](identity)
 
     val eventProducerService =
-      EventProducer.grpcServiceHandler(eventProducerSource)
+      EventProducer.grpcServiceHandler(Set(eventProducerSource, eventProducerSourceFromSnapshot))
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(eventProducerService)
