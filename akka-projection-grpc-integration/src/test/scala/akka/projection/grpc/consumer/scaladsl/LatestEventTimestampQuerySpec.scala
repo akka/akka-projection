@@ -52,6 +52,7 @@ class LatestEventTimestampQuerySpec(testContainerConf: TestContainerConf)
   private implicit val ec: ExecutionContext = system.executionContext
   private val entityType = nextEntityType()
   private val streamId = "stream_id_" + entityType
+  private val streamIdFromSnapshot = "stream_id_from_snapshot" + entityType
 
   class TestFixture {
     val pid = nextPid(entityType)
@@ -67,6 +68,11 @@ class LatestEventTimestampQuerySpec(testContainerConf: TestContainerConf)
       GrpcClientSettings.fromConfig(system.settings.config.getConfig("akka.projection.grpc.consumer.client")),
       protobufDescriptors = Nil)
 
+    lazy val grpcReadJournalFromSnapshot = GrpcReadJournal(
+      GrpcQuerySettings(streamIdFromSnapshot),
+      GrpcClientSettings.fromConfig(system.settings.config.getConfig("akka.projection.grpc.consumer.client")),
+      protobufDescriptors = Nil)
+
     lazy val readJournal =
       PersistenceQuery(system).readJournalFor[LatestEventTimestampQuery](R2dbcReadJournal.Identifier)
   }
@@ -76,9 +82,12 @@ class LatestEventTimestampQuerySpec(testContainerConf: TestContainerConf)
 
     val eventProducerSource =
       EventProducerSource(entityType, streamId, Transformation.identity, EventProducerSettings(system))
+    val eventProducerSourceFromSnapshot =
+      EventProducerSource(entityType, streamIdFromSnapshot, Transformation.identity, EventProducerSettings(system))
+        .withStartingFromSnapshots[Any, Any](identity)
 
     val eventProducerService =
-      EventProducer.grpcServiceHandler(eventProducerSource)
+      EventProducer.grpcServiceHandler(Set(eventProducerSource, eventProducerSourceFromSnapshot))
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(eventProducerService)
@@ -99,16 +108,39 @@ class LatestEventTimestampQuerySpec(testContainerConf: TestContainerConf)
       entity ! TestEntity.Ping(replyProbe.ref)
       replyProbe.receiveMessage()
 
-      val timestampA =
+      val timestamp =
         grpcReadJournal.latestEventTimestamp(streamId, slice, slice).futureValue.get
-      val expectedTimestampA = readJournal.latestEventTimestamp(entityType, slice, slice).futureValue.get
-      timestampA shouldBe expectedTimestampA
+      val expectedTimestamp = readJournal.latestEventTimestamp(entityType, slice, slice).futureValue.get
+      timestamp shouldBe expectedTimestamp
 
-      grpcReadJournal.latestEventTimestamp(streamId, 0, 1023).futureValue.get shouldBe expectedTimestampA
+      grpcReadJournal.latestEventTimestamp(streamId, 0, 1023).futureValue.get shouldBe expectedTimestamp
 
       val wrongSlice =
         if (slice == 0) 1023 else (slice - 1)
       grpcReadJournal.latestEventTimestamp(streamId, wrongSlice, wrongSlice).futureValue shouldBe None
+    }
+
+    "lookup event timestamp when StartingFromSnapshots" in new TestFixture {
+      entity ! TestEntity.Persist("c")
+      entity ! TestEntity.Persist("d")
+      entity ! TestEntity.Ping(replyProbe.ref)
+      replyProbe.receiveMessage()
+
+      val timestamp =
+        grpcReadJournalFromSnapshot.latestEventTimestamp(streamIdFromSnapshot, slice, slice).futureValue.get
+      val expectedTimestamp = readJournal.latestEventTimestamp(entityType, slice, slice).futureValue.get
+      timestamp shouldBe expectedTimestamp
+
+      grpcReadJournalFromSnapshot
+        .latestEventTimestamp(streamIdFromSnapshot, 0, 1023)
+        .futureValue
+        .get shouldBe expectedTimestamp
+
+      val wrongSlice =
+        if (slice == 0) 1023 else (slice - 1)
+      grpcReadJournalFromSnapshot
+        .latestEventTimestamp(streamIdFromSnapshot, wrongSlice, wrongSlice)
+        .futureValue shouldBe None
     }
 
     "handle missing event as None" in new TestFixture {
