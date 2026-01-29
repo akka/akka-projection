@@ -152,6 +152,32 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
       filtered = true,
       env.source)
 
+  def snapshotEnvelope(env: EventEnvelope[String]): EventEnvelope[String] =
+    new EventEnvelope[String](
+      env.offset,
+      env.persistenceId,
+      sequenceNr = env.sequenceNr,
+      env.eventOption,
+      env.timestamp,
+      None,
+      env.entityType,
+      env.slice,
+      filtered = false,
+      source = EnvelopeOrigin.SourceSnapshot)
+
+  def heartbeatEnvelope(env: EventEnvelope[String]): EventEnvelope[String] =
+    new EventEnvelope[String](
+      env.offset,
+      env.persistenceId,
+      sequenceNr = env.sequenceNr,
+      None,
+      env.timestamp,
+      None,
+      env.entityType,
+      env.slice,
+      filtered = true,
+      source = EnvelopeOrigin.SourceHeartbeat)
+
   def createUpdatedDurableState(
       pid: Pid,
       revision: SeqNr,
@@ -676,6 +702,82 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
           .futureValue
       }
       offsetStore.getInflight() shouldBe Map("p1" -> 4L, "p3" -> 8L)
+    }
+
+    "accept snapshots" in {
+      val projectionId = genRandomProjectionId()
+      val eventTimestampQueryClock = TestClock.nowMicros()
+      val offsetStore = createOffsetStore(projectionId, eventTimestampQueryClock = eventTimestampQueryClock)
+
+      val p1 = "p-08071" // slice 101
+
+      val startTime = TestClock.nowMicros().instant()
+
+      val env1 = snapshotEnvelope(createEnvelope(p1, 1L, startTime.plusMillis(1), "s1"))
+      offsetStore.validate(env1).futureValue shouldBe Accepted
+
+      // seqNr gap is allowed
+      val env2 = snapshotEnvelope(createEnvelope(p1, 3L, startTime.plusMillis(2), "s3"))
+      offsetStore.validate(env2).futureValue shouldBe Accepted
+
+      offsetStore.saveOffset(OffsetPidSeqNr(env2.offset, env2.persistenceId, env2.sequenceNr)).futureValue
+      // duplicate
+      offsetStore.validate(env1).futureValue shouldBe Duplicate
+      offsetStore.validate(env2).futureValue shouldBe Duplicate
+
+      offsetStore.getState().byPid(p1).seqNr shouldBe env2.sequenceNr
+
+      val env3 = snapshotEnvelope(createEnvelope(p1, 10L, startTime.plusMillis(3), "s10"))
+      offsetStore.validate(env3).futureValue shouldBe Accepted
+      offsetStore.addInflight(env3)
+      offsetStore.getInflight() shouldBe Map(p1 -> env3.sequenceNr)
+      offsetStore.validate(env3).futureValue shouldBe Duplicate
+
+      offsetStore.saveOffset(OffsetPidSeqNr(env3.offset, env3.persistenceId, env3.sequenceNr)).futureValue
+      offsetStore.getState().byPid(p1).seqNr shouldBe env3.sequenceNr
+      offsetStore.getInflight() shouldBe Map.empty
+
+      offsetStore.validate(env1).futureValue shouldBe Duplicate
+      offsetStore.validate(env2).futureValue shouldBe Duplicate
+      offsetStore.validate(env3).futureValue shouldBe Duplicate
+    }
+
+    "accept heartbeats" in {
+      val projectionId = genRandomProjectionId()
+      val eventTimestampQueryClock = TestClock.nowMicros()
+      val offsetStore = createOffsetStore(projectionId, eventTimestampQueryClock = eventTimestampQueryClock)
+
+      val hbPid1 = "test-entity|_hb-26498e81-66ad-4aa9-b985-b34602c5f32d-1" // slice 359
+
+      val startTime = TestClock.nowMicros().instant()
+
+      val env1 = heartbeatEnvelope(createEnvelope(hbPid1, 1L, startTime.plusMillis(1), ""))
+      offsetStore.validate(env1).futureValue shouldBe Accepted
+
+      // seqNr gap is allowed
+      val env2 = heartbeatEnvelope(createEnvelope(hbPid1, 3L, startTime.plusMillis(2), ""))
+      offsetStore.validate(env2).futureValue shouldBe Accepted
+
+      offsetStore.saveOffset(OffsetPidSeqNr(env2.offset, env2.persistenceId, env2.sequenceNr)).futureValue
+      // duplicate
+      offsetStore.validate(env1).futureValue shouldBe Duplicate
+      offsetStore.validate(env2).futureValue shouldBe Duplicate
+
+      offsetStore.getState().byPid(hbPid1).seqNr shouldBe env2.sequenceNr
+
+      val env3 = heartbeatEnvelope(createEnvelope(hbPid1, 10L, startTime.plusMillis(3), ""))
+      offsetStore.validate(env3).futureValue shouldBe Accepted
+      offsetStore.addInflight(env3)
+      offsetStore.getInflight() shouldBe Map(hbPid1 -> env3.sequenceNr)
+      offsetStore.validate(env3).futureValue shouldBe Duplicate
+
+      offsetStore.saveOffset(OffsetPidSeqNr(env3.offset, env3.persistenceId, env3.sequenceNr)).futureValue
+      offsetStore.getState().byPid(hbPid1).seqNr shouldBe env3.sequenceNr
+      offsetStore.getInflight() shouldBe Map.empty
+
+      offsetStore.validate(env1).futureValue shouldBe Duplicate
+      offsetStore.validate(env2).futureValue shouldBe Duplicate
+      offsetStore.validate(env3).futureValue shouldBe Duplicate
     }
 
     "update inflight on error and re-accept element" in {

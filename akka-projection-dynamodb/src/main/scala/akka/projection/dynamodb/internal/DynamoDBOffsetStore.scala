@@ -69,8 +69,7 @@ private[projection] object DynamoDBOffsetStore {
       offset: TimestampOffset,
       strictSeqNr: Boolean,
       fromBacktracking: Boolean,
-      fromPubSub: Boolean,
-      fromSnapshot: Boolean)
+      fromPubSub: Boolean)
 
   object State {
     val empty: State = State(Map.empty, Map.empty, Map.empty)
@@ -707,9 +706,6 @@ private[projection] class DynamoDBOffsetStore(
               seqNr,
               pid)
             FutureDuplicate
-          } else if (recordWithOffset.fromSnapshot) {
-            // snapshots will mean we are starting from some arbitrary offset after last seen offset
-            FutureAccepted
           } else if (!recordWithOffset.fromBacktracking) {
             logUnexpected()
             // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
@@ -725,14 +721,12 @@ private[projection] class DynamoDBOffsetStore(
         } else if (seqNr == 1) {
           // always accept first event if no other event for that pid has been seen
           FutureAccepted
-        } else if (recordWithOffset.fromSnapshot) {
-          // always accept starting from snapshots when there was no previous event seen
-          FutureAccepted
         } else {
           validateEventTimestamp(recordWithOffset)
         }
       } else {
-        // strictSeqNr == false is for durable state where each revision might not be visible
+        // strictSeqNr == false is for durable state, AllowSeqNrGapsMetadata, snapshots, or heartbeats
+        // where each revision might not be visible
         val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
         val ok = seqNr > prevSeqNr
 
@@ -740,7 +734,7 @@ private[projection] class DynamoDBOffsetStore(
           FutureAccepted
         } else {
           logger.trace(
-            "{} Filtering out earlier revision [{}] for pid [{}], previous revision [{}]",
+            "{} Filtering out duplicate sequence number [{}] for pid [{}], previous sequence number [{}]",
             logPrefix,
             seqNr,
             pid,
@@ -867,16 +861,18 @@ private[projection] class DynamoDBOffsetStore(
       case eventEnvelope: EventEnvelope[_] if eventEnvelope.offset.isInstanceOf[TimestampOffset] =>
         val timestampOffset = eventEnvelope.offset.asInstanceOf[TimestampOffset]
         val slice = persistenceExt.sliceForPersistenceId(eventEnvelope.persistenceId)
+        val fromSnapshot = EnvelopeOrigin.fromSnapshot(eventEnvelope)
+        val fromHeartbeat = EnvelopeOrigin.fromHeartbeat(eventEnvelope)
         // Allow gaps if envelope has AllowSeqNrGapsMetadata
-        val strictSeqNr = eventEnvelope.metadata[AllowSeqNrGapsMetadata.type].isEmpty
+        val strictSeqNr = eventEnvelope.metadata[AllowSeqNrGapsMetadata.type].isEmpty &&
+          !fromSnapshot && !fromHeartbeat
         Some(
           RecordWithOffset(
             Record(slice, eventEnvelope.persistenceId, eventEnvelope.sequenceNr, timestampOffset.timestamp),
             timestampOffset,
             strictSeqNr,
             fromBacktracking = EnvelopeOrigin.fromBacktracking(eventEnvelope),
-            fromPubSub = EnvelopeOrigin.fromPubSub(eventEnvelope),
-            fromSnapshot = EnvelopeOrigin.fromSnapshot(eventEnvelope)))
+            fromPubSub = EnvelopeOrigin.fromPubSub(eventEnvelope)))
       case change: UpdatedDurableState[_] if change.offset.isInstanceOf[TimestampOffset] =>
         val timestampOffset = change.offset.asInstanceOf[TimestampOffset]
         val slice = persistenceExt.sliceForPersistenceId(change.persistenceId)
@@ -886,8 +882,7 @@ private[projection] class DynamoDBOffsetStore(
             timestampOffset,
             strictSeqNr = false,
             fromBacktracking = EnvelopeOrigin.fromBacktracking(change),
-            fromPubSub = false,
-            fromSnapshot = false))
+            fromPubSub = false))
       case change: DeletedDurableState[_] if change.offset.isInstanceOf[TimestampOffset] =>
         val timestampOffset = change.offset.asInstanceOf[TimestampOffset]
         val slice = persistenceExt.sliceForPersistenceId(change.persistenceId)
@@ -897,8 +892,7 @@ private[projection] class DynamoDBOffsetStore(
             timestampOffset,
             strictSeqNr = false,
             fromBacktracking = false,
-            fromPubSub = false,
-            fromSnapshot = false))
+            fromPubSub = false))
       case change: DurableStateChange[_] if change.offset.isInstanceOf[TimestampOffset] =>
         // in case additional types are added
         throw new IllegalArgumentException(

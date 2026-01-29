@@ -987,6 +987,7 @@ private[projection] object DynamoDBProjectionImpl {
         else if (EnvelopeOrigin.fromPubSub(env)) "pubsub"
         else if (EnvelopeOrigin.fromBacktracking(env)) "backtracking"
         else if (EnvelopeOrigin.fromSnapshot(env)) "snapshot"
+        else if (EnvelopeOrigin.fromHeartbeat(env)) "heartbeat"
         else env.source
       case _ => "unknown"
     }
