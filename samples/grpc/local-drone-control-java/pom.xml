@@ -19,7 +19,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <akka.version>2.10.13</akka.version>
         <akka-projection.version>1.6.19</akka-projection.version>
-        <akka-persistence-r2dbc.version>1.3.11</akka-persistence-r2dbc.version>
+        <akka-persistence-r2dbc.version>1.3.12</akka-persistence-r2dbc.version>
         <akka-management.version>1.6.4</akka-management.version>
         <akka-diagnostics.version>2.2.1</akka-diagnostics.version>
         <akka-http.version>10.7.3</akka-http.version>
