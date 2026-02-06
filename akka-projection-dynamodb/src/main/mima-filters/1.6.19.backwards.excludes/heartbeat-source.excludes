@@ -1,0 +1,3 @@
+# snapshots, heartbeats, internals
+ProblemFilters.exclude[Problem]("akka.projection.dynamodb.internal.DynamoDBOffsetStore#RecordWithOffset*")
+ProblemFilters.exclude[MissingTypesProblem]("akka.projection.dynamodb.internal.DynamoDBOffsetStore$RecordWithOffset$")
