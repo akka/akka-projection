@@ -1,0 +1,3 @@
+# snapshots, heartbeats, internals
+ProblemFilters.exclude[Problem]("akka.projection.r2dbc.internal.R2dbcOffsetStore#RecordWithOffset*")
+ProblemFilters.exclude[MissingTypesProblem]("akka.projection.r2dbc.internal.R2dbcOffsetStore$RecordWithOffset$")
