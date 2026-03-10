@@ -118,8 +118,6 @@ jobs:
 
       - name: Run akka/github-actions-scripts
         uses: akka/github-actions-scripts/setup_global_resolver@main
-        with:
-          maven-mirror-control: 'NO_MIRROR'
 
       - name: Gather version
         # some cleanup of the sbt output to get the version sbt will use when publishing below
@@ -241,6 +239,8 @@ jobs:
 
       - name: Run akka/github-actions-scripts
         uses: akka/github-actions-scripts/setup_global_resolver@main
+        with:
+          maven-mirror-control: 'NO_MIRROR'
 
       - name: Restore published artifacts
         # https://github.com/actions/cache/releases
