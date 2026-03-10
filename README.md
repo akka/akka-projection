@@ -26,6 +26,13 @@ for [Scala](https://doc.akka.io/libraries/akka-projection/current/?language=scal
 
 The current versions of all Akka libraries are listed on the [Akka Dependencies](https://doc.akka.io/libraries/akka-dependencies/current/) page. Releases of the Akka Projections libraries in this repository are listed on the [GitHub releases](https://github.com/akka/akka-projection/releases) page.
 
+## Build Token
+
+To build locally, you need to fetch a token at https://account.akka.io/token that you have to place into `~/.sbt/1.0/akka-commercial.sbt` file like this:
+```
+ThisBuild / resolvers += "lightbend-akka".at("your token resolver here")
+```
+
 License
 -------
 
