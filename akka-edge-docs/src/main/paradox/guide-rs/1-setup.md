@@ -6,7 +6,7 @@ Akka Edge Rust requires a minimum of Rust version 1.70.0 stable (June 2023), but
 
 To install Rust, follow [the official instructions](https://www.rust-lang.org/learn/get-started).
 
-[Trunk](https://trunkrs.dev/) is used to build and package our frontend example for WebAssembly. Please follow its getting-started
+[Trunk](https://trunk-rs.github.io/trunk/) is used to build and package our frontend example for WebAssembly. Please follow its getting-started
 instructions.
 
 Finally, the following command will [allow the Rust compiler to target WebAssembly](https://www.rust-lang.org/tools/install) for the browser:
