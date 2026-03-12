@@ -13,6 +13,7 @@ import scala.collection.immutable.TreeSet
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 import scala.jdk.DurationConverters._
+import scala.util.control.NonFatal
 import akka.Done
 import akka.NotUsed
 import akka.actor.typed.ActorSystem
@@ -650,99 +651,103 @@ private[projection] class DynamoDBOffsetStore(
     val seqNr = recordWithOffset.record.seqNr
 
     load(pid).flatMap { currentState =>
-      val duplicate = currentState.isDuplicate(recordWithOffset.record, settings.acceptSequenceNumberResetAfter)
+      try {
+        val duplicate = currentState.isDuplicate(recordWithOffset.record, settings.acceptSequenceNumberResetAfter)
 
-      if (duplicate) {
-        logger.trace("{} Filtering out duplicate sequence number [{}] for pid [{}]", logPrefix, seqNr, pid)
-        FutureDuplicate
-      } else if (recordWithOffset.strictSeqNr) {
-        // strictSeqNr == true is for event sourced
-        val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
-
-        def logUnexpected(): Unit = {
-          if (recordWithOffset.fromPubSub)
-            logger.debug(
-              "{} Rejecting pub-sub envelope, unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
-              logPrefix,
-              seqNr,
-              pid,
-              prevSeqNr,
-              recordWithOffset.offset)
-          else if (!recordWithOffset.fromBacktracking)
-            logger.debug(
-              "{} Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
-              logPrefix,
-              seqNr,
-              pid,
-              prevSeqNr,
-              recordWithOffset.offset)
-          else
-            logger.warn(
-              "{} Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
-              logPrefix,
-              seqNr,
-              pid,
-              prevSeqNr,
-              recordWithOffset.offset)
-        }
-
-        if (prevSeqNr > 0) {
-          // expecting seqNr to be +1 of previously known
-          val ok = seqNr == prevSeqNr + 1
-          // detect reset of sequence number (for example, if events were deleted and then pid was recreated)
-          val seqNrReset = (seqNr == 1) && currentState.byPid.get(pid).exists { existingRecord =>
-              settings.acceptSequenceNumberResetAfter.exists { acceptAfter =>
-                Validation.acceptReset(recordWithOffset.record, existingRecord, acceptAfter)
-              }
-            }
-          if (ok || seqNrReset) {
-            FutureAccepted
-          } else if (seqNr <= currentInflight.getOrElse(pid, 0L)) {
-            // currentInFlight contains those that have been processed or about to be processed in Flow,
-            // but offset not saved yet => ok to handle as duplicate
-            logger.trace(
-              "{} Filtering out duplicate in-flight sequence number [{}] for pid [{}]",
-              logPrefix,
-              seqNr,
-              pid)
-            FutureDuplicate
-          } else if (!recordWithOffset.fromBacktracking) {
-            logUnexpected()
-            // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
-            // and SourceProvider supports it.
-            FutureRejectedSeqNr
-          } else {
-            logUnexpected()
-            // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
-            // and SourceProvider supports it.
-            // Otherwise this will result in projection restart (with normal configuration).
-            FutureRejectedBacktrackingSeqNr
-          }
-        } else if (seqNr == 1) {
-          // always accept first event if no other event for that pid has been seen
-          FutureAccepted
-        } else {
-          validateEventTimestamp(recordWithOffset)
-        }
-      } else {
-        // strictSeqNr == false is for durable state, AllowSeqNrGapsMetadata, snapshots, or heartbeats
-        // where each revision might not be visible
-        val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
-        val ok = seqNr > prevSeqNr
-
-        if (ok) {
-          FutureAccepted
-        } else {
-          logger.trace(
-            "{} Filtering out duplicate sequence number [{}] for pid [{}], previous sequence number [{}]",
-            logPrefix,
-            seqNr,
-            pid,
-            prevSeqNr)
+        if (duplicate) {
+          logger.trace("{} Filtering out duplicate sequence number [{}] for pid [{}]", logPrefix, seqNr, pid)
           FutureDuplicate
+        } else if (recordWithOffset.strictSeqNr) {
+          // strictSeqNr == true is for event sourced
+          val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
+
+          def logUnexpected(): Unit = {
+            if (recordWithOffset.fromPubSub)
+              logger.debug(
+                "{} Rejecting pub-sub envelope, unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+                logPrefix,
+                seqNr,
+                pid,
+                prevSeqNr,
+                recordWithOffset.offset)
+            else if (!recordWithOffset.fromBacktracking)
+              logger.debug(
+                "{} Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+                logPrefix,
+                seqNr,
+                pid,
+                prevSeqNr,
+                recordWithOffset.offset)
+            else
+              logger.warn(
+                "{} Rejecting unexpected sequence number [{}] for pid [{}], previous sequence number [{}]. Offset: {}",
+                logPrefix,
+                seqNr,
+                pid,
+                prevSeqNr,
+                recordWithOffset.offset)
+          }
+
+          if (prevSeqNr > 0) {
+            // expecting seqNr to be +1 of previously known
+            val ok = seqNr == prevSeqNr + 1
+            // detect reset of sequence number (for example, if events were deleted and then pid was recreated)
+            val seqNrReset = (seqNr == 1) && currentState.byPid.get(pid).exists { existingRecord =>
+                settings.acceptSequenceNumberResetAfter.exists { acceptAfter =>
+                  Validation.acceptReset(recordWithOffset.record, existingRecord, acceptAfter)
+                }
+              }
+            if (ok || seqNrReset) {
+              FutureAccepted
+            } else if (seqNr <= currentInflight.getOrElse(pid, 0L)) {
+              // currentInFlight contains those that have been processed or about to be processed in Flow,
+              // but offset not saved yet => ok to handle as duplicate
+              logger.trace(
+                "{} Filtering out duplicate in-flight sequence number [{}] for pid [{}]",
+                logPrefix,
+                seqNr,
+                pid)
+              FutureDuplicate
+            } else if (!recordWithOffset.fromBacktracking) {
+              logUnexpected()
+              // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+              // and SourceProvider supports it.
+              FutureRejectedSeqNr
+            } else {
+              logUnexpected()
+              // Rejected will trigger replay of missed events, if replay-on-rejected-sequence-numbers is enabled
+              // and SourceProvider supports it.
+              // Otherwise this will result in projection restart (with normal configuration).
+              FutureRejectedBacktrackingSeqNr
+            }
+          } else if (seqNr == 1) {
+            // always accept first event if no other event for that pid has been seen
+            FutureAccepted
+          } else {
+            validateEventTimestamp(recordWithOffset)
+          }
+        } else {
+          // strictSeqNr == false is for durable state, AllowSeqNrGapsMetadata, snapshots, or heartbeats
+          // where each revision might not be visible
+          val prevSeqNr = currentInflight.getOrElse(pid, currentState.byPid.get(pid).map(_.seqNr).getOrElse(0L))
+          val ok = seqNr > prevSeqNr
+
+          if (ok) {
+            FutureAccepted
+          } else {
+            logger.trace(
+              "{} Filtering out duplicate sequence number [{}] for pid [{}], previous sequence number [{}]",
+              logPrefix,
+              seqNr,
+              pid,
+              prevSeqNr)
+            FutureDuplicate
+          }
         }
+      } catch {
+        case NonFatal(ex) => Future.failed(ex)
       }
-    }
+    }(ExecutionContext.parasitic)
   }
 
   private def validateEventTimestamp(recordWithOffset: RecordWithOffset) = {
