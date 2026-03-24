@@ -18,8 +18,7 @@ jobs:
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
-        # v4.1.1
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -31,13 +30,11 @@ jobs:
 
       - name: Cache Coursier cache
         # https://github.com/coursier/cache-action/releases
-        # v7.0.0
-        uses: coursier/cache-action@bebeeb0e6f48ebad66d3783946588ecf43114433
+        uses: coursier/cache-action@v8.1.0
 
       - name: Set up JDK ${{ matrix.jdkVersion }}
         # https://github.com/coursier/setup-action/releases
-        # v1.3.4
-        uses: coursier/setup-action@48280172a2c999022e42527711d6b28e4945e6f0
+        uses: coursier/setup-action@v3.0.0
         with:
           jvm: ${{ matrix.jvmName }}
 

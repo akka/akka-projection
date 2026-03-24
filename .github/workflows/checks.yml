@@ -17,8 +17,7 @@ jobs:
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
-        # v4.1.1
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@v6
         with:
           # we don't know what commit the last tag was it's safer to get entire repo so previousStableVersion resolves
           fetch-depth: 0
@@ -31,13 +30,11 @@ jobs:
 
       - name: Cache Coursier cache
         # https://github.com/coursier/cache-action/releases
-        # v7.0.0
-        uses: coursier/cache-action@bebeeb0e6f48ebad66d3783946588ecf43114433
+        uses: coursier/cache-action@v8.1.0
 
       - name: Set up JDK 11
         # https://github.com/coursier/setup-action/releases
-        # v1.3.5
-        uses: coursier/setup-action@7bde40eee928896f074dbb76d22dd772eed5c65f
+        uses: coursier/setup-action@v3.0.0
         with:
           jvm: temurin:1.11
 
@@ -53,8 +50,7 @@ jobs:
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
-        # v4.1.1
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -66,13 +62,11 @@ jobs:
 
       - name: Cache Coursier cache
         # https://github.com/coursier/cache-action/releases
-        # v7.0.0
-        uses: coursier/cache-action@bebeeb0e6f48ebad66d3783946588ecf43114433
+        uses: coursier/cache-action@v8.1.0
 
       - name: Set up JDK 11
         # https://github.com/coursier/setup-action/releases
-        # v1.3.5
-        uses: coursier/setup-action@7bde40eee928896f074dbb76d22dd772eed5c65f
+        uses: coursier/setup-action@v3.0.0
         with:
           jvm: temurin:1.11
 
@@ -93,8 +87,7 @@ jobs:
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
-        # v4.1.1
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -106,13 +99,11 @@ jobs:
 
       - name: Cache Coursier cache
         # https://github.com/coursier/cache-action/releases
-        # v7.0.0
-        uses: coursier/cache-action@bebeeb0e6f48ebad66d3783946588ecf43114433
+        uses: coursier/cache-action@v8.1.0
 
       - name: Set up JDK 11
         # https://github.com/coursier/setup-action/releases
-        # v1.3.5
-        uses: coursier/setup-action@7bde40eee928896f074dbb76d22dd772eed5c65f
+        uses: coursier/setup-action@v3.0.0
         with:
           jvm: temurin:1.11
 
@@ -132,8 +123,7 @@ jobs:
 
       - name: Cache published artifacts
         # https://github.com/actions/cache/releases
-        # v4.3.0
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830
+        uses: actions/cache/save@v5
         with:
           path: |
             ~/.ivy2/local
@@ -142,8 +132,7 @@ jobs:
 
       - name: Save version
         # https://github.com/actions/upload-artifact/releases
-        # v4.3.1
-        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3
+        uses: actions/upload-artifact@v7
         with:
           name: akka-projection-version
           path: ~/.version
@@ -214,8 +203,7 @@ jobs:
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
-        # v4.1.1
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -227,13 +215,11 @@ jobs:
 
       - name: Cache Coursier cache
         # https://github.com/coursier/cache-action/releases
-        # v7.0.0
-        uses: coursier/cache-action@bebeeb0e6f48ebad66d3783946588ecf43114433
+        uses: coursier/cache-action@v8.1.0
 
       - name: Set up JDK 11
         # https://github.com/coursier/setup-action/releases
-        # v1.3.5
-        uses: coursier/setup-action@7bde40eee928896f074dbb76d22dd772eed5c65f
+        uses: coursier/setup-action@v3.0.0
         with:
           jvm: temurin:1.11
 
@@ -244,8 +230,7 @@ jobs:
 
       - name: Restore published artifacts
         # https://github.com/actions/cache/releases
-        # v4.3.0
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830
+        uses: actions/cache/restore@v5
         with:
           path: |
             ~/.ivy2/local
@@ -255,8 +240,7 @@ jobs:
 
       - name: Download version
         # https://github.com/actions/download-artifact/releases
-        # v4.1.4
-        uses: actions/download-artifact@8caf195ad4b1dee92908e23f56eeb0696f1dd42d
+        uses: actions/download-artifact@v8
         with:
           name: akka-projection-version
           path: ~/
@@ -272,8 +256,7 @@ jobs:
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
-        # v4.1.1
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -300,8 +283,7 @@ jobs:
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
-        # v4.1.1
-        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -317,8 +299,7 @@ jobs:
 
       - name: Install protoc
         # https://github.com/taiki-e/install-action/releases
-        # v2.20.3
-        uses: taiki-e/install-action@47d27149ff6b3422864ec504071d5cc7873d642e
+        uses: taiki-e/install-action@v2.69.4
         with:
           tool: protoc@${{ env.PROTOC_VERSION }}
 
