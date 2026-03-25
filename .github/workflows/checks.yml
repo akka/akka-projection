@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   check-code-style:
@@ -240,10 +241,11 @@ jobs:
 
       - name: Download version
         # https://github.com/actions/download-artifact/releases
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: akka-projection-version
           path: ~/
+          merge-multiple: true
 
       - name: Test sample
         run: |
