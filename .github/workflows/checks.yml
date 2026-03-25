@@ -114,9 +114,9 @@ jobs:
       - name: Gather version
         # some cleanup of the sbt output to get the version sbt will use when publishing below
         run: |-
-          sbt --no-colors "print akka-projection-core/version" | tail -n 1 | tr -d '\n' > .version
-          echo [$(cat .version)]
-          # useful for debugging: hexdump -c .version
+          sbt --no-colors "print akka-projection-core/version" | tail -n 1 | tr -d '\n' > /tmp/.version
+          echo [$(cat /tmp/.version)]
+          # useful for debugging: hexdump -c /tmp/.version
 
       - name: Publish artifacts locally
         run: |-
@@ -136,7 +136,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: akka-projection-version
-          path: .version
+          path: /tmp/.version
           retention-days: 1
 
   check-samples:
