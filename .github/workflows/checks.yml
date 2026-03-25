@@ -132,7 +132,7 @@ jobs:
 
       - name: Save version
         # https://github.com/actions/upload-artifact/releases
-        uses: actions/upload-artifact@v8
+        uses: actions/upload-artifact@v7
         with:
           name: akka-projection-version
           path: ~/.version
@@ -240,7 +240,7 @@ jobs:
 
       - name: Download version
         # https://github.com/actions/download-artifact/releases
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v7
         with:
           name: akka-projection-version
           path: ~/
