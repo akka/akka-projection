@@ -114,9 +114,9 @@ jobs:
       - name: Gather version
         # some cleanup of the sbt output to get the version sbt will use when publishing below
         run: |-
-          sbt --no-colors "print akka-projection-core/version" | tail -n 1 | tr -d '\n' > ~/.version
-          echo [$(cat ~/.version)]
-          # useful for debugging: hexdump -c ~/.version
+          sbt --no-colors "print akka-projection-core/version" | tail -n 1 | tr -d '\n' > .version
+          echo [$(cat .version)]
+          # useful for debugging: hexdump -c .version
 
       - name: Publish artifacts locally
         run: |-
@@ -136,7 +136,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: akka-projection-version
-          path: ~/.version
+          path: .version
           retention-days: 1
 
   check-samples:
@@ -155,51 +155,51 @@ jobs:
           - name: "Test Scala gRPC Shopping Cart"
             path: "samples/grpc/shopping-cart-service-scala"
             command: |
-              sbt test -Dakka-projection.version=`cat ~/.version`
-              sbt "clean; ++${SCALA3_VERSION}!; test;" -Dakka-projection.version=`cat ~/.version`
+              sbt test -Dakka-projection.version=`cat /tmp/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; test;" -Dakka-projection.version=`cat /tmp/.version`
           - name: "Compile Scala gRPC Analytics"
             path: "samples/grpc/shopping-analytics-service-scala"
             command: |
-              sbt Test/compile -Dakka-projection.version=`cat ~/.version`
+              sbt Test/compile -Dakka-projection.version=`cat /tmp/.version`
               sbt "clean; ++${SCALA3_VERSION}!; Test/compile;"
           - name: "Test Java gRPC Shopping Cart"
             path: "samples/grpc/shopping-cart-service-java"
-            command: "mvn test -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+            command: "mvn test -nsu -ntp -Dakka-projection.version=`cat /tmp/.version`"
           - name: "Compile Java gRPC Analytics"
             path: "samples/grpc/shopping-analytics-service-java"
-            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat /tmp/.version`"
           - name: "Compile Scala Replicated Shopping Cart"
             path: "samples/replicated/shopping-cart-service-scala"
             command: |
-              sbt Test/compile -Dakka-projection.version=`cat ~/.version`
+              sbt Test/compile -Dakka-projection.version=`cat /tmp/.version`
               sbt "clean; ++${SCALA3_VERSION}!; Test/compile;"
           - name: "Compile Java Replicated Shopping Cart"
             path: "samples/replicated/shopping-cart-service-java"
-            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat /tmp/.version`"
           - name: "Compile Scala Local Drone Control"
             path: "samples/grpc/local-drone-control-scala"
             command: |
-              sbt Test/compile -Dakka-projection.version=`cat ~/.version`
-              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat ~/.version`
+              sbt Test/compile -Dakka-projection.version=`cat /tmp/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat /tmp/.version`
           - name: "Compile Scala Restaurant Drone Deliveries"
             path: "samples/grpc/restaurant-drone-deliveries-service-scala"
             command: |
-              sbt compile -Dakka-projection.version=`cat ~/.version`
-              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat ~/.version`
+              sbt compile -Dakka-projection.version=`cat /tmp/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat /tmp/.version`
           - name: "Compile Java Local Drone Control"
             path: "samples/grpc/local-drone-control-java"
-            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat /tmp/.version`"
           - name: "Compile Java Restaurant Drone Deliveries"
             path: "samples/grpc/restaurant-drone-deliveries-service-java"
-            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat /tmp/.version`"
           - name: "Test Scala gRPC IoT Service"
             path: "samples/grpc/iot-service-scala"
             command: |
-              sbt test -Dakka-projection.version=`cat ~/.version`
-              sbt "clean; ++${SCALA3_VERSION}!; test;" -Dakka-projection.version=`cat ~/.version`
+              sbt test -Dakka-projection.version=`cat /tmp/.version`
+              sbt "clean; ++${SCALA3_VERSION}!; test;" -Dakka-projection.version=`cat /tmp/.version`
           - name: "Compile Java gRPC IoT Service"
             path: "samples/grpc/iot-service-java"
-            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ~/.version`"
+            command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat /tmp/.version`"
 
     steps:
       - name: Checkout
@@ -244,7 +244,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: akka-projection-version
-          path: ~/
+          path: /tmp/
           merge-multiple: true
 
       - name: Test sample
