@@ -12,6 +12,9 @@ import scala.annotation.tailrec
 import scala.collection.immutable.TreeSet
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.Promise
+import scala.util.Failure
+import scala.util.Success
 import scala.jdk.DurationConverters._
 import scala.util.control.NonFatal
 import akka.Done
@@ -83,7 +86,8 @@ private[projection] object DynamoDBOffsetStore {
   final case class State(
       byPid: Map[Pid, Record],
       bySliceSorted: Map[Int, TreeSet[Record]],
-      offsetBySlice: Map[Int, TimestampOffset]) {
+      offsetBySlice: Map[Int, TimestampOffset],
+      saveCounter: Long = 0) {
 
     def size: Int = byPid.size
 
@@ -229,8 +233,25 @@ private[projection] class DynamoDBOffsetStore(
     sourceProvider: Option[BySlicesSourceProvider],
     system: ActorSystem[_],
     val settings: DynamoDBProjectionSettings,
-    client: DynamoDbAsyncClient,
-    clock: Clock = Clock.systemUTC()) {
+    dao: OffsetStoreDao,
+    clock: Clock) {
+
+  private[projection] def this(
+      projectionId: ProjectionId,
+      uuid: String,
+      sourceProvider: Option[BySlicesSourceProvider],
+      system: ActorSystem[_],
+      settings: DynamoDBProjectionSettings,
+      client: DynamoDbAsyncClient,
+      clock: Clock = Clock.systemUTC()) =
+    this(
+      projectionId,
+      uuid,
+      sourceProvider,
+      system,
+      settings,
+      new OffsetStoreDaoImpl(system, settings, projectionId, client),
+      clock)
 
   import DynamoDBOffsetStore._
 
@@ -244,8 +265,6 @@ private[projection] class DynamoDBOffsetStore(
   private val logger = LoggerFactory.getLogger(this.getClass)
   val logPrefix = s"${projectionId.name} [$minSlice-$maxSlice]${CorrelationId.toCorrelationLogText(uuid)}:"
 
-  private val dao = new OffsetStoreDao(system, settings, projectionId, client)
-
   private val offsetExpiry =
     settings.timeToLiveSettings.projections.get(projectionId.name).offsetTimeToLive.map(_.toJava)
 
@@ -253,13 +272,21 @@ private[projection] class DynamoDBOffsetStore(
 
   // The OffsetStore instance is used by a single projectionId and there shouldn't be many concurrent
   // calls to methods that access the `state`, but for example validate (load) may be concurrent
-  // with save. Therefore, this state can be updated concurrently with CAS retries.
+  // with save. Therefore, this state can be updated concurrently with CAS retries, though retries
+  // are nearly certain to involve I/O
   private val state = new AtomicReference(State.empty)
 
   // Transient state of inflight pid -> seqNr (before they have been stored and included in `state`), which is
   // needed for at-least-once or other projections where the offset is saved afterwards. Not needed for exactly-once.
   // This can be updated concurrently with CAS retries.
   private val inflight = new AtomicReference(Map.empty[Pid, SeqNr])
+
+  // Advisory pessimistic concurrency control to allow validation loads to wait until a save completes
+  // (as a save is multiple queries (slice offset and per-pid timestamps), moreso in at-least-once)
+  // to prevent retrying the save on conflict.
+  //  incomplete future: save is in-progress
+  //  completed future: no in-progress save
+  private val pendingStore = new AtomicReference[Future[Done]](FutureDone)
 
   @volatile private var stopped = false
 
@@ -369,21 +396,77 @@ private[projection] class DynamoDBOffsetStore(
     if (oldState.contains(pid))
       Future.successful(oldState)
     else {
-      val slice = persistenceExt.sliceForPersistenceId(pid)
-      dao.loadSequenceNumber(slice, pid).flatMap {
-        case Some(record) =>
-          logger.trace("{} loaded pid [{}], seqNr [{}]", logPrefix, pid, record.seqNr)
-          val newState = oldState.add(Vector(record), settings.acceptSequenceNumberResetAfter)
-          if (state.compareAndSet(oldState, newState))
-            Future.successful(newState)
-          else
-            load(pid) // CAS retry, concurrent update
-        case None => Future.successful(oldState)
+      val ps = pendingStore.get()
+      ps.value match {
+        case Some(Failure(ex)) => Future.failed(ex)
+        case Some(Success(_))  =>
+          // store completed... it's unlikely that it updated state and completed in the time between state.get
+          // and checking the future, so we can be optimistic here
+          val slice = persistenceExt.sliceForPersistenceId(pid)
+          loadFromDao(slice, pid, oldState)
+
+        case None =>
+          // store is in progress, so when it completes, the state will have probably changed
+          ps.flatMap(_ => load(pid)) // async retry
       }
     }
   }
 
+  private def loadFromDao(slice: Int, pid: Pid, oldState: State): Future[State] = {
+    checkStopped()
+    dao.loadSequenceNumber(slice, pid).flatMap {
+      case None => Future.successful(state.get())
+      case Some(record) =>
+        logger.trace("{} loaded pid [{}], seqNr [{}]", logPrefix, pid, record.seqNr)
+        val newState = oldState.add(Vector(record), settings.acceptSequenceNumberResetAfter)
+
+        if (state.compareAndSet(oldState, newState)) Future.successful(newState)
+        else {
+          // Intervening update(s)
+          val updatedState = state.get()
+          if (updatedState.saveCounter == oldState.saveCounter) {
+            // none of the updates was a save
+            val newerState = updatedState.add(Vector(record), settings.acceptSequenceNumberResetAfter)
+            if (state.compareAndSet(updatedState, newerState)) Future.successful(newerState)
+            else {
+              load(pid) // CAS retry, concurrent update
+            }
+          } else if (updatedState.saveCounter == oldState.saveCounter + 1) {
+            // exactly one save
+            if (updatedState.contains(pid)) Future.successful(updatedState)
+            else {
+              val newerState = updatedState.add(Vector(record), settings.acceptSequenceNumberResetAfter)
+              if (state.compareAndSet(updatedState, newerState)) Future.successful(newerState)
+              else {
+                load(pid) // CAS retry concurrent update
+              }
+            }
+          } else {
+            // Multiple saves (which can evict), so retry from the top
+            load(pid) // CAS retry, concurrent update
+          }
+        }
+    }
+  }
+
   def load(pids: Set[Pid]): Future[State] = {
+    checkStopped()
+    val oldState = state.get()
+    val pidsToLoad = pids.filterNot(oldState.contains)
+
+    if (pidsToLoad.isEmpty) Future.successful(oldState)
+    else {
+      val ps = pendingStore.get()
+      ps.value match {
+        case Some(Failure(ex)) => Future.failed(ex)
+        case Some(Success(_))  => rawLoad(pids)
+        case None              => ps.flatMap { _ => load(pids) }
+      }
+    }
+  }
+
+  // Callable from within storeTimestampOffsets, does not check for current store completion
+  private def rawLoad(pids: Set[Pid]): Future[State] = {
     checkStopped()
     val oldState = state.get()
     val pidsToLoad = pids.filterNot(oldState.contains)
@@ -404,7 +487,7 @@ private[projection] class DynamoDBOffsetStore(
         if (state.compareAndSet(oldState, newState))
           Future.successful(newState)
         else
-          load(pids) // CAS retry, concurrent update
+          rawLoad(pids) // CAS retry, concurrent update
       }
     }
   }
@@ -426,23 +509,44 @@ private[projection] class DynamoDBOffsetStore(
       storeSequenceNumbers: IndexedSeq[Record] => Future[Done],
       canBeConcurrent: Boolean): Future[Done] = {
     checkStopped()
-    if (offsets.isEmpty)
-      FutureDone
+
+    if (offsets.isEmpty) FutureDone
     else if (offsets.head.offset.isInstanceOf[TimestampOffset]) {
       val records = offsets.map {
         case OffsetPidSeqNr(t: TimestampOffset, Some((pid, seqNr))) =>
           val slice = persistenceExt.sliceForPersistenceId(pid)
           Record(slice, pid, seqNr, t.timestamp)
+
         case OffsetPidSeqNr(_: TimestampOffset, None) =>
           throw new IllegalArgumentException(
             s"$logPrefix Required EventEnvelope or DurableStateChange for TimestampOffset.")
+
         case _ =>
           throw new IllegalArgumentException(
-            s"$logPrefix Mix of TimestampOffset and other offset type in same transaction is not supported")
+            s"$logPrefix Mix of TimestampOffset and ofther offset type in same transaction is not supported.")
       }
-      storeTimestampOffsets(records, storeSequenceNumbers, canBeConcurrent)
+
+      val currentStore = pendingStore.get()
+      val promise = Promise[Done]()
+
+      val ret = currentStore.flatMap { _ =>
+        checkStopped()
+        if (pendingStore.compareAndExchange(currentStore, promise.future) eq currentStore) {
+          storeTimestampOffsets(records, storeSequenceNumbers, canBeConcurrent)
+        } else {
+          logger.error("{} Concurrent storing of offsets detected.  This should not happen", logPrefix)
+          Future.failed(new IllegalStateException(s"$logPrefix Concurrent storing of offsets detected"))
+        }
+      }(ExecutionContext.parasitic)
+
+      ret.onComplete { _ =>
+        promise.completeWith(ret)
+      }(ExecutionContext.parasitic)
+
+      ret
     } else {
-      throw new IllegalStateException(s"$logPrefix TimestampOffset is required. Primitive offsets not supported.")
+      Future.failed(
+        new IllegalStateException(s"$logPrefix TimestampOffset is required.  Primitive offsets not supported"))
     }
   }
 
@@ -451,7 +555,7 @@ private[projection] class DynamoDBOffsetStore(
       storeSequenceNumbers: IndexedSeq[Record] => Future[Done],
       canBeConcurrent: Boolean): Future[Done] = {
     checkStopped()
-    load(records.iterator.map(_.pid).toSet).flatMap { oldState =>
+    rawLoad(records.iterator.map(_.pid).toSet).flatMap { oldState =>
       val filteredRecords =
         if (records.size <= 1)
           records.filterNot(record => oldState.isDuplicate(record, settings.acceptSequenceNumberResetAfter))
@@ -479,18 +583,20 @@ private[projection] class DynamoDBOffsetStore(
           else filteredRecords.iterator.map(_.slice).toSet
 
         val currentInflight = getInflight()
-        val evictedNewState = slices.foldLeft(newState) {
-          case (s, slice) =>
-            s.evict(
-              slice,
-              settings.timeWindow,
-              // Only persistence IDs that aren't inflight are evictable,
-              // if only so that those persistence IDs can be removed from
-              // inflight... in the absence of further records from that
-              // persistence ID, the next store will evict (further records
-              // would make that persistence ID recent enough to not be evicted)
-              record => !currentInflight.contains(record.pid))
-        }
+        val evictedNewState = slices
+          .foldLeft(newState) {
+            case (s, slice) =>
+              s.evict(
+                slice,
+                settings.timeWindow,
+                // Only persistence IDs that aren't inflight are evictable,
+                // if only so that those persistence IDs can be removed from
+                // inflight... in the absence of further records from that
+                // persistence ID, the next store will evict (further records
+                // would make that persistence ID recent enough to not be evicted)
+                record => !currentInflight.contains(record.pid))
+          }
+          .copy(saveCounter = oldState.saveCounter + 1)
 
         // FIXME we probably don't have to store the latest offset per slice all the time, but can
         //       accumulate some changes and flush on size/time.
@@ -538,8 +644,10 @@ private[projection] class DynamoDBOffsetStore(
               cleanupInflight(evictedNewState)
               FutureDone
             } else { // concurrent update
-              if (canBeConcurrent) storeTimestampOffsets(records, storeSequenceNumbers, canBeConcurrent) // CAS retry
-              else
+              if (canBeConcurrent) {
+                logger.info(s"$logPrefix re-attempting save of timestamp offsets due to concurrent update.")
+                storeTimestampOffsets(records, storeSequenceNumbers, canBeConcurrent) // CAS retry
+              } else
                 throw new IllegalStateException(
                   s"$logPrefix Unexpected concurrent modification of state in save offsets.")
             }
