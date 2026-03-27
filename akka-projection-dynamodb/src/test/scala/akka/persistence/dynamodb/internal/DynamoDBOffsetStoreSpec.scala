@@ -28,6 +28,7 @@ import akka.projection.internal.ManagementState
 import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem
+import akka.projection.dynamodb.internal.DynamoDBOffsetStore.AttemptToUseStoppedOffsetStore
 
 object DynamoDBOffsetStoreSpec {
   val config = {
@@ -47,8 +48,7 @@ object DynamoDBOffsetStoreSpec {
 
   final case class StoreTimestampOffset(offset: TimestampOffset, promise: Promise[Done]) extends BySliceCommand
 
-  //@annotation.nowarn("msg=never used")
-  class InMemOffsetStoreDao(testKit: ActorTestKit) extends OffsetStoreDao {
+  class ProbeStubOffsetStoreDao(testKit: ActorTestKit) extends OffsetStoreDao {
     import testKit.system
 
     implicit val ec: ExecutionContext = system.executionContext
@@ -132,7 +132,7 @@ class DynamoDBOffsetStoreSpec
       val clock = Clock.systemUTC()
       val startTime = clock.instant()
 
-      val dao = new InMemOffsetStoreDao(testKit)
+      val dao = new ProbeStubOffsetStoreDao(testKit)
 
       val offsetStore = new DynamoDBOffsetStore(projectionId, uuid(), None, system, baseSettings, dao, clock)
 
@@ -173,7 +173,7 @@ class DynamoDBOffsetStoreSpec
       val clock = Clock.systemUTC()
       val startTime = clock.instant()
 
-      val dao = new InMemOffsetStoreDao(testKit)
+      val dao = new ProbeStubOffsetStoreDao(testKit)
 
       val offsetStore = new DynamoDBOffsetStore(projectionId, uuid(), None, system, baseSettings, dao, clock)
 
@@ -208,7 +208,7 @@ class DynamoDBOffsetStoreSpec
       val clock = Clock.systemUTC()
       val startTime = clock.instant()
 
-      val dao = new InMemOffsetStoreDao(testKit)
+      val dao = new ProbeStubOffsetStoreDao(testKit)
 
       val offsetStore = new DynamoDBOffsetStore(projectionId, uuid(), None, system, baseSettings, dao, clock)
 
@@ -259,7 +259,7 @@ class DynamoDBOffsetStoreSpec
       val clock = Clock.systemUTC()
       val startTime = clock.instant()
 
-      val dao = new InMemOffsetStoreDao(testKit)
+      val dao = new ProbeStubOffsetStoreDao(testKit)
 
       val offsetStore = new DynamoDBOffsetStore(projectionId, uuid(), None, system, baseSettings, dao, clock)
 
@@ -286,6 +286,29 @@ class DynamoDBOffsetStoreSpec
           case (state1, state2) => state1.byPid.size + state2.byPid.size
         }
         .futureValue shouldBe 3 // one of the states has both pids
+    }
+
+    "stop on failed save and propagate" in {
+      val clock = Clock.systemUTC()
+
+      val dao = new ProbeStubOffsetStoreDao(testKit)
+
+      val offsetStore = new DynamoDBOffsetStore(projectionId, uuid(), None, system, baseSettings, dao, clock)
+
+      val t0 = clock.instant()
+      val offset0 = TimestampOffset(t0, Map("p1" -> 777L))
+
+      val saveFuture = offsetStore.saveOffset(OffsetPidSeqNr(offset0, "p1", 777))
+      val loadFromSave = dao.probesByPid.get("p1").expectMessageType[LoadSequenceNumber]
+      val loadFuture = offsetStore.load("p2")
+      loadFuture.value shouldBe (empty)
+      loadFromSave.promise.failure(new RuntimeException("DB went boom"))
+
+      saveFuture.failed.futureValue.getMessage should include("DB went boom")
+      eventually { assert(offsetStore.isStopped(), "offset store should stop") }
+      loadFuture.failed.futureValue.getMessage should include("DB went boom")
+
+      an[AttemptToUseStoppedOffsetStore] shouldBe thrownBy { offsetStore.load("p2") }
     }
   }
 }

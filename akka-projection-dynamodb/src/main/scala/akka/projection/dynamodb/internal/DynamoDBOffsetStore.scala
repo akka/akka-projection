@@ -415,7 +415,21 @@ private[projection] class DynamoDBOffsetStore(
   private def loadFromDao(slice: Int, pid: Pid, oldState: State): Future[State] = {
     checkStopped()
     dao.loadSequenceNumber(slice, pid).flatMap {
-      case None => Future.successful(state.get())
+      case None =>
+        // no sequence number found, no update, but we can try to move forward
+        val latestState = state.get()
+        if (latestState eq oldState) Future.successful(oldState)
+        else if (latestState.saveCounter == oldState.saveCounter) {
+          // no saves in the meantime + no updates, move forward to latestState
+          Future.successful(latestState)
+        } else if (latestState.saveCounter == oldState.saveCounter + 1) {
+          // exactly one save: if the save was for this pid, the latest pid is in latestState
+          Future.successful(latestState)
+        } else {
+          // multiple saves, could have saved and then evicted, CAS retry from the top
+          load(pid)
+        }
+
       case Some(record) =>
         logger.trace("{} loaded pid [{}], seqNr [{}]", logPrefix, pid, record.seqNr)
         val newState = oldState.add(Vector(record), settings.acceptSequenceNumberResetAfter)
@@ -483,6 +497,7 @@ private[projection] class DynamoDBOffsetStore(
             logger.trace("{} loaded pid [{}], seqNr [{}]", logPrefix, record.pid, record.seqNr)
           }
         }
+
         val newState = oldState.add(records.flatten, settings.acceptSequenceNumberResetAfter)
         if (state.compareAndSet(oldState, newState))
           Future.successful(newState)
@@ -539,8 +554,16 @@ private[projection] class DynamoDBOffsetStore(
         }
       }(ExecutionContext.parasitic)
 
-      ret.onComplete { _ =>
+      ret.onComplete { result =>
+        // propagate the failure to subsequent operations
         promise.completeWith(ret)
+
+        if (result.isFailure) {
+          // A failure in save will fail the stream using this offset store.
+          // This will trigger a stop() call, but it is certain that the
+          // it will eventually happen... we may as well stop() here
+          stop()
+        }
       }(ExecutionContext.parasitic)
 
       ret
