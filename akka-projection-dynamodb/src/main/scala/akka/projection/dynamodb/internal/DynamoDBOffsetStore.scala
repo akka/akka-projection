@@ -523,7 +523,7 @@ private[projection] class DynamoDBOffsetStore(
 
         case _ =>
           throw new IllegalArgumentException(
-            s"$logPrefix Mix of TimestampOffset and ofther offset type in same transaction is not supported.")
+            s"$logPrefix Mix of TimestampOffset and other offset type in same transaction is not supported.")
       }
 
       val currentStore = pendingStore.get()
