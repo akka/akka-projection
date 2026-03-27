@@ -1,3 +1,7 @@
+/*
+ * Copyright (C) 2025 Lightbend Inc. <https://akka.io>
+ */
+
 package akka.projection.dynamodb.internal
 
 import java.time.Clock
