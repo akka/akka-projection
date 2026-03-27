@@ -1,0 +1,4 @@
+# InternalApi
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.dynamodb.internal.DynamoDBOffsetStore#State.copy")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.dynamodb.internal.DynamoDBOffsetStore#State.this")
+ProblemFilters.exclude[DirectMissingMethodProblem]("akka.projection.dynamodb.internal.DynamoDBOffsetStore#State.apply")
