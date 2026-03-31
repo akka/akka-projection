@@ -195,7 +195,6 @@ private[projection] object DynamoDBOffsetStore {
       sb.append(")")
       sb.toString
     }
-
   }
 
   final class RejectedEnvelope(message: String) extends IllegalStateException(message)
@@ -221,6 +220,12 @@ private[projection] object DynamoDBOffsetStore {
   val FutureDone: Future[Done] = Future.successful(Done)
 
   final class AttemptToUseStoppedOffsetStore(message: String) extends RuntimeException(message)
+
+  // constant added to save counter on failed stores
+  // a fairly large number (> 2^32), larger than any reasonable number of stores between CAS retries in load()
+  // yet would need at least 2^28 failed stores to increment and wrap around to anything close to the save counter
+  // before the failed stores
+  private val WontTurnAround = 0xACE0FBA5EL
 }
 
 /**
@@ -554,17 +559,28 @@ private[projection] class DynamoDBOffsetStore(
         }
       }(ExecutionContext.parasitic)
 
-      ret.onComplete { result =>
-        // propagate the failure to subsequent operations
-        promise.completeWith(ret)
+      ret
+        .recoverWith {
+          // unfortunately, there's no andThen-equivalent for failed futures
+          case _ =>
+            // byPid/bySlice state may or may not be consistent with what's actually been written to DDB
+            // (same for offsetBySlice, but no decisions are made based on offsetBySlice, so no need to invalidate)
+            // therefore, we empty the byPid/bySlice state
+            @tailrec
+            def casRetry(oldState: State): Unit = {
+              val newState =
+                State(Map.empty, Map.empty, oldState.offsetBySlice, oldState.saveCounter + WontTurnAround)
 
-        if (result.isFailure) {
-          // A failure in save will fail the stream using this offset store.
-          // This will trigger a stop() call, but it is certain that the
-          // it will eventually happen... we may as well stop() here
-          stop()
+              if (!state.compareAndSet(oldState, newState)) casRetry(state.get())
+            }
+
+            casRetry(state.get())
+            ret
         }
-      }(ExecutionContext.parasitic)
+        .onComplete { _ =>
+          // unblock other operations
+          promise.success(Done)
+        }(ExecutionContext.parasitic)
 
       ret
     } else {

@@ -28,7 +28,6 @@ import akka.projection.internal.ManagementState
 import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem
-import akka.projection.dynamodb.internal.DynamoDBOffsetStore.AttemptToUseStoppedOffsetStore
 
 object DynamoDBOffsetStoreSpec {
   val config = {
@@ -288,27 +287,41 @@ class DynamoDBOffsetStoreSpec
         .futureValue shouldBe 3 // one of the states has both pids
     }
 
-    "stop on failed save and propagate" in {
+    "reset state on failed save but not stop" in {
       val clock = Clock.systemUTC()
+      val startTime = clock.instant()
 
       val dao = new ProbeStubOffsetStoreDao(testKit)
 
       val offsetStore = new DynamoDBOffsetStore(projectionId, uuid(), None, system, baseSettings, dao, clock)
 
-      val t0 = clock.instant()
+      val t0 = startTime
       val offset0 = TimestampOffset(t0, Map("p1" -> 777L))
+      val slice1 = dao.sliceFor("p1")
+      val recordP1N1 = Record(slice1, "p1", 776, offset0.timestamp.minusSeconds(400))
+      Seq("p1", "p2").foreach { pid =>
+        dao.initializeProbes(Some(pid), Some(dao.sliceFor(pid)))
+      }
 
+      val firstLoadFuture = offsetStore.load("p1")
+      val p1Probe = dao.probesByPid.get("p1")
+      p1Probe.expectMessageType[LoadSequenceNumber].promise.success(Some(recordP1N1))
+      firstLoadFuture.futureValue.byPid.get("p1").map(_.seqNr) should contain(776L)
       val saveFuture = offsetStore.saveOffset(OffsetPidSeqNr(offset0, "p1", 777))
-      val loadFromSave = dao.probesByPid.get("p1").expectMessageType[LoadSequenceNumber]
-      val loadFuture = offsetStore.load("p2")
-      loadFuture.value shouldBe (empty)
-      loadFromSave.promise.failure(new RuntimeException("DB went boom"))
+      // no need to load...
+      val storeSequenceNumber = p1Probe.expectMessageType[StoreSequenceNumber]
+      storeSequenceNumber.seqNr shouldBe 777
+      val secondLoadFuture = offsetStore.load("p2")
+      val p2Probe = dao.probesByPid.get("p2")
+      p2Probe.expectNoMessage(30.millis)
 
-      saveFuture.failed.futureValue.getMessage should include("DB went boom")
-      eventually { assert(offsetStore.isStopped(), "offset store should stop") }
-      loadFuture.failed.futureValue.getMessage should include("DB went boom")
+      storeSequenceNumber.promise.failure(new RuntimeException("DB failure"))
+      p2Probe.expectMessageType[LoadSequenceNumber].promise.success(None)
 
-      an[AttemptToUseStoppedOffsetStore] shouldBe thrownBy { offsetStore.load("p2") }
+      (the[RuntimeException] thrownBy (saveFuture.futureValue)).getMessage should include("DB failure")
+      (secondLoadFuture.futureValue.byPid.keySet shouldNot contain).oneOf("p1", "p2")
+
+      assert(!offsetStore.isStopped(), "offset store should not be stopped")
     }
   }
 }
