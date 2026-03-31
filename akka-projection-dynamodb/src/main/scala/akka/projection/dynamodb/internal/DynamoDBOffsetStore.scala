@@ -221,9 +221,6 @@ private[projection] object DynamoDBOffsetStore {
   val FutureDone: Future[Done] = Future.successful(Done)
 
   final class AttemptToUseStoppedOffsetStore(message: String) extends RuntimeException(message)
-
-  // a big jump in the save counter (to signal a discontinuity), but not so big that a plausible number of jumps would overflow around
-  private val DontTurnAround = 0xACE0FBA5EL
 }
 
 /**
@@ -237,10 +234,7 @@ private[projection] class DynamoDBOffsetStore(
     system: ActorSystem[_],
     val settings: DynamoDBProjectionSettings,
     dao: OffsetStoreDao,
-    clock: Clock,
-    // if true, offset store is not stopped on a save failure but state is reset (analogous to restart supervision strategy)
-    // if false, offset store is stopped and subsequent operations will fail (note that the stream using the offset store will likely fail also)
-    clearStateOnSaveFailure: Boolean) {
+    clock: Clock) {
 
   private[projection] def this(
       projectionId: ProjectionId,
@@ -249,8 +243,7 @@ private[projection] class DynamoDBOffsetStore(
       system: ActorSystem[_],
       settings: DynamoDBProjectionSettings,
       client: DynamoDbAsyncClient,
-      clock: Clock = Clock.systemUTC(),
-      clearStateOnSaveFailure: Boolean = false) =
+      clock: Clock = Clock.systemUTC()) =
     this(
       projectionId,
       uuid,
@@ -258,8 +251,7 @@ private[projection] class DynamoDBOffsetStore(
       system,
       settings,
       new OffsetStoreDaoImpl(system, settings, projectionId, client),
-      clock,
-      clearStateOnSaveFailure)
+      clock)
 
   import DynamoDBOffsetStore._
 
@@ -382,7 +374,6 @@ private[projection] class DynamoDBOffsetStore(
             s"${dumpState(oldState, getInflight())}")
         clearInflight()
       }
-
       if (offsetBySlice.isEmpty) {
         logger.debug("{} readTimestampOffset no stored offset", logPrefix)
         TimestampOffsetBySlice.empty
@@ -563,54 +554,19 @@ private[projection] class DynamoDBOffsetStore(
         }
       }(ExecutionContext.parasitic)
 
-      if (!clearStateOnSaveFailure) {
-        // analogous to stop supervision
-        // if this is a success, great
-        // if this failed, propagate failure to subsequent operations and stop offset store
-        ret.onComplete { result =>
-          promise.completeWith(ret)
+      ret.onComplete { result =>
+        // propagate the failure to subsequent operations
+        promise.completeWith(ret)
 
-          if (result.isFailure) {
-            stop()
-          }
-        }(ExecutionContext.parasitic)
-
-        ret
-      } else {
-        // analogous to restart supervision
-        ret.transformWith {
-          case Success(_) =>
-            promise.success(Done)
-            ret
-
-          case Failure(_) =>
-            // Must never leave in an inconsistent state
-            def recoverState: Future[Done] =
-              readTimestampOffset(false)
-                .flatMap { offset =>
-                  def newState(from: State): State =
-                    State(Map.empty, Map.empty, offset.offsets, from.saveCounter + DontTurnAround)
-
-                  @tailrec
-                  def casRetry(oldState: State): Unit =
-                    if (!state.compareAndSet(oldState, newState(oldState))) casRetry(state.get())
-
-                  casRetry(state.get())
-                  FutureDone
-                }
-                .recoverWith {
-                  case ex =>
-                    logger.warn("loadTimestampOffset failed when recovering offset store after failed save", ex)
-                    // FIXME: backoff?
-                    recoverState
-                }
-
-            recoverState.flatMap { _ =>
-              promise.success(Done)
-              ret
-            }
+        if (result.isFailure) {
+          // A failure in save will fail the stream using this offset store.
+          // This will trigger a stop() call, but it is certain that the
+          // it will eventually happen... we may as well stop() here
+          stop()
         }
-      }
+      }(ExecutionContext.parasitic)
+
+      ret
     } else {
       Future.failed(
         new IllegalStateException(s"$logPrefix TimestampOffset is required.  Primitive offsets not supported"))
