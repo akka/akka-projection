@@ -554,7 +554,6 @@ private[projection] class DynamoDBOffsetStore(
         if (pendingStore.compareAndExchange(currentStore, promise.future) eq currentStore) {
           storeTimestampOffsets(records, storeSequenceNumbers, canBeConcurrent)
         } else {
-          logger.error("{} Concurrent storing of offsets detected.  This should not happen", logPrefix)
           Future.failed(new IllegalStateException(s"$logPrefix Concurrent storing of offsets detected"))
         }
       }(ExecutionContext.parasitic)
