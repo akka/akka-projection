@@ -684,7 +684,7 @@ private[projection] class DynamoDBOffsetStore(
               FutureDone
             } else { // concurrent update
               if (canBeConcurrent) {
-                logger.info(s"$logPrefix re-attempting save of timestamp offsets due to concurrent update.")
+                logger.info("{} re-attempting save of timestamp offsets due to concurrent update.", logPrefix)
                 storeTimestampOffsets(records, storeSequenceNumbers, canBeConcurrent) // CAS retry
               } else
                 throw new IllegalStateException(
