@@ -39,6 +39,7 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
 
   lazy val settings: DynamoDBProjectionSettings =
     DynamoDBProjectionSettings(typedSystem.settings.config.getConfig(testConfigPath))
+      .withMaxConcurrentValidations(10)
 
   lazy val dynamoDBSettings: DynamoDBSettings =
     DynamoDBSettings(

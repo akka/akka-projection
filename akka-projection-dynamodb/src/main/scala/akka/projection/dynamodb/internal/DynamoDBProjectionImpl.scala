@@ -5,6 +5,7 @@
 package akka.projection.dynamodb.internal
 
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 
@@ -12,7 +13,11 @@ import scala.annotation.nowarn
 import scala.annotation.tailrec
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
+import scala.util.Failure
+import scala.util.Success
+import scala.util.Try
 import scala.util.control.NonFatal
 
 import akka.Done
@@ -699,7 +704,10 @@ private[projection] object DynamoDBProjectionImpl {
       }
     }
 
-    def accepted(envelope: Envelope, context: ProjectionContext): Source[(Envelope, ProjectionContext), NotUsed] = {
+    def accepted(
+        envelope: Envelope,
+        context: ProjectionContext,
+        promise: Promise[Done]): Source[(Envelope, ProjectionContext), NotUsed] = {
       if (isFilteredEvent(envelope) && settings.warnAboutFilteredEventsInFlow) {
         log.info("atLeastOnceFlow doesn't support skipping envelopes. Envelope [{}] still emitted.", envelope)
       }
@@ -707,34 +715,115 @@ private[projection] object DynamoDBProjectionImpl {
         QueryCorrelationId.withCorrelationId(offsetStore.uuid)(() => loadEnvelope(envelope, sourceProvider))).map {
         loadedEnvelope =>
           offsetStore.addInflight(loadedEnvelope)
+          promise.success(Done)
           (loadedEnvelope, context)
       }
     }
 
-    val validate = Flow[(Envelope, ProjectionContext)]
-      .flatMapConcat[(Envelope, ProjectionContext), NotUsed] {
-        case (env, context) =>
-          offsetStore
-            .validateSource(env)
-            .flatMapConcat {
-              case Accepted  => accepted(env, context)
-              case Duplicate => Source.empty
-              case RejectedSeqNr =>
-                fastFutureSource(replayIfPossible(env, context).map {
-                  // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
-                  case ReplayedOnRejection(source) => source.concatLazy(Source.lazySource(() => accepted(env, context)))
-                  case ReplayTriggered             => Source.empty
-                  case NotReplayed                 => Source.empty
-                })
-              case RejectedBacktrackingSeqNr =>
-                fastFutureSource(replayIfPossible(env, context).map {
-                  // if missing events were replayed immediately, then accept the rejected envelope for downstream processing
-                  case ReplayedOnRejection(source) => source.concatLazy(Source.lazySource(() => accepted(env, context)))
-                  case ReplayTriggered             => Source.empty
-                  case NotReplayed                 => throwRejectedEnvelope(sourceProvider, env)
-                })
-            }
+    def pidFor(envelope: Envelope): Option[String] =
+      envelope match {
+        case event: EventEnvelope[_] => Some(event.persistenceId)
+        case _                       => None
       }
+
+    def dropAfterValidated(promise: Promise[Done]): Source[(Envelope, ProjectionContext), NotUsed] = {
+      promise.success(Done)
+      Source.empty
+    }
+
+    val validate = Flow.fromMaterializer { (_, _) =>
+      // Validate events from disjoint persistence IDs concurrently
+      //
+      // The complication here is that validation can depend on the previously validated envelopes
+      // being added to the offset store's inflight.  In the presence of replays (or even potentially
+      // if the stream materializer inserts an async boundary), we need to delay the next validation for
+      // a pid until the envelope from the previous validation is either inflight (see the [[accepted]]
+      // method, above) or will definitively never be inflight.
+      //
+      // Thus, this map functions as a set of queues.  The protocol is:
+      //  - if there's a promise in this map, remove it from the map and delay validation until the promise completes
+      //    - otherwise, no prior envelope was between validation and inflight: ok to validate immediately
+      //  - as part of validation, save a promise in the map
+      //  - if envelope is dropped (duplicate, triggered (non-immediate replay), or
+      //      no replay after rejecting a non-backtracking envelope, the saved promise is completed
+      //  - if envelope is accepted, saved promise is completed
+      //  - on promise completion, remove from the map (in case there are no pending validations for the pid)
+      val acceptancePromises = new ConcurrentHashMap[Option[String], Promise[Done]]()
+
+      Flow[(Envelope, ProjectionContext)]
+        .mapAsyncPartitioned(settings.maxConcurrentValidations, 1)(pair => pidFor(pair._1)) { (pair, pid) =>
+          val (env, context) = pair
+          val priorAcceptance =
+            acceptancePromises.get(pid) match {
+              case null    => Future.successful(Done)
+              case promise =>
+                // no concurrent put to acceptancePromises for this key (thanks to mapAsyncPartitioned)
+                acceptancePromises.remove(pid)
+                promise.future
+            }
+
+          // key constraint: this is the "single put-ter" to acceptancePromises
+          // put-and-get for a given pid are sequenced by mapAsyncPartitioned
+          // removals can happen either on get (above) or when the promise completes
+          priorAcceptance.value match {
+            case None =>
+              priorAcceptance.map { _ =>
+                val emittedPromise = Promise[Done]()
+                acceptancePromises.put(pid, emittedPromise)
+                (env, offsetStore.validateSource(env), emittedPromise, context)
+              }(system.executionContext)
+
+            case Some(Success(_)) =>
+              val emittedPromise = Promise[Done]()
+              acceptancePromises.put(pid, emittedPromise)
+              Future.successful((env, offsetStore.validateSource(env), emittedPromise, context))
+
+            case Some(Failure(ex)) => Future.failed(ex)
+          }
+        }
+        .flatMapConcat[(Envelope, ProjectionContext), NotUsed] {
+          case (env, validationSource, promise, context) =>
+            // important to complete promise successfully in paths that don't throw
+            promise.future.andThen { _ =>
+              // NB: if already replaced, not a problem (consumer in mapAsyncPartioned already removed)
+              acceptancePromises.remove(pidFor(env), promise)
+            }(ExecutionContext.parasitic)
+
+            validationSource
+              .onErrorComplete {
+                case ex =>
+                  promise.failure(ex)
+                  false // still fail
+              }
+              .flatMapConcat {
+                case Accepted  => accepted(env, context, promise)
+                case Duplicate => dropAfterValidated(promise)
+                case RejectedSeqNr =>
+                  fastFutureSource(replayIfPossible(env, context).map {
+                    // If missing event were replayed immediately, accept the rejected envelope for downstream processing
+                    case ReplayedOnRejection(source) =>
+                      source.concatLazy(Source.lazySource(() => accepted(env, context, promise)))
+
+                    case ReplayTriggered => dropAfterValidated(promise)
+                    case NotReplayed     => dropAfterValidated(promise)
+                  })
+
+                case RejectedBacktrackingSeqNr =>
+                  fastFutureSource(replayIfPossible(env, context).map {
+                    case ReplayedOnRejection(source) =>
+                      source.concatLazy(Source.lazySource(() => accepted(env, context, promise)))
+
+                    case ReplayTriggered => dropAfterValidated(promise)
+                    case NotReplayed     =>
+                      // ensure that promise also fails with same rejection exception so that
+                      // stream fails for consistent reason
+                      val failedTry = Try { throwRejectedEnvelope(sourceProvider, env) }
+                      promise.tryComplete(failedTry)
+                      failedTry.get // throws and fails stream
+                  })
+              }
+        }
+    }
 
     FlowWithContext[Envelope, ProjectionContext]
       .via(validate)
