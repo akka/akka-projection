@@ -35,7 +35,7 @@ import akka.projection.dynamodb.internal.DynamoDBOffsetStore.Validation.Duplicat
 import akka.projection.dynamodb.internal.DynamoDBOffsetStore.Validation.RejectedBacktrackingSeqNr
 import akka.projection.dynamodb.internal.DynamoDBOffsetStore.Validation.RejectedSeqNr
 import akka.projection.dynamodb.internal.OffsetPidSeqNr
-import akka.projection.dynamodb.internal.OffsetStoreDao
+import akka.projection.dynamodb.internal.OffsetStoreDaoImpl
 import akka.projection.dynamodb.internal.OffsetStoreDao.OffsetStoreAttributes
 import akka.projection.internal.ManagementState
 import com.typesafe.config.Config
@@ -1303,7 +1303,7 @@ abstract class DynamoDBTimestampOffsetStoreBaseSpec(config: Config)
         .futureValue
       // it's evicted immediately
       offsetStore.getState().byPid.keySet shouldBe Set(p7, p8)
-      val dao = new OffsetStoreDao(system, settings, projectionId, client)
+      val dao = new OffsetStoreDaoImpl(system, settings, projectionId, client)
       // but still saved
       dao.loadSequenceNumber(slice(p2), p2).futureValue.get.seqNr shouldBe 2
       // the timestamp was earlier than previously used for this slice, and therefore stored timestamp not changed

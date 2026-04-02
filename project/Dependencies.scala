@@ -322,7 +322,10 @@ object Dependencies {
         Compile.akkaPersistenceDynamodb,
         Compile.akkaPersistenceQuery,
         Compile.akkaPersistenceTyped,
-        Compile.akkaStreamTyped)
+        Compile.akkaStreamTyped,
+        Test.akkaTypedTestkit,
+        Test.logback,
+        Test.scalatest)
 
   val dynamodbIntegration = deps ++= Seq(
         Test.akkaStreamTestkit,

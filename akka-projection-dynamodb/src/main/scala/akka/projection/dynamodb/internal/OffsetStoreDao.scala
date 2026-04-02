@@ -66,13 +66,28 @@ import software.amazon.awssdk.services.dynamodb.model.BatchWriteItemResponse
 /**
  * INTERNAL API
  */
-@InternalApi private[projection] class OffsetStoreDao(
+@InternalApi private[projection] trait OffsetStoreDao {
+  def loadTimestampOffset(slice: Int): Future[Option[TimestampOffset]]
+  def storeTimestampOffsets(offsetsBySlice: Map[Int, TimestampOffset]): Future[Done]
+  def storeSequenceNumbers(records: IndexedSeq[Record]): Future[Done]
+  def loadSequenceNumber(slice: Int, pid: String): Future[Option[Record]]
+  def transactStoreSequenceNumbers(writeItems: Iterable[TransactWriteItem])(records: Seq[Record]): Future[Done]
+  def readManagementState(slice: Int): Future[Option[ManagementState]]
+  def updateManagementState(minSlice: Int, maxSlice: Int, paused: Boolean): Future[Done]
+
+  protected final val log: Logger = OffsetStoreDao.log
+  protected final val MaxTransactItems = OffsetStoreDao.MaxTransactItems
+}
+
+/**
+ * INTERNAL API
+ */
+@InternalApi private[projection] class OffsetStoreDaoImpl(
     system: ActorSystem[_],
     settings: DynamoDBProjectionSettings,
     projectionId: ProjectionId,
-    client: DynamoDbAsyncClient) {
-  import OffsetStoreDao.log
-  import OffsetStoreDao.MaxTransactItems
+    client: DynamoDbAsyncClient)
+    extends OffsetStoreDao {
   import settings.offsetBatchSize
   import system.executionContext
 
