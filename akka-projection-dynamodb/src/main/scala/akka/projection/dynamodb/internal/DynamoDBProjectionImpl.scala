@@ -790,11 +790,6 @@ private[projection] object DynamoDBProjectionImpl {
             }(ExecutionContext.parasitic)
 
             validationSource
-              .onErrorComplete {
-                case ex =>
-                  promise.failure(ex)
-                  false // still fail
-              }
               .flatMapConcat {
                 case Accepted  => accepted(env, context, promise)
                 case Duplicate => dropAfterValidated(promise)
@@ -821,6 +816,12 @@ private[projection] object DynamoDBProjectionImpl {
                       promise.tryComplete(failedTry)
                       failedTry.get // throws and fails stream
                   })
+              }
+              .onErrorComplete {
+                // catch-all to cover failed sources in flatMapConcat and failed validationSource
+                case ex =>
+                  promise.failure(ex)
+                  false // still fail
               }
         }
     }
