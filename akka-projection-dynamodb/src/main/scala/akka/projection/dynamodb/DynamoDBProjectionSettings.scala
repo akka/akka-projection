@@ -89,6 +89,7 @@ final class DynamoDBProjectionSettings private (
 
   // 25 is a hard limit of batch writes in DynamoDB
   require(offsetBatchSize <= 25, s"offset-batch-size must be <= 25, was [$offsetBatchSize]")
+  require(maxConcurrentValidations > 0, "max-concurrent-validations must be positive")
 
   def withTimestampOffsetTable(timestampOffsetTable: String): DynamoDBProjectionSettings =
     copy(timestampOffsetTable = timestampOffsetTable)
@@ -193,7 +194,7 @@ final class DynamoDBProjectionSettings private (
     s"retrySettings=$retrySettings, " +
     s"replayOnRejectedSequenceNumbers=$replayOnRejectedSequenceNumbers, " +
     s"acceptSequenceNumberResetAfter=$acceptSequenceNumberResetAfter, " +
-    s"maxConcurrentValidations = $maxConcurrentValidations)"
+    s"maxConcurrentValidations=$maxConcurrentValidations)"
 }
 
 object TimeToLiveSettings {
