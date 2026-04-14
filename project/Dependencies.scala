@@ -47,7 +47,7 @@ object Dependencies {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
 
-    val slick = "3.5.1"
+    val slick = "3.6.1"
     val scalaTest = "3.2.18"
     val testContainers = "1.19.3"
     val junit = "4.13.2"
