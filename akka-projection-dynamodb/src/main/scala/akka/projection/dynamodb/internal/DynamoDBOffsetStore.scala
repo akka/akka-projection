@@ -796,7 +796,16 @@ private[projection] class DynamoDBOffsetStore(
     val pid = recordWithOffset.record.pid
     val seqNr = recordWithOffset.record.seqNr
 
-    load(pid).flatMap { currentState =>
+    // If the pid is currently in flight, we'll prefer that pid over current state in all cases except when it's a sequence number
+    // reset, so only attempt the load if not inflight or if seqNr is 1 and we allow sequence number reset
+    val loadedIfNecessary =
+      if (currentInflight.contains(pid)) {
+        if (seqNr > 1 || settings.acceptSequenceNumberResetAfter.isEmpty)
+          Future.successful(state.get()) // definitely not a seqNr reset
+        else load(pid)
+      } else load(pid)
+
+    loadedIfNecessary.flatMap { currentState =>
       try {
         val duplicate = currentState.isDuplicate(recordWithOffset.record, settings.acceptSequenceNumberResetAfter)
 
