@@ -82,6 +82,7 @@ import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput
 import software.amazon.awssdk.services.dynamodb.model.Put
 import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem
+import java.util.concurrent.ThreadLocalRandom
 
 object DynamoDBTimestampOffsetProjectionSpec {
 
@@ -2556,11 +2557,16 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       FlowWithContext[EventEnvelope[String], ProjectionContext]
         .mapAsync(1) { env =>
-          if (initialDelay.future.value.isEmpty) {
-            system.scheduler.scheduleOnce(20.millis, () => initialDelay.success(Done))
-          }
+          val delay =
+            if (initialDelay.future.value.isEmpty) {
+              system.scheduler.scheduleOnce(20.millis, () => initialDelay.success(Done))
+              initialDelay.future
+            } else if (ThreadLocalRandom.current().nextBoolean()) {
+              // introduce a 10 milli delay for ~50% of elements after the first
+              akka.pattern.after(10.millis) { DynamoDBOffsetStore.FutureDone }
+            } else DynamoDBOffsetStore.FutureDone
 
-          initialDelay.future.flatMap { _ => repository.concatToText(env.persistenceId, env.event) }
+          delay.flatMap { _ => repository.concatToText(env.persistenceId, env.event) }
         }
     }
 

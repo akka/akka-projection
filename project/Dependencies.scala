@@ -323,6 +323,7 @@ object Dependencies {
         Compile.akkaPersistenceQuery,
         Compile.akkaPersistenceTyped,
         Compile.akkaStreamTyped,
+        Test.akkaStreamTestkit,
         Test.akkaTypedTestkit,
         Test.logback,
         Test.scalatest)
