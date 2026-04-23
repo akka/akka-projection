@@ -17,7 +17,6 @@ import scala.concurrent.Promise
 import scala.concurrent.duration.FiniteDuration
 import scala.util.Failure
 import scala.util.Success
-import scala.util.Try
 import scala.util.control.NonFatal
 
 import akka.Done
@@ -837,14 +836,9 @@ private[projection] object DynamoDBProjectionImpl {
                     case ReplayedOnRejection(source) =>
                       source.concatLazy(Source.lazySource(() => accepted(env, context, promiseOpt)))
 
-                    case ReplayTriggered                       => dropAfterValidated(promiseOpt)
-                    case NotReplayed if (promiseOpt.isDefined) =>
-                      // ensure that promise also fails with same rejection exception so that
-                      // stream fails for consistent reason
-                      val failedTry = Try { throwRejectedEnvelope(sourceProvider, env) }
-                      promiseOpt.get.tryComplete(failedTry)
-                      failedTry.get // throws and fails stream
-                    case NotReplayed =>
+                    case ReplayTriggered => dropAfterValidated(promiseOpt)
+                    case NotReplayed     =>
+                      // if promise is defined, will ultimately fail the promise with the same exception
                       throwRejectedEnvelope(sourceProvider, env)
                   })
               }
