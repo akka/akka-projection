@@ -353,8 +353,10 @@ class DynamoDBOffsetStoreSpec
       validation2.futureValue shouldBe Validation.Accepted // no load attempted
       dao.probesByPid.get("p1").expectNoMessage(30.millis)
       offsetStore.addInflight(env1)
-      // for whatever reason, no save of the offsets...
+      // no offset save to remove from inflight and update state
       val validation3 = offsetStore.validate(env2) // reset the sequence number
+      // since no save (which would update state and clear inflight) happened, there shouldn't actually be a record
+      // for p1 in the offset store, but assume that there now is.
       dao.probesByPid
         .get("p1")
         .expectMessageType[LoadSequenceNumber]
