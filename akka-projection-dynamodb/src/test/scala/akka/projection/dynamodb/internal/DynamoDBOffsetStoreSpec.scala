@@ -118,7 +118,7 @@ object DynamoDBOffsetStoreSpec {
   def uuid() = UUID.randomUUID().toString
 
   val baseSettings = DynamoDBProjectionSettings(config.getConfig("akka.projection.dynamodb"))
-    .withAcceptSequenceNumberResetAfter(3600.seconds)
+    .withAcceptSequenceNumberResetAfter(3600.seconds) // needed for test "...number reset is possible"
 }
 
 class DynamoDBOffsetStoreSpec
