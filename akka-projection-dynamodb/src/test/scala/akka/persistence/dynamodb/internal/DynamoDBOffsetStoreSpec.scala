@@ -28,6 +28,8 @@ import akka.projection.internal.ManagementState
 import com.typesafe.config.ConfigFactory
 import org.scalatest.wordspec.AnyWordSpecLike
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem
+import akka.persistence.query.typed.EventEnvelope
+import akka.projection.dynamodb.internal.DynamoDBOffsetStore.Validation
 
 object DynamoDBOffsetStoreSpec {
   val config = {
@@ -116,6 +118,7 @@ object DynamoDBOffsetStoreSpec {
   def uuid() = UUID.randomUUID().toString
 
   val baseSettings = DynamoDBProjectionSettings(config.getConfig("akka.projection.dynamodb"))
+    .withAcceptSequenceNumberResetAfter(3600.seconds) // needed for test "...number reset is possible"
 }
 
 class DynamoDBOffsetStoreSpec
@@ -253,7 +256,6 @@ class DynamoDBOffsetStoreSpec
       loadFuture.futureValue.byPid("p2").seqNr shouldBe 57
     }
 
-    // The current implementation doesn't actually do concurrent single-pid loads in validation, but we can test this
     "merge concurrent loads of 2 pids without retrying I/O" in {
       val clock = Clock.systemUTC()
       val startTime = clock.instant()
@@ -322,6 +324,45 @@ class DynamoDBOffsetStoreSpec
       (secondLoadFuture.futureValue.byPid.keySet shouldNot contain).oneOf("p1", "p2")
 
       assert(!offsetStore.isStopped(), "offset store should not be stopped")
+    }
+
+    "not load when validating in-flight pid unless sequence number reset is possible" in {
+      val clock = Clock.systemUTC()
+      val startTime = clock.instant()
+
+      val dao = new ProbeStubOffsetStoreDao(testKit)
+
+      val offsetStore = new DynamoDBOffsetStore(projectionId, uuid(), None, system, baseSettings, dao, clock)
+
+      val t0 = startTime.minusSeconds(3610)
+      val offset0 = TimestampOffset(t0, Map("p1" -> 1L))
+      val env0 = EventEnvelope(offset0, "p1", 1, "e1", t0.toEpochMilli, "", dao.sliceFor("p1"))
+      val offset1 = TimestampOffset(t0.plusMillis(100), Map("p1" -> 2))
+      val env1 = EventEnvelope(offset1, "p1", 2, "e2", offset1.timestamp.toEpochMilli, "", dao.sliceFor("p1"))
+      val t1 = startTime.minusSeconds(5)
+      val offset2 = TimestampOffset(t1, Map("p1" -> 1L)) // sequence number reset
+      val env2 = EventEnvelope(offset2, "p1", 1, "e1a", offset2.timestamp.toEpochMilli, "", dao.sliceFor("p1"))
+      dao.initializeProbes(Some("p1"), None)
+
+      val validation1 = offsetStore.validate(env0)
+      dao.probesByPid.get("p1").expectMessageType[LoadSequenceNumber].promise.success(None)
+      // offset store state does not have a seqNr for p1
+      validation1.futureValue shouldBe Validation.Accepted
+      offsetStore.addInflight(env0)
+      val validation2 = offsetStore.validate(env1)
+      validation2.futureValue shouldBe Validation.Accepted // no load attempted
+      dao.probesByPid.get("p1").expectNoMessage(30.millis)
+      offsetStore.addInflight(env1)
+      // no offset save to remove from inflight and update state
+      val validation3 = offsetStore.validate(env2) // reset the sequence number
+      // since no save (which would update state and clear inflight) happened, there shouldn't actually be a record
+      // for p1 in the offset store, but assume that there now is.
+      dao.probesByPid
+        .get("p1")
+        .expectMessageType[LoadSequenceNumber]
+        .promise
+        .success(Some(Record(env1.slice, env1.persistenceId, env1.sequenceNr, Instant.ofEpochMilli(env1.timestamp))))
+      validation3.futureValue shouldBe Validation.Accepted
     }
   }
 }
