@@ -82,6 +82,7 @@ import software.amazon.awssdk.services.dynamodb.model.ProvisionedThroughput
 import software.amazon.awssdk.services.dynamodb.model.Put
 import software.amazon.awssdk.services.dynamodb.model.ScalarAttributeType
 import software.amazon.awssdk.services.dynamodb.model.TransactWriteItem
+import java.util.concurrent.ThreadLocalRandom
 
 object DynamoDBTimestampOffsetProjectionSpec {
 
@@ -2550,6 +2551,25 @@ class DynamoDBTimestampOffsetProjectionSpec
 
   "A DynamoDB flow projection with TimestampOffset" must {
 
+    def flowHandler = {
+      // Ensure demand for concurrent validations by backpressuring after the first event
+      val initialDelay = Promise[Done]()
+
+      FlowWithContext[EventEnvelope[String], ProjectionContext]
+        .mapAsync(1) { env =>
+          val delay =
+            if (initialDelay.future.value.isEmpty) {
+              system.scheduler.scheduleOnce(20.millis, () => initialDelay.success(Done))
+              initialDelay.future
+            } else if (ThreadLocalRandom.current().nextBoolean()) {
+              // introduce a 10 milli delay for ~50% of elements after the first
+              akka.pattern.after(10.millis) { DynamoDBOffsetStore.FutureDone }
+            } else DynamoDBOffsetStore.FutureDone
+
+          delay.flatMap { _ => repository.concatToText(env.persistenceId, env.event) }
+        }
+    }
+
     "persist projection and offset" in {
       implicit val pid = UUID.randomUUID().toString
       val projectionId = genRandomProjectionId()
@@ -2558,12 +2578,6 @@ class DynamoDBTimestampOffsetProjectionSpec
       implicit val offsetStore = createOffsetStore(projectionId, sourceProvider)
 
       offsetShouldBeEmpty()
-
-      val flowHandler =
-        FlowWithContext[EventEnvelope[String], ProjectionContext]
-          .mapAsync(1) { env =>
-            repository.concatToText(env.persistenceId, env.event)
-          }
 
       val projection =
         DynamoDBProjection
@@ -2588,12 +2602,6 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       info(s"pid1 [$pid1], pid2 [$pid2]")
 
-      val flowHandler =
-        FlowWithContext[EventEnvelope[String], ProjectionContext]
-          .mapAsync(1) { env =>
-            repository.concatToText(env.persistenceId, env.event)
-          }
-
       val projection =
         DynamoDBProjection
           .atLeastOnceFlow(projectionId, Some(settings), sourceProvider, handler = flowHandler)
@@ -2616,12 +2624,6 @@ class DynamoDBTimestampOffsetProjectionSpec
       val startTime = TestClock.nowMicros().instant()
       val sourceProvider = new TestSourceProviderWithInput()
       implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
-
-      val flowHandler =
-        FlowWithContext[EventEnvelope[String], ProjectionContext]
-          .mapAsync(1) { env =>
-            repository.concatToText(env.persistenceId, env.event)
-          }
 
       val projectionRef = spawn(
         ProjectionBehavior(
@@ -2671,12 +2673,6 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       offsetShouldBeEmpty()
 
-      val flowHandler =
-        FlowWithContext[EventEnvelope[String], ProjectionContext]
-          .mapAsync(1) { env =>
-            repository.concatToText(env.persistenceId, env.event)
-          }
-
       val projection =
         DynamoDBProjection
           .atLeastOnceFlow(projectionId, Some(settings), sourceProvider, handler = flowHandler)
@@ -2713,12 +2709,6 @@ class DynamoDBTimestampOffsetProjectionSpec
       implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
 
       offsetShouldBeEmpty()
-
-      val flowHandler =
-        FlowWithContext[EventEnvelope[String], ProjectionContext]
-          .mapAsync(1) { env =>
-            repository.concatToText(env.persistenceId, env.event)
-          }
 
       val projection =
         DynamoDBProjection
@@ -2779,12 +2769,6 @@ class DynamoDBTimestampOffsetProjectionSpec
 
       offsetShouldBeEmpty()
 
-      val flowHandler =
-        FlowWithContext[EventEnvelope[String], ProjectionContext]
-          .mapAsync(1) { env =>
-            repository.concatToText(env.persistenceId, env.event)
-          }
-
       val projection =
         DynamoDBProjection
           .atLeastOnceFlow(
@@ -2829,12 +2813,6 @@ class DynamoDBTimestampOffsetProjectionSpec
       val (sourceProvider, sourceProbe) = createDynamicSourceProvider(allEnvelopes)
 
       implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
-
-      val flowHandler =
-        FlowWithContext[EventEnvelope[String], ProjectionContext]
-          .mapAsync(1) { env =>
-            repository.concatToText(env.persistenceId, env.event)
-          }
 
       val projectionRef = spawn(
         ProjectionBehavior(
@@ -2887,12 +2865,6 @@ class DynamoDBTimestampOffsetProjectionSpec
         createDynamicSourceProvider(allEnvelopes, enableCurrentEventsByPersistenceId = true)
 
       implicit val offsetStore: DynamoDBOffsetStore = createOffsetStore(projectionId, sourceProvider)
-
-      val flowHandler =
-        FlowWithContext[EventEnvelope[String], ProjectionContext]
-          .mapAsync(1) { env =>
-            repository.concatToText(env.persistenceId, env.event)
-          }
 
       val projectionRef = spawn(
         ProjectionBehavior(

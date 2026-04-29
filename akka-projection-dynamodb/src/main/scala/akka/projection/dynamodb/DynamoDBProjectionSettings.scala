@@ -57,7 +57,8 @@ object DynamoDBProjectionSettings {
       timeToLiveSettings = TimeToLiveSettings(config.getConfig("time-to-live")),
       retrySettings = RetrySettings(config.getConfig("offset-store.retries")),
       replayOnRejectedSequenceNumbers = config.getBoolean("replay-on-rejected-sequence-numbers"),
-      acceptSequenceNumberResetAfter = acceptSequenceNumberResetAfter)
+      acceptSequenceNumberResetAfter = acceptSequenceNumberResetAfter,
+      maxConcurrentValidations = config.getInt("max-concurrent-validations"))
   }
 
   /**
@@ -83,10 +84,12 @@ final class DynamoDBProjectionSettings private (
     val timeToLiveSettings: TimeToLiveSettings,
     val retrySettings: RetrySettings,
     val replayOnRejectedSequenceNumbers: Boolean,
-    val acceptSequenceNumberResetAfter: Option[JDuration]) {
+    val acceptSequenceNumberResetAfter: Option[JDuration],
+    val maxConcurrentValidations: Int) {
 
   // 25 is a hard limit of batch writes in DynamoDB
   require(offsetBatchSize <= 25, s"offset-batch-size must be <= 25, was [$offsetBatchSize]")
+  require(maxConcurrentValidations > 0, "max-concurrent-validations must be positive")
 
   def withTimestampOffsetTable(timestampOffsetTable: String): DynamoDBProjectionSettings =
     copy(timestampOffsetTable = timestampOffsetTable)
@@ -142,6 +145,9 @@ final class DynamoDBProjectionSettings private (
   def withAcceptSequenceNumberResetAfter(acceptSequenceNumberResetAfter: JDuration): DynamoDBProjectionSettings =
     copy(acceptSequenceNumberResetAfter = Some(acceptSequenceNumberResetAfter))
 
+  def withMaxConcurrentValidations(maxConcurrentValidations: Int): DynamoDBProjectionSettings =
+    copy(maxConcurrentValidations = maxConcurrentValidations)
+
   @nowarn("msg=deprecated")
   private def copy(
       timestampOffsetTable: String = timestampOffsetTable,
@@ -154,7 +160,8 @@ final class DynamoDBProjectionSettings private (
       timeToLiveSettings: TimeToLiveSettings = timeToLiveSettings,
       retrySettings: RetrySettings = retrySettings,
       replayOnRejectedSequenceNumbers: Boolean = replayOnRejectedSequenceNumbers,
-      acceptSequenceNumberResetAfter: Option[JDuration] = acceptSequenceNumberResetAfter) =
+      acceptSequenceNumberResetAfter: Option[JDuration] = acceptSequenceNumberResetAfter,
+      maxConcurrentValidations: Int = maxConcurrentValidations) =
     new DynamoDBProjectionSettings(
       timestampOffsetTable,
       useClient,
@@ -168,7 +175,8 @@ final class DynamoDBProjectionSettings private (
       timeToLiveSettings,
       retrySettings,
       replayOnRejectedSequenceNumbers,
-      acceptSequenceNumberResetAfter)
+      acceptSequenceNumberResetAfter,
+      maxConcurrentValidations)
 
   @nowarn("msg=deprecated")
   override def toString: String =
@@ -185,7 +193,8 @@ final class DynamoDBProjectionSettings private (
     s"timeToLiveSettings=$timeToLiveSettings, " +
     s"retrySettings=$retrySettings, " +
     s"replayOnRejectedSequenceNumbers=$replayOnRejectedSequenceNumbers, " +
-    s"acceptSequenceNumberResetAfter=$acceptSequenceNumberResetAfter)"
+    s"acceptSequenceNumberResetAfter=$acceptSequenceNumberResetAfter, " +
+    s"maxConcurrentValidations=$maxConcurrentValidations)"
 }
 
 object TimeToLiveSettings {
