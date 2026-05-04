@@ -35,7 +35,7 @@ object Dependencies {
     val AkkaProjectionVersionInDocs = "1.6"
 
     val AkkaPersistenceCassandra = "1.3.3"
-    val AkkaPersistenceJdbc = "5.5.4"
+    val AkkaPersistenceJdbc = "5.5.5"
 
     val AkkaPersistenceR2dbc = "1.3.12"
     val AkkaPersistenceR2dbcVersionInDocs = VersionNumber(AkkaPersistenceR2dbc).numbers match {
