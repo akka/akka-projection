@@ -35,7 +35,7 @@ object Dependencies {
     val AkkaProjectionVersionInDocs = "1.6"
 
     val AkkaPersistenceCassandra = "1.3.3"
-    val AkkaPersistenceJdbc = "5.5.4"
+    val AkkaPersistenceJdbc = "5.5.5"
 
     val AkkaPersistenceR2dbc = "1.3.12"
     val AkkaPersistenceR2dbcVersionInDocs = VersionNumber(AkkaPersistenceR2dbc).numbers match {
@@ -47,7 +47,7 @@ object Dependencies {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
 
-    val slick = "3.5.1"
+    val slick = "3.6.1"
     val scalaTest = "3.2.18"
     val testContainers = "1.19.3"
     val junit = "4.13.2"
