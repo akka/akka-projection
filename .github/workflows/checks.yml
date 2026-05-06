@@ -160,7 +160,7 @@ jobs:
             path: "samples/grpc/shopping-analytics-service-scala"
             command: |
               sbt Test/compile -Dakka-projection.version=`cat ../../../version.txt`
-              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;"
+              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat ../../../version.txt`
           - name: "Test Java gRPC Shopping Cart"
             path: "samples/grpc/shopping-cart-service-java"
             command: "mvn test -nsu -ntp -Dakka-projection.version=`cat ../../../version.txt`"
@@ -171,7 +171,7 @@ jobs:
             path: "samples/replicated/shopping-cart-service-scala"
             command: |
               sbt Test/compile -Dakka-projection.version=`cat ../../../version.txt`
-              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;"
+              sbt "clean; ++${SCALA3_VERSION}!; Test/compile;" -Dakka-projection.version=`cat ../../../version.txt`
           - name: "Compile Java Replicated Shopping Cart"
             path: "samples/replicated/shopping-cart-service-java"
             command: "mvn compile -nsu -ntp -Dakka-projection.version=`cat ../../../version.txt`"
