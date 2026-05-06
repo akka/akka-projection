@@ -9,10 +9,27 @@ on:
     tags-ignore: [ v.* ]
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: Akka-Default
+    outputs:
+      release_prep_only: ${{ steps.filter.outputs.release_prep_only }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Detect release-prep-only changes
+        id: filter
+        uses: ./.github/actions/release-prep-only
+
   test-r2dbc-postgres:
     name: Run r2dbc test with Postgres
+    needs: changes
     runs-on: Akka-Default
-    if: github.repository == 'akka/akka-projection'
+    if: |
+      github.event.repository.fork == false &&
+      needs.changes.outputs.release_prep_only != 'true'
     strategy:
       fail-fast: false
       matrix:

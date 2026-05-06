@@ -11,9 +11,26 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: Akka-Default
+    outputs:
+      release_prep_only: ${{ steps.filter.outputs.release_prep_only }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Detect release-prep-only changes
+        id: filter
+        uses: ./.github/actions/release-prep-only
+
   release:
+    needs: changes
     # runs on main repo only
-    if: github.repository == 'akka/akka-projection'
+    if: |
+      github.event.repository.fork == false &&
+      needs.changes.outputs.release_prep_only != 'true'
     name: Release
     # the release environment provides access to secrets required in the release process
     # https://github.com/akka/akka-projection/settings/environments
@@ -55,8 +72,11 @@ jobs:
 
   documentation:
     name: Documentation
+    needs: changes
     runs-on: Akka-Default
-    if: github.event.repository.fork == false
+    if: |
+      github.event.repository.fork == false &&
+      needs.changes.outputs.release_prep_only != 'true'
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases

@@ -13,18 +13,20 @@ Variables to be expanded in this template:
 
 ### Cutting the release
 
-- [ ] Check that open PRs and issues assigned to the milestone are reasonable
-- [ ] Update the Change date and version in the LICENSE file
-- [ ] Update the Akka Projection version in the samples to $VERSION$, otherwise the published zip files of the samples will have the old version.
-- [ ] If PRs were merged after the last native-image-tests run, trigger manually [native-image-tests](https://github.com/akka/akka-core/actions/workflows/native-image-tests.yml) and see that they are green.
-- [ ] When changing minor version, update `Dependencies.AkkaProjectionVersionInDocs`   
+- [ ] Check that [open PRs](https://github.com/akka/akka-projection/pulls) and [issues assigned to the milestone](https://github.com/akka/akka-projection/issues?q=milestone%3A%22$VERSION$%22) are reasonable
+- [ ] If PRs were merged after the last native-image-tests run, trigger manually [native-image-tests](https://github.com/akka/akka-projection/actions/workflows/native-image-tests.yml) and see that they are green.
+- [ ] Run the release-prep script to update LICENSE (version, copyright year, change date + 3y) and bump the akka-projection version in every sample build file. With `--commit-and-pr` it pushes a `wip-release-prep-$VERSION$` branch and opens a PR:
+      ```
+      ./scripts/release-prep.sh --commit-and-pr $VERSION$
+      ```
+- [ ] When changing minor version, update `Dependencies.AkkaProjectionVersionInDocs`
 - [ ] Create a new milestone for the [next version](https://github.com/akka/akka-projection/milestones)
 - [ ] Close the [$VERSION$ milestone](https://github.com/akka/akka-projection/milestones?direction=asc&sort=due_date)
 - [ ] Make sure all important PRs have been merged
 - [ ] For recent dependency updates or changes on a minor release branch the Fossa validation can be triggered from the GitHub actions "Dependency License Scanning" (Manually choosing the release branch)
 - [ ] Update the revision in Fossa in the Akka Group for the Akka umbrella version, e.g. `22.10`. Note that the revisions for the release is udpated by Akka Group > Projects > Edit.
 - [ ] Wait until [main build finished](https://github.com/akka/akka-projection/actions) after merging the latest PR
-- [ ] Update the [draft release](https://github.com/akka/akka-projection/releases) with the next tag version `v$VERSION$`, title and release description. Use the `Publish release` button, which will create the tag.
+- [ ] Create the [draft release](https://github.com/akka/akka-projection/releases/new?tag=v$VERSION$), click `Generate release notes` to get a title and release description. Use the `Publish release` button, which will create the tag.
 - [ ] Check that GitHub Actions release build has executed successfully (GitHub Actions will start a [CI build](https://github.com/akka/akka-projection/actions) for the new tag and publish artifacts to https://repo.akka.io/maven)
 
 ### Check availability

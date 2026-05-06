@@ -10,9 +10,26 @@ permissions:
   contents: read
 
 jobs:
-  validate-links:
+  changes:
+    name: Detect changes
     runs-on: Akka-Default
-    if: github.event.repository.fork == false
+    outputs:
+      release_prep_only: ${{ steps.filter.outputs.release_prep_only }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Detect release-prep-only changes
+        id: filter
+        uses: ./.github/actions/release-prep-only
+
+  validate-links:
+    needs: changes
+    runs-on: Akka-Default
+    if: |
+      github.event.repository.fork == false &&
+      needs.changes.outputs.release_prep_only != 'true'
     steps:
       - name: Checkout
         # https://github.com/actions/checkout/releases
