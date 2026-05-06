@@ -16,6 +16,7 @@ object VersionSyncCheckPlugin extends AutoPlugin {
   object autoImport {
     val akkaVersionSyncCheck = taskKey[Unit]("")
     val akkaGrpcVersionSyncCheck = taskKey[Unit]("")
+    val akkaProjectionVersionSyncCheck = taskKey[Unit]("")
     val allVersionSyncChecks = taskKey[Unit]("Runs all version sync checks")
   }
   import autoImport.*
@@ -72,10 +73,48 @@ object VersionSyncCheckPlugin extends AutoPlugin {
           raw"""<akka-grpc\.version>(\d+\.\d+\.\d+)""".r.unanchored,
           allSampleMavenBuildFiles).value
       },
+      akkaProjectionVersionSyncCheck := akkaProjectionVersionSyncCheckImpl.value,
       allVersionSyncChecks := {
         akkaVersionSyncCheck.value
         akkaGrpcVersionSyncCheck.value
+        akkaProjectionVersionSyncCheck.value
       })
+
+  // Verifies that every sample build file pins the same akka-projection version
+  // literal. Unlike the akka/akka-grpc checks there is no single source of
+  // truth in build.sbt for the released akka-projection version, so we just
+  // ensure all samples agree with each other (catches a missed file in the
+  // release-prep bump).
+  private def akkaProjectionVersionSyncCheckImpl = Def.task[Unit] {
+    val log = state.value.log
+    val SbtRegex = raw"""sys\.props\.getOrElse\("akka-projection\.version", "([^"]+)"\)""".r.unanchored
+    val PomRegex = raw"""<akka-projection\.version>([^<]+)</akka-projection\.version>""".r.unanchored
+
+    def extract(path: Path, regex: UnanchoredRegex): Option[String] =
+      Files
+        .lines(path)
+        .iterator
+        .asScala
+        .collectFirst({ case regex(v) => v })
+
+    val sbtVersions = allSampleSbtBuildFiles.map(p => p -> extract(p, SbtRegex))
+    val pomVersions = allSampleMavenBuildFiles.map(p => p -> extract(p, PomRegex))
+    val all = sbtVersions ++ pomVersions
+
+    val missing = all.collect { case (p, None) => p }
+    if (missing.nonEmpty) {
+      missing.foreach(p => log.error(s"Could not find akka-projection version literal in $p"))
+      fail("Akka Projection version sync check failed: missing version literal")
+    }
+
+    val versions = all.collect { case (p, Some(v)) => p -> v }
+    val distinct = versions.map(_._2).toSet
+    if (distinct.size > 1) {
+      versions.foreach { case (p, v) => log.error(s"$p -> $v") }
+      fail(s"Akka Projection version sync check failed: samples disagree, found versions $distinct")
+    }
+    log.info(s"Akka Projection version sync check success: all samples on ${distinct.headOption.getOrElse("?")}")
+  }
 
   def versionSyncCheckImpl(
       name: String,

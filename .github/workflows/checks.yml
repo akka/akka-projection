@@ -12,8 +12,24 @@ permissions:
   actions: write
 
 jobs:
+  changes:
+    name: Detect changes
+    runs-on: Akka-Default
+    outputs:
+      release_prep_only: ${{ steps.filter.outputs.release_prep_only }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Detect release-prep-only changes
+        id: filter
+        uses: ./.github/actions/release-prep-only
+
   check-code-style:
     name: Check Code Style
+    needs: changes
+    if: needs.changes.outputs.release_prep_only != 'true'
     runs-on: Akka-Default
     steps:
       - name: Checkout
@@ -47,6 +63,8 @@ jobs:
 
   check-code-compilation:
     name: Check Code Compilation
+    needs: changes
+    if: needs.changes.outputs.release_prep_only != 'true'
     runs-on: Akka-Default
     steps:
       - name: Checkout
@@ -77,11 +95,43 @@ jobs:
       - name: Compile all code with fatal warnings for Java 11, Scala 2.13 and Scala 3
         run: sbt "clean ; +compile; +Test/compile; +akka-projection-integration/Test/compile"
 
+  check-version-sync:
+    name: Check Sample Version Sync
+    needs: changes
+    runs-on: Akka-Default
+    steps:
+      - name: Checkout
+        # https://github.com/actions/checkout/releases
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Checkout GitHub merge
+        if: github.event.pull_request
+        run: |-
+          git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
+          git checkout scratch
+
+      - name: Cache Coursier cache
+        # https://github.com/coursier/cache-action/releases
+        uses: coursier/cache-action@v8.1.0
+
+      - name: Set up JDK 11
+        # https://github.com/coursier/setup-action/releases
+        uses: coursier/setup-action@v3.0.0
+        with:
+          jvm: temurin:1.11
+
+      - name: Run akka/github-actions-scripts
+        uses: akka/github-actions-scripts/setup_global_resolver@main
+
       - name: "Check sample library versions in sync"
         run: sbt "allVersionSyncChecks"
 
   setup-samples:
     name: Setup Sample Projects
+    needs: changes
+    if: needs.changes.outputs.release_prep_only != 'true'
     runs-on: Akka-Default
     # builds and publishes projections once for individual parallel sample testing to pick it up in the matrix below
 
@@ -252,6 +302,8 @@ jobs:
           ${{ matrix.sample.command }}
 
   diff-checks:
+    needs: changes
+    if: needs.changes.outputs.release_prep_only != 'true'
     runs-on: Akka-Default
 
     steps:
@@ -275,6 +327,8 @@ jobs:
 
 
   check-rust-sample:
+    needs: changes
+    if: needs.changes.outputs.release_prep_only != 'true'
     runs-on: Akka-Default
     env:
       RUSTFLAGS: -Dwarnings
@@ -317,8 +371,10 @@ jobs:
     runs-on: Akka-Default
     if: always()
     needs:
+      - changes
       - check-code-style
       - check-code-compilation
+      - check-version-sync
       - check-samples
       - diff-checks
       - check-rust-sample
@@ -329,5 +385,5 @@ jobs:
           ${{
             contains(needs.*.result, 'failure') ||
             contains(needs.*.result, 'cancelled') ||
-            contains(needs.*.result, 'skipped')
+            (needs.changes.outputs.release_prep_only != 'true' && contains(needs.*.result, 'skipped'))
           }}
