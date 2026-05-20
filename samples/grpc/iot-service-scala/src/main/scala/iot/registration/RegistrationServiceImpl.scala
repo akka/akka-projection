@@ -28,7 +28,8 @@ class RegistrationServiceImpl(system: ActorSystem[_])
 
   override def register(in: proto.RegisterRequest): Future[Empty] = {
     logger.info("register sensor {}", in.sensorEntityId)
-    val entityRef = sharding.entityRefFor(Registration.EntityKey, in.sensorEntityId)
+    val entityRef =
+      sharding.entityRefFor(Registration.EntityKey, in.sensorEntityId)
     val reply: Future[Done] =
       entityRef.askWithStatus(
         Registration.Register(Registration.SecretDataValue(in.secret), _))
