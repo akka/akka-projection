@@ -208,7 +208,7 @@ private[akka] object ReplicationImpl {
     }
     ShardedDaemonProcess(system).initWithContext[ProjectionBehavior.Command](
       sanitizeActorName(projectionName),
-      remoteReplica.numberOfConsumers, { (context: ShardedDaemonProcessContext) =>
+      remoteReplica.numberOfConsumers, { context =>
         val sliceRanges = Persistence(system).sliceRanges(context.totalProcesses)
         val sliceRange = sliceRanges(context.processNumber)
         val projectionKey = s"${sliceRange.min}-${sliceRange.max}"

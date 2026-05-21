@@ -107,7 +107,7 @@ For graceful stop it is recommended to use @scala[`ProjectionBehavior.Stop`]@jav
 @@@ warning
 The `numberOfInstances`/`initialNumberOfInstances` argument passed to `ShardedDaemonProcess.init`/`initWithContext` is only used the first time a given Sharded Daemon Process is started. After that the running count is kept in distributed data and is authoritative — redeploying with a different argument value alone will **not** change the number of running projection instances.
 
-To change the number at runtime use the `ChangeNumberOfProcesses` command on the `ActorRef[ShardedDaemonProcessCommand]` returned from `initWithContext`, as described in @extref:[Sharded Daemon Process dynamic scaling](akka:typed/cluster-sharded-daemon-process.html#dynamic-scaling-of-number-of-workers).
+To change the number at runtime send the `ChangeNumberOfProcesses` command to the `ActorRef` returned from `initWithContext`, as described in @extref:[Sharded Daemon Process dynamic scaling](akka:typed/cluster-sharded-daemon-process.html#dynamic-scaling-of-number-of-workers).
 
 When the behavior factory derives slice ranges from the configured number (the common `sliceRanges(numberOfConsumers)` pattern), compute the slice ranges *inside* the behavior factory from `daemonContext.totalProcesses` rather than from the outer `numberOfInstances` value. Otherwise a stale distributed data state (from a previous deployment that rescaled to a different number) will cause processes outside the configured range to start with an out-of-bounds slice index and fail in a restart loop.
 @@@
