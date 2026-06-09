@@ -32,6 +32,10 @@ import org.slf4j.LoggerFactory
  * oldest entry older than `timeout`. Below the threshold each overdue check logs a warning.
  * If `timeout` is `Duration.Zero` the watchdog is disabled — pings still flow to keep the
  * connection alive and RTT is logged at debug on Pong.
+ *
+ * Note: the deadline measures Pong observation at this stage. Pongs share the inbound channel
+ * with Events, so a consumer-side downstream that stalls pulling events for longer than
+ * `timeout * failureThreshold` can also trigger failure even when the producer is responsive.
  */
 @InternalApi
 private[akka] final class KeepAliveBidiStage(
@@ -56,15 +60,18 @@ private[akka] final class KeepAliveBidiStage(
     private val PingTickKey = "ping-tick"
     private val DeadlineCheckKey = "deadline-check"
 
-    // Bounds the in-flight tracker when the watchdog is disabled (timeout = 0)
+    // Bounds the in-flight tracker when the watchdog is disabled (timeout = 0); 10 is
+    // generous given typical intervals (seconds) and gives a clear breadcrumb in the prune log.
     private val MaxInFlight = 10
 
     private var nextId: Long = 0L
     private var inFlight = Map[Long, Long]()
     private var consecutiveOverdueChecks: Int = 0
 
-    // At most one Ping is queued here when outProducer has no demand; newer ticks are dropped.
-    private var pendingPing: Option[StreamIn] = None
+    // A tick fired with no demand on outProducer; the Ping itself is materialized only when
+    // we actually push, so its id and inFlight timestamp reflect the real send time. Newer
+    // ticks while pendingPing is already true are dropped.
+    private var pendingPing: Boolean = false
 
     setHandler(inApp, new InHandler {
       override def onPush(): Unit = push(outProducer, grab(inApp))
@@ -76,16 +83,13 @@ private[akka] final class KeepAliveBidiStage(
       outProducer,
       new OutHandler {
         override def onPull(): Unit = {
-          pendingPing match {
-            case Some(p) =>
-              pendingPing = None
-              push(outProducer, p)
-            case None =>
-              if (isClosed(inApp)) {
-                complete(outProducer)
-              } else if (!hasBeenPulled(inApp)) {
-                pull(inApp)
-              }
+          if (pendingPing) {
+            pendingPing = false
+            emitPing()
+          } else if (isClosed(inApp)) {
+            complete(outProducer)
+          } else if (!hasBeenPulled(inApp)) {
+            pull(inApp)
           }
         }
         override def onDownstreamFinish(cause: Throwable): Unit = cancel(inApp, cause)
@@ -137,27 +141,10 @@ private[akka] final class KeepAliveBidiStage(
 
     override protected def onTimer(timerKey: Any): Unit = timerKey match {
       case PingTickKey =>
-        val id = nextId
-        nextId += 1
-        val ping = StreamIn(StreamIn.Message.Ping(Ping(id)))
-
-        val emitted =
-          if (isAvailable(outProducer)) {
-            push(outProducer, ping)
-            true
-          } else if (pendingPing.isEmpty) {
-            pendingPing = Some(ping)
-            true
-          } else {
-            log.debug("{}: Skipping Ping [{}] because outProducer is backed up", logPrefix, id)
-            false
-          }
-
-        if (emitted) {
-          inFlight += (id -> System.nanoTime())
-          // Prune only with watchdog disabled; otherwise failStage would beat the cap.
-          if (timeout <= Duration.Zero && inFlight.size > MaxInFlight) pruneInFlight()
-        }
+        if (isAvailable(outProducer)) emitPing()
+        else if (!pendingPing) pendingPing = true
+        else
+          log.debug("{}: Skipping Ping tick because outProducer is backed up and a Ping is already pending", logPrefix)
 
       case DeadlineCheckKey =>
         if (inFlight.isEmpty) {
@@ -171,15 +158,17 @@ private[akka] final class KeepAliveBidiStage(
             if (consecutiveOverdueChecks >= failureThreshold) {
               failStage(
                 new TimeoutException(
-                  s"$logPrefix: No keepalive Pong response for Ping [$oldestId] within [$timeout] " +
-                  s"after [$failureThreshold] consecutive overdue checks (elapsed [$elapsedMs ms])"))
+                  s"$logPrefix: No keepalive Pong observed for Ping [$oldestId] within [$timeout] " +
+                  s"after [$failureThreshold] consecutive overdue checks (elapsed [$elapsedMs ms]). " +
+                  s"May indicate a stuck producer, slow network, or consumer-side downstream backpressure."))
             } else {
               log.warn(
-                "{}: Keepalive Pong for Ping [{}] overdue [{} ms > {}], consecutive overdue checks [{}/{}]",
+                "{}: Keepalive Pong not observed for Ping [{}] within [{}] (overdue [{} ms]), " +
+                "consecutive overdue checks [{}/{}]",
                 logPrefix,
                 oldestId,
-                elapsedMs,
                 timeout,
+                elapsedMs,
                 consecutiveOverdueChecks,
                 failureThreshold)
             }
@@ -190,6 +179,15 @@ private[akka] final class KeepAliveBidiStage(
 
       case other =>
         log.warn("{}: Unexpected timer key [{}]", logPrefix, other)
+    }
+
+    private def emitPing(): Unit = {
+      val id = nextId
+      nextId += 1
+      push(outProducer, StreamIn(StreamIn.Message.Ping(Ping(id))))
+      inFlight += (id -> System.nanoTime())
+      // Prune only with watchdog disabled; otherwise failStage would beat the cap.
+      if (timeout <= Duration.Zero && inFlight.size > MaxInFlight) pruneInFlight()
     }
 
     private def pruneInFlight(): Unit = {

@@ -110,7 +110,7 @@ class KeepAliveBidiStageSpec extends ScalaTestWithActorTestKit("""
 
       val err = toAppSub.expectError()
       err shouldBe a[TimeoutException]
-      err.getMessage should include("No keepalive Pong response")
+      err.getMessage should include("No keepalive Pong observed")
     }
 
     "keep emitting Pings without failing the stream when timeout is zero" in {
@@ -175,11 +175,12 @@ class KeepAliveBidiStageSpec extends ScalaTestWithActorTestKit("""
       val (_, toProdSub, _, toAppSub) = makeProbes(100.millis, Duration.Zero, "test-pending")
       toAppSub.request(10)
       // intentionally do NOT request from toProdSub yet; several ticks will fire while there
-      // is no demand. The first becomes pendingPing, the rest are dropped.
+      // is no demand. The first sets pendingPing, the rest are dropped.
       Thread.sleep(500)
 
-      // Grant single-element demand; the queued pendingPing arrives immediately and its id is 0
-      // (the very first ping), proving the rest were dropped rather than buffered.
+      // Grant single-element demand; the queued pendingPing is materialized at push time with
+      // id=0 (the very first id, since nextId is only incremented on emit), proving the rest
+      // were dropped rather than buffered with reserved ids.
       toProdSub.request(1)
       val queued = expectPing(toProdSub, 200.millis)
       queued.id shouldBe 0L
@@ -189,17 +190,15 @@ class KeepAliveBidiStageSpec extends ScalaTestWithActorTestKit("""
       // timeout = 0 so the stream stays alive while in-flight grows
       val (_, toProdSub, _, toAppSub) = makeProbes(20.millis, Duration.Zero, "test-prune")
       toAppSub.request(50)
-      // Bound demand at exactly 10: ticks 0..9 push, inFlight grows to 10 (== MaxInFlight, no prune yet).
-      // Tick #10 finds no demand, becomes pendingPing, inFlight grows to 11 → exactly one prune fires.
-      // Subsequent ticks find pendingPing already set and are dropped (no further inFlight growth).
-      toProdSub.request(10)
+      // Demand for 20 pushes: ticks 1..10 grow inFlight to 10 (== MaxInFlight, no prune yet),
+      // tick 11 pushes and grows it to 11 → prune fires once. Subsequent ticks push and the
+      // size stays at MaxInFlight via further prunes.
+      toProdSub.request(20)
 
       LoggingTestKit
         .debug("test-prune: Dropping in-flight Ping")
         .expect {
-          for (_ <- 1 to 10) expectPing(toProdSub, 500.millis)
-          // small grace window for the next tick (which becomes pendingPing) to fire and trigger the prune
-          Thread.sleep(100)
+          for (_ <- 1 to 11) expectPing(toProdSub, 500.millis)
         }
     }
 

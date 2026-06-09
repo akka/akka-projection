@@ -155,6 +155,11 @@ final class GrpcQuerySettings private (
    * Set `timeout` to `Duration.Zero` to keep sending requests without ever failing the
    * stream (firewall keep-alive only).
    *
+   * The deadline measures Pong observation at the consumer-side stage. Pongs share the
+   * inbound channel with Events, so a consumer-side downstream that stalls pulling events
+   * for longer than `timeout * failureThreshold` can also trigger failure even when the
+   * producer is responsive. Pick `timeout` and `failureThreshold` with that in mind.
+   *
    * Requires an akka-projection producer of version 1.6.24 or newer.
    */
   def withKeepAlive(interval: FiniteDuration, timeout: FiniteDuration, failureThreshold: Int): GrpcQuerySettings =
