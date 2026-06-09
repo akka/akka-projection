@@ -28,6 +28,7 @@ import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
+import akka.projection.grpc.internal.KeepAliveBidiStage
 import akka.projection.grpc.internal.ProjectionGrpcSerialization
 import akka.projection.grpc.internal.ConnectionException
 import akka.projection.grpc.internal.ProtoAnySerialization
@@ -46,7 +47,11 @@ import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
 import akka.projection.internal.CanTriggerReplay
 import akka.stream.OverflowStrategy
+import akka.stream.scaladsl.BidiFlow
+import akka.stream.scaladsl.Flow
 import akka.stream.scaladsl.Source
+
+import scala.concurrent.duration.Duration
 import akka.util.Timeout
 import com.google.protobuf.Descriptors
 import com.typesafe.config.Config
@@ -400,19 +405,45 @@ final class GrpcReadJournal private (
         .mapMaterializedValue(_ => NotUsed)
     }
 
-    val streamOut: Source[StreamOut, NotUsed] =
-      addRequestHeaders(client.eventsBySlices())
-        .invoke(streamIn)
-        .recover {
-          case ex: akka.grpc.GrpcServiceException if ex.status.getCode == Status.Code.UNAVAILABLE =>
-            val port = clientSettings.servicePortName.getOrElse(clientSettings.defaultPort.toString)
-            throw new ConnectionException(clientSettings.serviceName, port, streamId)
+    val grpcFlow: Flow[StreamIn, StreamOut, NotUsed] =
+      Flow[StreamIn]
+        .prefixAndTail(0)
+        .flatMapConcat {
+          case (_, tail) =>
+            addRequestHeaders(client.eventsBySlices())
+              .invoke(tail)
+              .recover {
+                case ex: akka.grpc.GrpcServiceException if ex.status.getCode == Status.Code.UNAVAILABLE =>
+                  val port = clientSettings.servicePortName.getOrElse(clientSettings.defaultPort.toString)
+                  throw new ConnectionException(clientSettings.serviceName, port, streamId)
 
-          case th: Throwable =>
-            throw new RuntimeException(
-              s"Failure to consume gRPC event stream for [$streamId]${CorrelationId.toLogText(correlationId)}",
-              th)
+                case th: Throwable =>
+                  throw new RuntimeException(
+                    s"Failure to consume gRPC event stream for [$streamId]${CorrelationId.toLogText(correlationId)}",
+                    th)
+              }
         }
+        .mapMaterializedValue(_ => NotUsed)
+
+    val effectiveFlow: Flow[StreamIn, StreamOut, NotUsed] =
+      if (settings.keepAliveInterval > Duration.Zero) {
+        log.debug(
+          "{}: Application level keepalive enabled, interval [{}], timeout [{}]",
+          logPrefix,
+          settings.keepAliveInterval,
+          settings.keepAliveTimeout)
+        BidiFlow
+          .fromGraph(
+            new KeepAliveBidiStage(
+              settings.keepAliveInterval,
+              settings.keepAliveTimeout,
+              settings.keepAliveFailureThreshold,
+              logPrefix))
+          .join(grpcFlow)
+      } else
+        grpcFlow
+
+    val streamOut: Source[StreamOut, NotUsed] = streamIn.via(effectiveFlow)
 
     streamOut.map {
       case StreamOut(StreamOut.Message.Event(event), _) =>
