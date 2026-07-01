@@ -78,7 +78,6 @@ lazy val slickIntegration =
     .dependsOn(slick)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
-    .enablePlugins(ArtifactBomPlugin)
     .disablePlugins(CiReleasePlugin)
 
 // provides offset storage backed by a Cassandra table
