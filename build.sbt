@@ -15,6 +15,7 @@ lazy val core =
     .settings(Dependencies.core)
     .settings(name := "akka-projection-core", AutomaticModuleName.settings("akka.projection.core"))
     .settings(Protobuf.settings)
+    .enablePlugins(ArtifactBomPlugin)
     .disablePlugins(CiReleasePlugin)
 
 lazy val coreTest =
@@ -43,6 +44,7 @@ lazy val jdbc =
     .dependsOn(core)
     .dependsOn(coreTest % "test->test")
     .dependsOn(testkit % Test)
+    .enablePlugins(ArtifactBomPlugin)
     .disablePlugins(CiReleasePlugin)
 
 lazy val jdbcIntegration =
@@ -63,6 +65,7 @@ lazy val slick =
       // needed because slick pulls in 2.2.0
       dependencyOverrides += Dependencies.Compile.slf4j)
     .dependsOn(jdbc, core)
+    .enablePlugins(ArtifactBomPlugin)
     .disablePlugins(CiReleasePlugin)
 
 lazy val slickIntegration =
@@ -83,6 +86,7 @@ lazy val cassandra =
     .settings(Dependencies.cassandra)
     .settings(AutomaticModuleName.settings("akka.projection.cassandra"))
     .dependsOn(core)
+    .enablePlugins(ArtifactBomPlugin)
     .disablePlugins(CiReleasePlugin)
 
 lazy val cassandraIntegration =
@@ -99,6 +103,7 @@ lazy val eventsourced =
     .settings(AutomaticModuleName.settings("akka.projection.eventsourced"))
     .dependsOn(core)
     .dependsOn(testkit % Test)
+    .enablePlugins(ArtifactBomPlugin)
     .disablePlugins(CiReleasePlugin)
 
 // provides offset storage backed by Kafka managed offset commits
@@ -108,6 +113,7 @@ lazy val kafka =
     .settings(AutomaticModuleName.settings("akka.projection.kafka"))
     .dependsOn(testkit % Test)
     .dependsOn(core)
+    .enablePlugins(ArtifactBomPlugin)
     .disablePlugins(CiReleasePlugin)
 
 lazy val kafkaIntegration =
@@ -129,6 +135,7 @@ lazy val `durable-state` =
     .settings(AutomaticModuleName.settings("akka.projection.durable-state"))
     .dependsOn(core)
     .dependsOn(testkit % Test)
+    .enablePlugins(ArtifactBomPlugin)
     .disablePlugins(CiReleasePlugin)
 
 lazy val grpc =
@@ -140,6 +147,7 @@ lazy val grpc =
     .dependsOn(core)
     .dependsOn(eventsourced)
     .enablePlugins(AkkaGrpcPlugin)
+    .enablePlugins(ArtifactBomPlugin)
     .disablePlugins(CiReleasePlugin)
 
 lazy val grpcTests =
@@ -171,6 +179,7 @@ lazy val r2dbc =
     .settings(Dependencies.r2dbc)
     .settings(AutomaticModuleName.settings("akka.projection.r2dbc"))
     .dependsOn(core, grpc, eventsourced, `durable-state`)
+    .enablePlugins(ArtifactBomPlugin)
     .disablePlugins(CiReleasePlugin)
 
 lazy val r2dbcIntegration =
@@ -186,6 +195,7 @@ lazy val dynamodb =
     .settings(Dependencies.dynamodb)
     .settings(AutomaticModuleName.settings("akka.projection.dynamodb"))
     .dependsOn(core, eventsourced)
+    .enablePlugins(ArtifactBomPlugin)
     .disablePlugins(CiReleasePlugin)
 
 lazy val dynamodbIntegration =

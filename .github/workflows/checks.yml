@@ -5,7 +5,7 @@ on:
   push:
     branches:
       - main
-    tags-ignore: [ v.* ]
+    tags-ignore: [v.*]
 
 permissions:
   contents: read
@@ -94,6 +94,9 @@ jobs:
 
       - name: Compile all code with fatal warnings for Java 11, Scala 2.13 and Scala 3
         run: sbt "clean ; +compile; +Test/compile; +akka-projection-integration/Test/compile"
+
+      - name: Artifact BOM validation
+        uses: akka/github-actions-scripts/artifact_bom_validation@main
 
   check-version-sync:
     name: Check Sample Version Sync
@@ -276,7 +279,7 @@ jobs:
       - name: Run akka/github-actions-scripts
         uses: akka/github-actions-scripts/setup_global_resolver@main
         with:
-          maven-mirror-control: 'NO_MIRROR'
+          maven-mirror-control: "NO_MIRROR"
 
       - name: Restore published artifacts
         # https://github.com/actions/cache/releases
@@ -324,7 +327,6 @@ jobs:
 
       - name: "gRPC sample Scala charger RES identical impl check"
         run: "diff samples/grpc/local-drone-control-scala/src/main/scala/charging/ChargingStation.scala samples/grpc/restaurant-drone-deliveries-service-scala/src/main/scala/charging/ChargingStation.scala"
-
 
   check-rust-sample:
     needs: changes
