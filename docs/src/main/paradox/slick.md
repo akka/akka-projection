@@ -25,7 +25,7 @@ The Akka dependencies are available from Akka's library repository. To access th
 @@repository [sbt,Maven,Gradle] {
 id="akka-repository"
 name="Akka library repository"
-url="https://repo.akka.io/maven"
+url="<url from https://account.akka.io/token>"
 }
 
 To use the Slick module of Akka Projections add the following dependency in your project:
