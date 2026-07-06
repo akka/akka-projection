@@ -27,7 +27,7 @@ Variables to be expanded in this template:
 - [ ] Update the revision in Fossa in the Akka Group for the Akka umbrella version, e.g. `22.10`. Note that the revisions for the release is udpated by Akka Group > Projects > Edit.
 - [ ] Wait until [main build finished](https://github.com/akka/akka-projection/actions) after merging the latest PR
 - [ ] Create the [draft release](https://github.com/akka/akka-projection/releases/new?tag=v$VERSION$), click `Generate release notes` to get a title and release description. Use the `Publish release` button, which will create the tag.
-- [ ] Check that GitHub Actions release build has executed successfully (GitHub Actions will start a [CI build](https://github.com/akka/akka-projection/actions) for the new tag and publish artifacts to the Akka repository)
+- [ ] Check that GitHub Actions release build has executed successfully (GitHub Actions will start a [CI build](https://github.com/akka/akka-projection/actions) for the new tag and publish artifacts to the Akka repository).
 
 ### Check availability
 
