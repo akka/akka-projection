@@ -9,7 +9,7 @@ The Akka dependencies are available from Akka's library repository. To access th
 @@repository [sbt,Maven,Gradle] {
 id="akka-repository"
 name="Akka library repository"
-url="https://repo.akka.io/maven"
+url="<url from https://account.akka.io/token>"
 }
 
 To distribute the projection over the cluster we recommend the use of [ShardedDaemonProcess](https://doc.akka.io/libraries/akka-core/current/typed/cluster-sharded-daemon-process.html). Add the following dependency in your project if not yet using Akka Cluster Sharding:
