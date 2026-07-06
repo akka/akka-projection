@@ -33,7 +33,7 @@ Variables to be expanded in this template:
 
 - [ ] Check [API](https://doc.akka.io/api/akka-projection/$VERSION$/) documentation
 - [ ] Check [reference](https://doc.akka.io/libraries/akka-projection/$VERSION$/) documentation. Check that the reference docs were deployed and show a version warning (see section below on how to fix the version warning).
-- [ ] Check the release using your token resolver URL from https://account.akka.io/token: `mvn dependency:get -Dartifact=com.lightbend.akka:akka-projection-core_2.13:$VERSION$ -Dmaven.repo.remote=<token url>`
+- [ ] Check the release using your token resolver URL from https://account.akka.io/token: `mvn dependency:get -Dartifact=com.lightbend.akka:akka-projection-core_2.13:$VERSION$ -Dmaven.repo.remote=<token url>`.
 
 ### When everything is available in the Akka repository
   - [ ] Log into `gustav.akka.io` as `akkarepo` 
