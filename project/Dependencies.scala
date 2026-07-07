@@ -22,7 +22,7 @@ object Dependencies {
     val Alpakka = "10.0.0"
     val AlpakkaVersionInDocs = VersionNumber(Alpakka).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
 
-    val AlpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "8.0.0")
+    val AlpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "8.0.2")
     val AlpakkaKafkaVersionInDocs = VersionNumber(AlpakkaKafka).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
