@@ -7,6 +7,11 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
+                <groupId>at.yawk.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
+                <version>1.10.1</version>
+            </dependency>
+            <dependency>
                 <groupId>com.fasterxml.jackson.core</groupId>
                 <artifactId>jackson-annotations</artifactId>
                 <version>2.18.8</version>
@@ -64,7 +69,7 @@
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-stream-kafka_2.13</artifactId>
-                <version>8.0.0</version>
+                <version>8.0.2</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
@@ -74,12 +79,7 @@
             <dependency>
                 <groupId>org.apache.kafka</groupId>
                 <artifactId>kafka-clients</artifactId>
-                <version>4.1.0</version>
-            </dependency>
-            <dependency>
-                <groupId>org.lz4</groupId>
-                <artifactId>lz4-java</artifactId>
-                <version>1.8.0</version>
+                <version>4.1.2</version>
             </dependency>
             <dependency>
                 <groupId>org.reactivestreams</groupId>
@@ -104,6 +104,11 @@
         </dependencies>
     </dependencyManagement>
     <dependencies>
+        <dependency>
+            <groupId>at.yawk.lz4</groupId>
+            <artifactId>lz4-java</artifactId>
+            <version>1.10.1</version>
+        </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-annotations</artifactId>
@@ -162,7 +167,7 @@
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-stream-kafka_2.13</artifactId>
-            <version>8.0.0</version>
+            <version>8.0.2</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
@@ -172,12 +177,7 @@
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
-            <version>4.1.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.lz4</groupId>
-            <artifactId>lz4-java</artifactId>
-            <version>1.8.0</version>
+            <version>4.1.2</version>
         </dependency>
         <dependency>
             <groupId>org.reactivestreams</groupId>
