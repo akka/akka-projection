@@ -75,7 +75,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion,
   // Common dependencies for logging and testing
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-  "ch.qos.logback" % "logback-classic" % "1.5.18",
+  "ch.qos.logback" % "logback-classic" % "1.6.1",
   "org.scalatest" %% "scalatest" % "3.2.19" % Test,
   // Prometheus client for custom metrics
   "io.prometheus" % "simpleclient" % "0.16.0",
