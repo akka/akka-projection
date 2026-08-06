@@ -214,7 +214,7 @@
             <dependency>
                 <groupId>io.grpc</groupId>
                 <artifactId>grpc-stub</artifactId>
-                <version>1.77.0</version>
+                <version>1.77.1</version>
             </dependency>
             <dependency>
                 <groupId>io.grpc</groupId>
@@ -582,7 +582,7 @@
         <dependency>
             <groupId>io.grpc</groupId>
             <artifactId>grpc-stub</artifactId>
-            <version>1.77.0</version>
+            <version>1.77.1</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
