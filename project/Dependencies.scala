@@ -48,7 +48,7 @@ object Dependencies {
     }
 
     val slick = "3.6.1"
-    val scalaTest = "3.2.18"
+    val scalaTest = "3.2.20"
     val testContainers = "1.19.3"
     val junit = "4.13.2"
     val jacksonDatabind = "2.18.8" // this should match the version of jackson used by akka-serialization-jackson
