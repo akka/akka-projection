@@ -74,7 +74,7 @@ object Dependencies {
       "com.lightbend.akka" %% "akka-persistence-r2dbc" % Versions.AkkaPersistenceR2dbc
 
     val h2 = "com.h2database" % "h2" % "2.4.240" % Provided // EPL 1.0
-    val r2dbcH2 = "io.r2dbc" % "r2dbc-h2" % "1.0.0.RELEASE" % Provided // ApacheV2
+    val r2dbcH2 = "io.r2dbc" % "r2dbc-h2" % "1.0.1.RELEASE" % Provided // ApacheV2
 
     val r2dbcSqlServer = "io.r2dbc" % "r2dbc-mssql" % "1.0.2.RELEASE" % Provided // ApacheV2
 
