@@ -80,7 +80,7 @@ object Dependencies {
 
     val akkaPersistenceDynamodb = "com.lightbend.akka" %% "akka-persistence-dynamodb" % Versions.AkkaPersistenceDynamodb
 
-    val slf4j = "org.slf4j" % "slf4j-api" % "2.0.17"
+    val slf4j = "org.slf4j" % "slf4j-api" % "2.0.18"
     val slick = "com.typesafe.slick" %% "slick" % Versions.slick
 
     val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.Alpakka
