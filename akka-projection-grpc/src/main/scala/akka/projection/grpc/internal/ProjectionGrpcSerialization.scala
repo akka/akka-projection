@@ -202,8 +202,7 @@ private[akka] trait ProjectionGrpcSerialization {
       decodeMessage(scalaPbAny)
     } else if (typeUrl.startsWith(AkkaSerializationTypeUrlPrefix)) {
       val (id, manifest) = akkaSerializerIdAndManifestFromTypeUrl(typeUrl)
-      // FIXME could potentially optimize to use byte buffer here instead of copy to byte array
-      serialization.deserialize(scalaPbAny.value.toByteArray, id, manifest).get
+      serialization.deserializeByteBuffer(scalaPbAny.value.asReadOnlyByteBuffer(), id, manifest)
     } else if (prefer == Prefer.Scala) {
       // when custom typeUrl
       scalaPbAny
@@ -490,8 +489,7 @@ private[akka] final class DelegateToAkkaSerialization(system: ActorSystem[_]) ex
     val typeUrl = event.typeUrl
     if (typeUrl.startsWith(AkkaSerializationTypeUrlPrefix)) {
       val (id, manifest) = akkaSerializerIdAndManifestFromTypeUrl(typeUrl)
-      // FIXME could potentially optimize to use byte buffer here instead of copy to byte array
-      serialization.deserialize(event.value.toByteArray, id, manifest).get
+      serialization.deserializeByteBuffer(event.value.asReadOnlyByteBuffer(), id, manifest)
     } else {
       throw new IllegalArgumentException(
         s"Got event with type url: [${typeUrl}] but only type urls with Akka serializer prefix ($AkkaSerializationTypeUrlPrefix) supported")
