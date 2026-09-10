@@ -80,7 +80,7 @@ object Dependencies {
 
     val akkaPersistenceDynamodb = "com.lightbend.akka" %% "akka-persistence-dynamodb" % Versions.AkkaPersistenceDynamodb
 
-    val slf4j = "org.slf4j" % "slf4j-api" % "2.0.17"
+    val slf4j = "org.slf4j" % "slf4j-api" % "2.0.18"
     val slick = "com.typesafe.slick" %% "slick" % Versions.slick
 
     val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.Alpakka
@@ -112,7 +112,7 @@ object Dependencies {
     val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % sbt.Test
     val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % sbt.Test
 
-    val logback = "ch.qos.logback" % "logback-classic" % "1.5.18" % sbt.Test
+    val logback = "ch.qos.logback" % "logback-classic" % "1.6.1" % sbt.Test
 
     val cassandraContainer =
       "org.testcontainers" % "cassandra" % Versions.testContainers % sbt.Test
