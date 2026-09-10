@@ -168,7 +168,6 @@ private[akka] object ReplicationImpl {
       projectionName.size < 255,
       s"The generated projection name for replica [${remoteReplica.replicaId.id}]: '$projectionName' is too long to fit " +
       "in the database column, must be at most 255 characters. See if you can shorten replica or entity type names.")
-    val sliceRanges = Persistence(system).sliceRanges(remoteReplica.numberOfConsumers)
 
     val grpcQuerySettings = {
       val s = GrpcQuerySettings(settings.streamId).withFromReplica(remoteReplica.replicaId)
@@ -207,9 +206,11 @@ private[akka] object ReplicationImpl {
         case Some(role) => defaultWithShardingSettings.withRole(role)
       }
     }
-    ShardedDaemonProcess(system).init(sanitizeActorName(projectionName), remoteReplica.numberOfConsumers, {
-      idx =>
-        val sliceRange = sliceRanges(idx)
+    ShardedDaemonProcess(system).initWithContext[ProjectionBehavior.Command](
+      sanitizeActorName(projectionName),
+      remoteReplica.numberOfConsumers, { context =>
+        val sliceRanges = Persistence(system).sliceRanges(context.totalProcesses)
+        val sliceRange = sliceRanges(context.processNumber)
         val projectionKey = s"${sliceRange.min}-${sliceRange.max}"
         val projectionId = ProjectionId(projectionName, projectionKey)
 
@@ -319,7 +320,9 @@ private[akka] object ReplicationImpl {
           sliceRange.min,
           sliceRange.max)
         ProjectionBehavior(settings.projectionProvider(projectionId, sourceProvider, replicationFlow, system))
-    }, shardedDaemonProcessSettings, Some(ProjectionBehavior.Stop))
+      },
+      shardedDaemonProcessSettings,
+      ProjectionBehavior.Stop)
   }
 
   /**
@@ -368,7 +371,6 @@ private[akka] object ReplicationImpl {
       projectionName.size < 255,
       s"The generated projection name for replication: '$projectionName' is too long to fit " +
       "in the database column, must be at most 255 characters. See if you can shorten replica or entity type names.")
-    val sliceRanges = Persistence(system).sliceRanges(remoteReplica.numberOfConsumers)
 
     val shardedDaemonProcessSettings = {
       import scala.concurrent.duration._
@@ -415,6 +417,7 @@ private[akka] object ReplicationImpl {
       sanitizeActorName(s"${settings.selfReplicaId.id}EventProducer"),
       // FIXME separate setting for number of producers?
       remoteReplica.numberOfConsumers, { (context: ShardedDaemonProcessContext) =>
+        val sliceRanges = Persistence(system).sliceRanges(context.totalProcesses)
         val sliceRange = sliceRanges(context.processNumber)
         val projectionKey = s"${sliceRange.min}-${sliceRange.max}"
         val projectionId = ProjectionId(projectionName, projectionKey)

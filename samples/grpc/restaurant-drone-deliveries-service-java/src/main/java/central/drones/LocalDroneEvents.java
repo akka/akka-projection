@@ -2,6 +2,7 @@ package central.drones;
 
 import akka.Done;
 import akka.actor.typed.ActorSystem;
+import akka.cluster.sharding.typed.ShardedDaemonProcessSettings;
 import akka.cluster.sharding.typed.javadsl.ClusterSharding;
 import akka.cluster.sharding.typed.javadsl.ShardedDaemonProcess;
 import akka.japi.Pair;
@@ -110,17 +111,20 @@ public final class LocalDroneEvents {
             .config()
             .getInt("restaurant-drone-deliveries-service.drones.projections-slice-count");
 
-    var sliceRanges =
-        EventSourcedProvider.sliceRanges(
-            system, R2dbcReadJournal.Identifier(), numberOfSliceRanges);
-
     ShardedDaemonProcess.get(system)
-        .init(
+        .initWithContext(
             ProjectionBehavior.Command.class,
             "LocalDronesProjection",
-            sliceRanges.size(),
-            i -> ProjectionBehavior.create(projection(system, sliceRanges.get(i))),
-            ProjectionBehavior.stopMessage());
+            numberOfSliceRanges,
+            daemonContext -> {
+              var sliceRanges =
+                  EventSourcedProvider.sliceRanges(
+                      system, R2dbcReadJournal.Identifier(), daemonContext.totalProcesses());
+              return ProjectionBehavior.create(
+                  projection(system, sliceRanges.get(daemonContext.processNumber())));
+            },
+            ShardedDaemonProcessSettings.create(system),
+            Optional.of(ProjectionBehavior.stopMessage()));
   }
 
   private static Projection<EventEnvelope<CoarseDroneLocation>> projection(

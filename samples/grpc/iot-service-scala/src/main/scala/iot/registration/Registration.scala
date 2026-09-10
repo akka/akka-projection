@@ -61,8 +61,7 @@ object Registration {
 
   sealed trait Event extends CborSerializable
 
-  final case class Registered(secret: SecretDataValue)
-      extends Event
+  final case class Registered(secret: SecretDataValue) extends Event
 
   val EntityKey: EntityTypeKey[Command] =
     EntityTypeKey[Command]("Registration")
@@ -77,8 +76,7 @@ object Registration {
       .withEnforcedReplies[Command, Event, State](
         persistenceId = PersistenceId(EntityKey.name, entityId),
         emptyState = State.empty,
-        commandHandler =
-          (state, command) => handleCommand(state, command),
+        commandHandler = (state, command) => handleCommand(state, command),
         eventHandler = (state, event) => handleEvent(state, event))
       .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = 100))
       .onPersistFailure(
