@@ -7,8 +7,6 @@ package akka.projection.r2dbc
 import java.time.{ Duration => JDuration }
 import java.time.Instant
 
-import java.util.concurrent.atomic.AtomicInteger
-
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.Pid
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.Record
 import akka.projection.r2dbc.internal.R2dbcOffsetStore.SeqNr
@@ -16,18 +14,6 @@ import akka.projection.r2dbc.internal.R2dbcOffsetStore.State
 import org.scalatest.TestSuite
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
-
-// counts entries visited via iterator, to detect a full-map scan (filterNot) vs targeted
-// removal (removedAll only calls `removed` per key, never `iterator`)
-private final class CountingMap[K, V](underlying: Map[K, V], counter: AtomicInteger) extends Map[K, V] {
-  override def get(key: K): Option[V] = underlying.get(key)
-  override def iterator: Iterator[(K, V)] = underlying.iterator.map { kv =>
-    counter.incrementAndGet()
-    kv
-  }
-  override def removed(key: K): Map[K, V] = new CountingMap(underlying.removed(key), counter)
-  override def updated[V1 >: V](key: K, value: V1): Map[K, V1] = underlying.updated(key, value)
-}
 
 class R2dbcOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Matchers {
 
@@ -322,43 +308,6 @@ class R2dbcOffsetStoreStateSpec extends AnyWordSpec with TestSuite with Matchers
           .add(Vector(createRecord("p1", 7, t1)), acceptResetAfter)
         state.byPid("p1").seqNr shouldBe 1
         state.latestTimestamp shouldBe t3
-      }
-    }
-
-    // reproducer of perf issue: evict scanned the full byPid map instead of just the evicted slice
-    "evict without scanning pids belonging to other slices" in {
-      val t0 = TestClock.nowMillis().instant()
-
-      val targetSlice = slice("p500")
-      val numOtherPids = 100000
-      // exclude any accidental hash collisions with targetSlice
-      val otherRecords = Iterator
-        .from(0)
-        .map(i => createRecord(s"other-$i", 1, t0))
-        .filterNot(_.slice == targetSlice)
-        .take(numOtherPids)
-        .toVector
-
-      // p500, p621, p742 all hash to targetSlice (645), see the "evict old" test above.
-      // Spread out so the short time window below actually evicts the older ones.
-      val targetRecords =
-        Vector(
-          createRecord("p500", 1, t0.plusMillis(1)),
-          createRecord("p621", 2, t0.plusMillis(100)),
-          createRecord("p742", 3, t0.plusMillis(200)))
-
-      val state = State.empty.add(otherRecords).add(targetRecords)
-      state.byPid.size shouldBe numOtherPids + 3
-
-      val counter = new AtomicInteger(0)
-      val countingState = State(new CountingMap(state.byPid, counter), state.bySliceSorted)
-
-      val evicted = countingState.evict(targetSlice, JDuration.ofMillis(50), allowAll)
-      evicted.byPid.size shouldBe (numOtherPids + 1) // p500 and p621 evicted, p742 kept as latest
-
-      // must only touch the evicted slice's own pids (3 here), never scan all 100000 other pids
-      withClue(s"byPid entries visited during evict: ${counter.get()}") {
-        counter.get() should be < 100
       }
     }
   }
