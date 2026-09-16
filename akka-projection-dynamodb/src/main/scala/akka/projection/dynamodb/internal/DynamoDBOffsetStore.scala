@@ -174,7 +174,7 @@ private[projection] object DynamoDBOffsetStore {
         if (filtered eq recordsSortedByTimestamp) {
           this
         } else {
-          val byPidOtherSlices = byPid.filterNot { case (_, r) => r.slice == slice }
+          val byPidOtherSlices = byPid -- recordsSortedByTimestamp.iterator.map(_.pid)
           val bySliceOtherSlices = bySliceSorted - slice
           copy(byPid = byPidOtherSlices, bySliceSorted = bySliceOtherSlices)
             .add(filtered)
