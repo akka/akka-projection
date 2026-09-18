@@ -168,29 +168,19 @@ private[projection] object R2dbcOffsetStore {
         this
       } else {
         val until = recordsSortedByTimestamp.last.timestamp.minus(timeWindow)
-        val filtered = {
-          // Records comparing >= this record by recordOrdering will definitely be kept,
-          // Records comparing < this record by recordOrdering are subject to eviction
-          // Slice will be equal, and pid will compare lexicographically less than any valid pid
-          val untilRecord = Record(slice, "", 0, until)
-          // this will always keep at least one, latest per slice
-          val newerRecords = recordsSortedByTimestamp.rangeFrom(untilRecord) // inclusive of until
-          val olderRecords = recordsSortedByTimestamp.rangeUntil(untilRecord) // exclusive of until
-          val filteredOlder = olderRecords.filterNot(ableToEvictRecord)
+        // Records comparing < this record by recordOrdering are subject to eviction, the rest are kept,
+        // which is always at least one, the latest of the slice.
+        // Slice will be equal, and pid will compare lexicographically less than any valid pid
+        val untilRecord = Record(slice, "", 0, until)
+        val olderRecords = recordsSortedByTimestamp.rangeUntil(untilRecord) // exclusive of until
+        val evicted = olderRecords.filter(ableToEvictRecord)
 
-          if (filteredOlder.size == olderRecords.size) recordsSortedByTimestamp
-          else newerRecords.union(filteredOlder)
-        }
-
-        // adding back filtered is linear in the size of filtered, but so is checking if we're able to evict
-        if (filtered eq recordsSortedByTimestamp) {
+        if (evicted.isEmpty)
           this
-        } else {
-          val byPidOtherSlices = byPid.filterNot { case (_, r) => r.slice == slice }
-          val bySliceOtherSlices = bySliceSorted - slice
-          copy(byPid = byPidOtherSlices, bySliceSorted = bySliceOtherSlices)
-            .add(filtered)
-        }
+        else
+          copy(
+            byPid = byPid -- evicted.iterator.map(_.pid),
+            bySliceSorted = bySliceSorted.updated(slice, recordsSortedByTimestamp -- evicted))
       }
     }
 
