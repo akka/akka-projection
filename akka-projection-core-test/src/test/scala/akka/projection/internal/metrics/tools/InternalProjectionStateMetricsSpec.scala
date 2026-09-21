@@ -31,7 +31,6 @@ import akka.projection.scaladsl.Handler
 import akka.projection.scaladsl.SourceProvider
 import akka.projection.testkit.internal.TestInMemoryOffsetStoreImpl
 import akka.projection.testkit.scaladsl.TestSourceProvider
-import akka.stream.SharedKillSwitch
 import akka.stream.scaladsl.Source
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -212,19 +211,19 @@ object InternalProjectionStateMetricsSpec {
       offsetStore.saveOffset(projectionId, offset)
 
     def newRunningInstance(): RunningProjection =
-      new TestRunningProjection(RunningProjection.withBackoff(() => mappedSource(), settings), killSwitch)
+      new TestRunningProjection(withBackoff(() => mappedSource()))
 
-    class TestRunningProjection(val source: Source[Done, _], killSwitch: SharedKillSwitch) extends RunningProjection {
+    class TestRunningProjection(val source: Source[Done, _]) extends RunningProjection {
 
       private val futureDone = source.run()
 
       override def stop(): Future[Done] = {
-        killSwitch.shutdown()
+        stopStream()
         futureDone
       }
 
       override def forcedStop(): Unit = {
-        killSwitch.shutdown()
+        stopStream()
       }
     }
   }

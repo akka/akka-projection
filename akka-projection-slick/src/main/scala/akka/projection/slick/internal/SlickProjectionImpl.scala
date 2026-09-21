@@ -17,7 +17,6 @@ import akka.projection.HandlerRecoveryStrategy
 import akka.projection.ProjectionId
 import akka.projection.RunningProjectionManagement
 import akka.projection.RunningProjection
-import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.internal.ActorHandlerInit
 import akka.projection.internal.AtLeastOnce
@@ -190,7 +189,7 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
       databaseConfig.db.run(offsetStore.saveOffset(projectionId, offset)).map(_ => Done)
 
     private[projection] def newRunningInstance(): RunningProjection =
-      new SlickRunningProjection(RunningProjection.withBackoff(() => this.mappedSource(), settings), this)
+      new SlickRunningProjection(withBackoff(() => this.mappedSource()), this)
 
   }
 
@@ -204,16 +203,12 @@ private[projection] class SlickProjectionImpl[Offset, Envelope, P <: JdbcProfile
     private val streamDone = source.run()
 
     override def stop(): Future[Done] = {
-      projectionState.killSwitch.shutdown()
-      // if the handler is retrying it will be aborted by this,
-      // otherwise the stream would not be completed by the killSwitch until after all retries
-      projectionState.abort.tryFailure(AbortProjectionException)
+      projectionState.stopStream()
       streamDone
     }
 
     override def forcedStop(): Unit = {
-      projectionState.killSwitch.shutdown()
-      projectionState.abort.tryFailure(AbortProjectionException)
+      projectionState.stopStream()
     }
 
     // RunningProjectionManagement
