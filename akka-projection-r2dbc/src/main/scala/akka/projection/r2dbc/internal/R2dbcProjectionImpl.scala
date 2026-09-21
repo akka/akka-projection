@@ -38,7 +38,6 @@ import akka.projection.HandlerRecoveryStrategy.Internal.Skip
 import akka.projection.ProjectionContext
 import akka.projection.ProjectionId
 import akka.projection.RunningProjection
-import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.RunningProjectionManagement
 import akka.projection.StatusObserver
 import akka.projection.eventsourced.scaladsl.EventSourcedProvider.LoadEventsByPersistenceIdSourceProvider
@@ -1386,10 +1385,10 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
       Future.successful(offsetStore().getState().latestOffset.map(_.timestamp))
 
     private[projection] def newRunningInstance(): RunningProjection = {
-      new R2dbcRunningProjection(RunningProjection.withBackoff({ () =>
+      new R2dbcRunningProjection(withBackoff { () =>
         offsetStoreAccess.newOffsetStore()
         this.mappedSource()
-      }, settings), this)
+      }, this)
     }
 
     override def mappedSource(): Source[Done, Future[Done]] = {
@@ -1423,10 +1422,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
         store.minSlice,
         store.maxSlice,
         store.uuid)
-      projectionState.killSwitch.shutdown()
-      // if the handler is retrying it will be aborted by this,
-      // otherwise the stream would not be completed by the killSwitch until after all retries
-      projectionState.abort.tryFailure(AbortProjectionException)
+      projectionState.stopStream()
       streamDone.andThen(_ => store.stop())(system.executionContext)
     }
 
@@ -1440,8 +1436,7 @@ private[projection] class R2dbcProjectionImpl[Offset, Envelope](
           store.maxSlice,
           store.uuid)
 
-      projectionState.killSwitch.shutdown()
-      projectionState.abort.tryFailure(AbortProjectionException)
+      projectionState.stopStream()
       store.stop()
     }
 

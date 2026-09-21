@@ -25,6 +25,7 @@ import akka.projection.MergeableOffset
 import akka.projection.OffsetVerification.VerificationFailure
 import akka.projection.OffsetVerification.VerificationSuccess
 import akka.projection.ProjectionId
+import akka.projection.RunningProjection
 import akka.projection.RunningProjection.AbortProjectionException
 import akka.projection.StatusObserver
 import akka.projection.scaladsl.Handler
@@ -72,6 +73,40 @@ private[projection] abstract class InternalProjectionState[Offset, Envelope](
   def saveOffset(projectionId: ProjectionId, offset: Offset): Future[Done]
   val killSwitch: SharedKillSwitch = KillSwitches.shared(projectionId.id)
   val abort: Promise[Done] = Promise()
+
+  // The killSwitch is part of the restarted stream, and there is no such stream during a restart backoff.
+  private val restartKillSwitch: SharedKillSwitch = KillSwitches.shared(s"${projectionId.id}-restart")
+  @volatile private var restartedStreamDone: Future[Done] = Future.successful(Done)
+
+  /**
+   * Wraps the source with restart backoff. The stream must be stopped with [[stopStream]].
+   */
+  def withBackoff(source: () => Source[Done, _]): Source[Done, _] =
+    RunningProjection
+      .withBackoff(
+        () => {
+          val done = Promise[Done]()
+          restartedStreamDone = done.future
+          source().watchTermination() { (mat, termination) =>
+            done.completeWith(termination)
+            mat
+          }
+        },
+        settings)
+      .via(restartKillSwitch.flow)
+
+  /**
+   * Gracefully stops the stream of `withBackoff`. A running stream completes the elements in flight.
+   * A pending restart is cancelled.
+   */
+  def stopStream(): Unit = {
+    killSwitch.shutdown()
+    // if the handler is retrying it will be aborted by this,
+    // otherwise the stream would not be completed by the killSwitch until after all retries
+    abort.tryFailure(AbortProjectionException)
+    // A stream started after the read of restartedStreamDone is completed immediately by the killSwitch.
+    restartedStreamDone.onComplete(_ => restartKillSwitch.shutdown())(ExecutionContext.parasitic)
+  }
 
   protected def saveOffsetAndReport(
       projectionId: ProjectionId,
