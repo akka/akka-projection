@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020-2025 Lightbend Inc. <https://www.lightbend.com>
+ * Copyright (C) 2020-2025 Lightbend Inc. <https://akka.io>
  */
 
 package akka.projection.internal
@@ -88,6 +88,13 @@ class InternalProjectionStateStopSpec extends ScalaTestWithActorTestKit("""
       val running = projectionState(sourceProvider).newRunningInstance()
       val probe = createTestProbe()
       probe.awaitAssert(sourceProvider.sourceCalls.get should ===(1))
+
+      running.stop().futureValue(timeout(5.seconds)) should ===(Done)
+    }
+
+    "complete when stopped right after start" in {
+      val sourceProvider = new TestSourceProvider(() => Future.successful(Source.never))
+      val running = projectionState(sourceProvider).newRunningInstance()
 
       running.stop().futureValue(timeout(5.seconds)) should ===(Done)
     }
