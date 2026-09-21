@@ -137,7 +137,7 @@ object ProjectionBehavior {
                   setOffset.offset,
                   projectionId)
                 context.pipeToSelf(running.stop())(_ => Stopped)
-                settingOffset(setOffset, mgmt)
+                settingOffset(setOffset, mgmt, stopRequested = false)
               } else {
                 Behaviors.same // not for this projectionId
               }
@@ -174,7 +174,7 @@ object ProjectionBehavior {
                   if (setPaused.paused) "paused" else "resumed",
                   projectionId)
                 context.pipeToSelf(running.stop())(_ => Stopped)
-                settingPaused(setPaused, mgmt)
+                settingPaused(setPaused, mgmt, stopRequested = false)
               } else {
                 Behaviors.same // not for this projectionId
               }
@@ -194,7 +194,7 @@ object ProjectionBehavior {
   private def settingOffset(
       setOffset: SetOffset[Offset],
       mgmt: RunningProjectionManagement[Offset],
-      stopRequested: Boolean = false): Behavior[Command] =
+      stopRequested: Boolean): Behavior[Command] =
     Behaviors.receiveMessage {
       case Stopped =>
         context.log.debug("Projection [{}] stopped", projectionId)
@@ -208,6 +208,7 @@ object ProjectionBehavior {
 
       case SetOffsetResult(replyTo) =>
         if (stopRequested) {
+          context.log.debug("Projection [{}] stopped after setting offset", projectionId)
           replyTo ! Done
           Behaviors.stopped
         } else {
@@ -220,10 +221,13 @@ object ProjectionBehavior {
           stashBuffer.unstashAll(started(running))
         }
 
-      case ManagementOperationException(op, exc) =>
+      // a failure of an earlier operation, such as GetOffset, is handled as other message
+      case ManagementOperationException(op, exc) if op eq setOffset =>
         context.log.warn("Operation [{}] failed.", op, exc)
-        if (stopRequested) Behaviors.stopped
-        else {
+        if (stopRequested) {
+          context.log.debug("Projection [{}] stopped after failure to set offset", projectionId)
+          Behaviors.stopped
+        } else {
           // start anyway, but no reply
           val running = projection.run()(context.system)
           stashBuffer.unstashAll(started(running))
@@ -234,8 +238,7 @@ object ProjectionBehavior {
         settingOffset(setOffset, mgmt, stopRequested = true)
 
       case other =>
-        stashBuffer.stash(other)
-        Behaviors.same
+        stashOrDiscard(other, stopRequested)
     }
 
   private def stopping(): Behavior[Command] =
@@ -260,7 +263,7 @@ object ProjectionBehavior {
   private def settingPaused(
       setPaused: SetPaused,
       mgmt: RunningProjectionManagement[_],
-      stopRequested: Boolean = false): Behavior[Command] =
+      stopRequested: Boolean): Behavior[Command] =
     Behaviors.receiveMessage {
       case Stopped =>
         context.log.debug("Projection [{}] stopped", projectionId)
@@ -274,6 +277,7 @@ object ProjectionBehavior {
 
       case SetPausedResult(replyTo) =>
         if (stopRequested) {
+          context.log.debug("Projection [{}] stopped after pause/resume", projectionId)
           replyTo ! Done
           Behaviors.stopped
         } else {
@@ -286,10 +290,13 @@ object ProjectionBehavior {
           stashBuffer.unstashAll(started(running))
         }
 
-      case ManagementOperationException(op, exc) =>
+      // a failure of an earlier operation, such as IsPaused, is handled as other message
+      case ManagementOperationException(op, exc) if op eq setPaused =>
         context.log.warn("Operation [{}] failed.", op, exc)
-        if (stopRequested) Behaviors.stopped
-        else {
+        if (stopRequested) {
+          context.log.debug("Projection [{}] stopped after failure to pause/resume", projectionId)
+          Behaviors.stopped
+        } else {
           // start anyway, but no reply
           val running = projection.run()(context.system)
           stashBuffer.unstashAll(started(running))
@@ -300,7 +307,16 @@ object ProjectionBehavior {
         settingPaused(setPaused, mgmt, stopRequested = true)
 
       case other =>
-        stashBuffer.stash(other)
-        Behaviors.same
+        stashOrDiscard(other, stopRequested)
+    }
+
+  private def stashOrDiscard(msg: Command, stopRequested: Boolean): Behavior[Command] =
+    if (stopRequested) {
+      // will not be started again, so the stash would never be used
+      context.log.debug("Projection [{}] is being stopped. Discarding [{}].", projectionId, msg)
+      Behaviors.unhandled
+    } else {
+      stashBuffer.stash(msg)
+      Behaviors.same
     }
 }
