@@ -196,8 +196,8 @@ private[akka] object ReplicationImpl {
       import scala.concurrent.duration._
       val default = ShardedDaemonProcessSettings(system)
       val shardingSettings = default.shardingSettings.getOrElse(ClusterShardingSettings(system))
-      // shorter handoff timeout because in some restart backoff it may take a while for the projections to
-      // terminate and we don't want to delay sharding rebalance for too long. 10 seconds actually
+      // shorter handoff timeout because it may take a while for the projections to terminate, e.g. when a handler
+      // call is in flight, and we don't want to delay sharding rebalance for too long. 10 seconds actually
       // means that it will wait 5 seconds before stopping them hard (5 seconds is reduced in sharding).
       val handOffTimeout = shardingSettings.tuningParameters.handOffTimeout.min(10.seconds)
       val defaultWithShardingSettings = default.withShardingSettings(
@@ -374,8 +374,8 @@ private[akka] object ReplicationImpl {
       import scala.concurrent.duration._
       val default = ShardedDaemonProcessSettings(system)
       val shardingSettings = default.shardingSettings.getOrElse(ClusterShardingSettings(system))
-      // shorter handoff timeout because in some restart backoff it may take a while for the projections to
-      // terminate and we don't want to delay sharding rebalance for too long. 10 seconds actually
+      // shorter handoff timeout because it may take a while for the projections to terminate, e.g. when a handler
+      // call is in flight, and we don't want to delay sharding rebalance for too long. 10 seconds actually
       // means that it will wait 5 seconds before stopping them hard (5 seconds is reduced in sharding).
       val handOffTimeout = shardingSettings.tuningParameters.handOffTimeout.min(10.seconds)
       default.withShardingSettings(
