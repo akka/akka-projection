@@ -11,11 +11,13 @@ import scala.concurrent.duration._
 
 import akka.Done
 import akka.NotUsed
+import akka.actor.UnhandledMessage
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.eventstream.EventStream
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.ManagementState
@@ -453,6 +455,49 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
       resumeProbe.expectMessage(Done)
       testProbe.expectMessage(StartObserved)
       currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(3)))
+    }
+
+    "stop without restart when stopped while setting offset" in {
+      val (testProbe, projectionRef, _) = setupTestProjection()
+      testProbe.expectMessage(StartObserved)
+
+      val setOffsetProbe = createTestProbe[Done]()
+      // offset > 3 is saved with a delay in the test projection
+      projectionRef ! SetOffset(TestProjectionId, Some(5), setOffsetProbe.ref)
+      projectionRef ! ProjectionBehavior.Stop
+
+      testProbe.expectMessage(StopObserved)
+      setOffsetProbe.expectMessage(Done)
+      testProbe.expectTerminated(projectionRef)
+      testProbe.expectNoMessage()
+    }
+
+    "stop without restart when stopped while pausing" in {
+      val (testProbe, projectionRef, _) = setupTestProjection()
+      testProbe.expectMessage(StartObserved)
+
+      val pauseProbe = createTestProbe[Done]()
+      projectionRef ! SetPaused(TestProjectionId, paused = true, pauseProbe.ref)
+      projectionRef ! ProjectionBehavior.Stop
+
+      testProbe.expectMessage(StopObserved)
+      pauseProbe.expectMessage(Done)
+      testProbe.expectTerminated(projectionRef)
+      testProbe.expectNoMessage()
+    }
+
+    "ignore additional stop message when stopping" in {
+      val unhandledProbe = createTestProbe[UnhandledMessage]()
+      system.eventStream ! EventStream.Subscribe(unhandledProbe.ref)
+      val (testProbe, projectionRef, _) = setupTestProjection()
+      testProbe.expectMessage(StartObserved)
+
+      projectionRef ! ProjectionBehavior.Stop
+      projectionRef ! ProjectionBehavior.Stop
+
+      testProbe.expectMessage(StopObserved)
+      testProbe.expectTerminated(projectionRef)
+      unhandledProbe.expectNoMessage()
     }
 
     "work with ProjectionManagement extension" in {
