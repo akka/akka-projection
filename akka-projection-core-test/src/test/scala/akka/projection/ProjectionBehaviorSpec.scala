@@ -529,6 +529,26 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
       currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(5)))
     }
 
+    "still set the offset when stopped and a late failure of an earlier operation arrives" in {
+      val (testProbe, projectionRef, _) = setupTestProjection()
+      testProbe.expectMessage(StartObserved)
+
+      val setOffsetProbe = createTestProbe[Done]()
+      val currentOffsetProbe = createTestProbe[CurrentOffset[Int]]()
+      // offset > 3 is saved with a delay in the test projection
+      projectionRef ! SetOffset(TestProjectionId, Some(5), setOffsetProbe.ref)
+      projectionRef ! ProjectionBehavior.Stop
+      projectionRef ! ManagementOperationException(
+        GetOffset(TestProjectionId, currentOffsetProbe.ref),
+        new RuntimeException("late failure of GetOffset"))
+
+      testProbe.expectMessage(StopObserved)
+      // Done is only sent when the offset has been saved
+      setOffsetProbe.expectMessage(Done)
+      testProbe.expectTerminated(projectionRef)
+      testProbe.expectNoMessage()
+    }
+
     "stop without restart when stopped while pausing" in {
       val (testProbe, projectionRef, _) = setupTestProjection()
       testProbe.expectMessage(StartObserved)
