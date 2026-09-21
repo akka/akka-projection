@@ -14,7 +14,11 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.actor.typed.ActorSystem
+import akka.projection.Projection
+import akka.projection.ProjectionBehavior
 import akka.projection.ProjectionId
+import akka.projection.RunningProjection
 import akka.projection.StatusObserver
 import akka.projection.TestStatusObserver
 import akka.projection.internal.metrics.tools.InternalProjectionStateMetricsSpec.Envelope
@@ -45,6 +49,9 @@ class InternalProjectionStateStopSpec extends ScalaTestWithActorTestKit("""
     override def extractCreationTime(envelope: Envelope): Long = envelope.creationTimestamp
   }
 
+  private def projectionId(sourceProvider: SourceProvider[Long, Envelope]) =
+    ProjectionId("stop-spec", sourceProvider.hashCode.toString)
+
   private def projectionState(
       sourceProvider: SourceProvider[Long, Envelope],
       offsetStore: TestInMemoryOffsetStoreImpl[Long] = new TestInMemoryOffsetStoreImpl[Long](),
@@ -54,13 +61,53 @@ class InternalProjectionStateStopSpec extends ScalaTestWithActorTestKit("""
       override def process(envelope: Envelope): Future[Done] = processEnvelope(envelope)
     }
     new InMemInternalProjectionState[Long, Envelope](
-      ProjectionId("stop-spec", sourceProvider.hashCode.toString),
+      projectionId(sourceProvider),
       sourceProvider,
       AtLeastOnce(),
       SingleHandlerStrategy(() => handler),
       statusObserver,
       ProjectionSettings(system),
       offsetStore)
+  }
+
+  /** The least a `ProjectionBehavior` needs to host the state under test. */
+  private class HostedProjection(
+      override val projectionId: ProjectionId,
+      override val statusObserver: StatusObserver[Envelope],
+      state: InMemInternalProjectionState[Long, Envelope])
+      extends Projection[Envelope] {
+
+    override def withRestartBackoff(
+        minBackoff: FiniteDuration,
+        maxBackoff: FiniteDuration,
+        randomFactor: Double): Projection[Envelope] = this
+
+    override def withRestartBackoff(
+        minBackoff: FiniteDuration,
+        maxBackoff: FiniteDuration,
+        randomFactor: Double,
+        maxRestarts: Int): Projection[Envelope] = this
+
+    override def withRestartBackoff(
+        minBackoff: java.time.Duration,
+        maxBackoff: java.time.Duration,
+        randomFactor: Double): Projection[Envelope] = this
+
+    override def withRestartBackoff(
+        minBackoff: java.time.Duration,
+        maxBackoff: java.time.Duration,
+        randomFactor: Double,
+        maxRestarts: Int): Projection[Envelope] = this
+
+    override def withStatusObserver(observer: StatusObserver[Envelope]): Projection[Envelope] = this
+
+    override private[projection] def mappedSource()(implicit system: ActorSystem[_]): Source[Done, Future[Done]] =
+      state.mappedSource()
+
+    override private[projection] def actorHandlerInit[T]: Option[ActorHandlerInit[T]] = None
+
+    override private[projection] def run()(implicit system: ActorSystem[_]): RunningProjection =
+      state.newRunningInstance()
   }
 
   "Stopping a projection" must {
@@ -79,6 +126,22 @@ class InternalProjectionStateStopSpec extends ScalaTestWithActorTestKit("""
       statusProbe.expectMessage(TestStatusObserver.Stopped)
 
       running.stop().futureValue(timeout(5.seconds)) should ===(Done)
+      sourceProvider.sourceCalls.get should ===(1)
+    }
+
+    "terminate the ProjectionBehavior that hosts it" in {
+      val sourceProvider = new TestSourceProvider(() => Future.failed(new RuntimeException("source failure")))
+      val statusProbe = createTestProbe[TestStatusObserver.Status]()
+      val statusObserver = new TestStatusObserver[Envelope](statusProbe.ref, lifecycle = true)
+      val state = projectionState(sourceProvider, statusObserver = statusObserver)
+      val ref = spawn(ProjectionBehavior(new HostedProjection(projectionId(sourceProvider), statusObserver, state)))
+      statusProbe.expectMessage(TestStatusObserver.Started)
+      // the stream has failed and the restart backoff is pending
+      statusProbe.expectMessage(TestStatusObserver.Failed)
+      statusProbe.expectMessage(TestStatusObserver.Stopped)
+
+      ref ! ProjectionBehavior.Stop
+      createTestProbe().expectTerminated(ref, 5.seconds)
       sourceProvider.sourceCalls.get should ===(1)
     }
 
