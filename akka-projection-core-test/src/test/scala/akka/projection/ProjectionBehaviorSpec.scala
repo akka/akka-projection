@@ -13,6 +13,7 @@ import akka.Done
 import akka.NotUsed
 import akka.actor.UnhandledMessage
 import akka.actor.testkit.typed.scaladsl.LogCapturing
+import akka.actor.testkit.typed.scaladsl.LoggingTestKit
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
@@ -554,6 +555,20 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
       testProbe.expectMessage(StopObserved)
       testProbe.expectTerminated(projectionRef)
       unhandledProbe.expectNoMessage()
+    }
+
+    "log unexpected internal messages and keep running when started" in {
+      val (testProbe, projectionRef, _) = setupTestProjection()
+      testProbe.expectMessage(StartObserved)
+
+      LoggingTestKit.warn("received unexpected").withOccurrences(2).expect {
+        projectionRef ! Stopped
+        projectionRef ! SetPausedResult(createTestProbe[Done]().ref)
+      }
+
+      val currentOffsetProbe = createTestProbe[CurrentOffset[Int]]()
+      projectionRef ! GetOffset(TestProjectionId, currentOffsetProbe.ref)
+      currentOffsetProbe.expectMessage(CurrentOffset[Int](TestProjectionId, None))
     }
 
     "work with ProjectionManagement extension" in {

@@ -181,6 +181,11 @@ object ProjectionBehavior {
             case _ => Behaviors.unhandled
           }
 
+        // Stopped, SetOffsetResult and SetPausedResult are handled in the states that are waiting for them
+        case msg @ (Stopped | _: SetOffsetResult[_] | _: SetPausedResult) =>
+          context.log.warn("Projection [{}] received unexpected [{}] when started", projectionId, msg)
+          Behaviors.same
+
       }
       .receiveSignal {
         case (_, PostStop | PreRestart) =>
