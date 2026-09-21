@@ -11,11 +11,14 @@ import scala.concurrent.duration._
 
 import akka.Done
 import akka.NotUsed
+import akka.actor.UnhandledMessage
 import akka.actor.testkit.typed.scaladsl.LogCapturing
+import akka.actor.testkit.typed.scaladsl.LoggingTestKit
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.testkit.typed.scaladsl.TestProbe
 import akka.actor.typed.ActorRef
 import akka.actor.typed.ActorSystem
+import akka.actor.typed.eventstream.EventStream
 import akka.projection.internal.AtMostOnce
 import akka.projection.internal.HandlerStrategy
 import akka.projection.internal.ManagementState
@@ -181,6 +184,13 @@ object ProjectionBehaviorSpec {
           case None =>
             offsetStore.saveOffset(projectionId, 0)
             Future.successful(Done)
+          case Some(n) if n < 0 =>
+            // this simulates a failure when saving the offset
+            import akka.actor.typed.scaladsl.adapter._
+            import akka.pattern.after
+            after(100.millis, system.toClassic.scheduler) {
+              Future.failed(new RuntimeException("failed to set offset"))
+            }
           case Some(n) =>
             if (n <= 3) {
               offsetStore.saveOffset(projectionId, n)
@@ -453,6 +463,132 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
       resumeProbe.expectMessage(Done)
       testProbe.expectMessage(StartObserved)
       currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(3)))
+    }
+
+    "stop without restart when stopped while setting offset" in {
+      val (testProbe, projectionRef, _) = setupTestProjection()
+      testProbe.expectMessage(StartObserved)
+
+      val setOffsetProbe = createTestProbe[Done]()
+      // offset > 3 is saved with a delay in the test projection
+      projectionRef ! SetOffset(TestProjectionId, Some(5), setOffsetProbe.ref)
+      projectionRef ! ProjectionBehavior.Stop
+
+      testProbe.expectMessage(StopObserved)
+      setOffsetProbe.expectMessage(Done)
+      testProbe.expectTerminated(projectionRef)
+      testProbe.expectNoMessage()
+    }
+
+    "stop without restart and without reply when stopped while setting offset fails" in {
+      val (testProbe, projectionRef, _) = setupTestProjection()
+      testProbe.expectMessage(StartObserved)
+
+      val setOffsetProbe = createTestProbe[Done]()
+      // negative offset fails in the test projection
+      projectionRef ! SetOffset(TestProjectionId, Some(-1), setOffsetProbe.ref)
+      projectionRef ! ProjectionBehavior.Stop
+
+      testProbe.expectMessage(StopObserved)
+      testProbe.expectTerminated(projectionRef)
+      setOffsetProbe.expectNoMessage()
+      testProbe.expectNoMessage()
+    }
+
+    "restart without reply when setting offset fails" in {
+      val (testProbe, projectionRef, _) = setupTestProjection()
+      testProbe.expectMessage(StartObserved)
+
+      val setOffsetProbe = createTestProbe[Done]()
+      // negative offset fails in the test projection
+      projectionRef ! SetOffset(TestProjectionId, Some(-1), setOffsetProbe.ref)
+
+      testProbe.expectMessage(StopObserved)
+      testProbe.expectMessage(StartObserved)
+      setOffsetProbe.expectNoMessage()
+    }
+
+    "not handle a late failure of an earlier operation as failure to set offset" in {
+      val (testProbe, projectionRef, _) = setupTestProjection()
+      testProbe.expectMessage(StartObserved)
+
+      val setOffsetProbe = createTestProbe[Done]()
+      val currentOffsetProbe = createTestProbe[CurrentOffset[Int]]()
+      // offset > 3 is saved with a delay in the test projection
+      projectionRef ! SetOffset(TestProjectionId, Some(5), setOffsetProbe.ref)
+      projectionRef ! ManagementOperationException(
+        GetOffset(TestProjectionId, currentOffsetProbe.ref),
+        new RuntimeException("late failure of GetOffset"))
+
+      testProbe.expectMessage(StopObserved)
+      setOffsetProbe.expectMessage(Done)
+      testProbe.expectMessage(StartObserved)
+      testProbe.expectNoMessage()
+
+      projectionRef ! GetOffset(TestProjectionId, currentOffsetProbe.ref)
+      currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(5)))
+    }
+
+    "still set the offset when stopped and a late failure of an earlier operation arrives" in {
+      val (testProbe, projectionRef, _) = setupTestProjection()
+      testProbe.expectMessage(StartObserved)
+
+      val setOffsetProbe = createTestProbe[Done]()
+      val currentOffsetProbe = createTestProbe[CurrentOffset[Int]]()
+      // offset > 3 is saved with a delay in the test projection
+      projectionRef ! SetOffset(TestProjectionId, Some(5), setOffsetProbe.ref)
+      projectionRef ! ProjectionBehavior.Stop
+      projectionRef ! ManagementOperationException(
+        GetOffset(TestProjectionId, currentOffsetProbe.ref),
+        new RuntimeException("late failure of GetOffset"))
+
+      testProbe.expectMessage(StopObserved)
+      // Done is only sent when the offset has been saved
+      setOffsetProbe.expectMessage(Done)
+      testProbe.expectTerminated(projectionRef)
+      testProbe.expectNoMessage()
+    }
+
+    "stop without restart when stopped while pausing" in {
+      val (testProbe, projectionRef, _) = setupTestProjection()
+      testProbe.expectMessage(StartObserved)
+
+      val pauseProbe = createTestProbe[Done]()
+      projectionRef ! SetPaused(TestProjectionId, paused = true, pauseProbe.ref)
+      projectionRef ! ProjectionBehavior.Stop
+
+      testProbe.expectMessage(StopObserved)
+      pauseProbe.expectMessage(Done)
+      testProbe.expectTerminated(projectionRef)
+      testProbe.expectNoMessage()
+    }
+
+    "ignore additional stop message when stopping" in {
+      val unhandledProbe = createTestProbe[UnhandledMessage]()
+      system.eventStream ! EventStream.Subscribe(unhandledProbe.ref)
+      val (testProbe, projectionRef, _) = setupTestProjection()
+      testProbe.expectMessage(StartObserved)
+
+      projectionRef ! ProjectionBehavior.Stop
+      projectionRef ! ProjectionBehavior.Stop
+
+      testProbe.expectMessage(StopObserved)
+      testProbe.expectTerminated(projectionRef)
+      unhandledProbe.expectNoMessage()
+    }
+
+    "log unexpected internal messages and keep running when started" in {
+      val (testProbe, projectionRef, _) = setupTestProjection()
+      testProbe.expectMessage(StartObserved)
+
+      LoggingTestKit.warn("received unexpected").withOccurrences(2).expect {
+        projectionRef ! Stopped
+        projectionRef ! SetPausedResult(createTestProbe[Done]().ref)
+      }
+
+      val currentOffsetProbe = createTestProbe[CurrentOffset[Int]]()
+      projectionRef ! GetOffset(TestProjectionId, currentOffsetProbe.ref)
+      currentOffsetProbe.expectMessage(CurrentOffset[Int](TestProjectionId, None))
     }
 
     "work with ProjectionManagement extension" in {
