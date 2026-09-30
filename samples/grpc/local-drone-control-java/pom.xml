@@ -440,6 +440,8 @@
                                 <buildArg>--verbose</buildArg>
                                 <buildArg>--install-exit-handlers</buildArg>
                                 <buildArg>--initialize-at-build-time=ch.qos.logback</buildArg>
+                                <!-- logback's ClassicConstants initializes MarkerFactory in its static initializer -->
+                                <buildArg>--initialize-at-build-time=org.slf4j.MarkerFactory</buildArg>
                                 <buildArg>-Dlogback.configurationFile=logback-native-image.xml</buildArg>
                             </buildArgs>
                         </configuration>
