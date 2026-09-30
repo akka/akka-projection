@@ -105,6 +105,8 @@ nativeImageOptions := Seq(
   "--verbose",
   "--install-exit-handlers",
   "--initialize-at-build-time=ch.qos.logback",
+  // logback's ClassicConstants initializes MarkerFactory in its static initializer
+  "--initialize-at-build-time=org.slf4j.MarkerFactory",
   "-Dlogback.configurationFile=logback-native-image.xml" // configured at build time
 )
 
