@@ -62,7 +62,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka" %% "akka-diagnostics" % AkkaDiagnosticsVersion,
   // Common dependencies for logging and testing
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-  "ch.qos.logback" % "logback-classic" % "1.5.18",
+  "ch.qos.logback" % "logback-classic" % "1.6.1",
   "org.scalatest" %% "scalatest" % "3.2.19" % Test,
   // 2. Using Akka Persistence
   "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion,
