@@ -120,7 +120,7 @@
         <dependency>
             <groupId>io.r2dbc</groupId>
             <artifactId>r2dbc-h2</artifactId>
-            <version>1.0.0.RELEASE</version>
+            <version>1.0.1.RELEASE</version>
         </dependency>
 
         <!-- Note: only management/bootstrap only needed when running the multi-node version of the service
