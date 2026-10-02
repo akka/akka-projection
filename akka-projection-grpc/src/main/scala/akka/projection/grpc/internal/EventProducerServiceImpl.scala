@@ -26,12 +26,17 @@ import akka.projection.grpc.internal.proto.FilteredEvent
 import akka.projection.grpc.internal.proto.InitReq
 import akka.projection.grpc.internal.proto.LoadEventRequest
 import akka.projection.grpc.internal.proto.LoadEventResponse
+import akka.projection.grpc.internal.proto.Pong
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducerInterceptor
+import akka.stream.FlowShape
 import akka.stream.scaladsl.BidiFlow
 import akka.stream.scaladsl.Flow
+import akka.stream.scaladsl.GraphDSL
+import akka.stream.scaladsl.MergePreferred
+import akka.stream.scaladsl.Partition
 import akka.stream.scaladsl.Sink
 import akka.stream.scaladsl.Source
 import com.google.protobuf.timestamp.Timestamp
@@ -123,7 +128,7 @@ import akka.projection.internal.CorrelationId
   override def eventsBySlices(in: Source[StreamIn, NotUsed], metadata: Metadata): Source[StreamOut, NotUsed] = {
     in.prefixAndTail(1).flatMapConcat {
       case (Seq(StreamIn(StreamIn.Message.Init(init), _)), tail) =>
-        tail.via(runEventsBySlices(init, metadata))
+        tail.via(pingPongFlow(runEventsBySlices(init, metadata)))
       case (Seq(), _) =>
         // if error during recovery in proxy the stream will be completed before init
         log.warn("Event stream closed before init.")
@@ -137,6 +142,29 @@ import akka.projection.internal.CorrelationId
         throw new IllegalStateException(s"Unexpected Seq prefix with [${seq.size}] elements.")
     }
   }
+
+  // Diverts incoming `Ping` messages to direct `Pong` responses merged into the StreamOut,
+  // so the rest of the inbound flow (FilterStage) never sees them and Pongs don't wait
+  // behind buffered events.
+  private def pingPongFlow(eventsFlow: Flow[StreamIn, StreamOut, NotUsed]): Flow[StreamIn, StreamOut, NotUsed] =
+    Flow.fromGraph(GraphDSL.create() { implicit b =>
+      import GraphDSL.Implicits._
+
+      val partition = b.add(Partition[StreamIn](2, {
+        case StreamIn(_: StreamIn.Message.Ping, _) => 0
+        case _                                     => 1
+      }))
+      val pingToPong = b.add(Flow[StreamIn].collect {
+        case StreamIn(StreamIn.Message.Ping(ping), _) => StreamOut(StreamOut.Message.Pong(Pong(ping.id)))
+      })
+      val events = b.add(eventsFlow)
+      val merge = b.add(MergePreferred[StreamOut](1))
+
+      partition.out(0) ~> pingToPong ~> merge.preferred
+      partition.out(1) ~> events ~> merge.in(0)
+
+      FlowShape(partition.in, merge.out)
+    })
 
   private def runEventsBySlices(init: InitReq, metadata: Metadata): Flow[StreamIn, StreamOut, NotUsed] = {
     val futureFlow = intercept(init.streamId, metadata).map { _ =>

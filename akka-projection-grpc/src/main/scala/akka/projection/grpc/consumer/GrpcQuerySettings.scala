@@ -10,7 +10,9 @@ import akka.grpc.scaladsl.MetadataBuilder
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import com.typesafe.config.Config
 import scala.collection.immutable
+import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters._
+import scala.jdk.DurationConverters._
 
 import akka.annotation.InternalApi
 import akka.persistence.typed.ReplicaId
@@ -48,7 +50,18 @@ object GrpcQuerySettings {
             .build())
     }
 
-    new GrpcQuerySettings(streamId, additionalHeaders, Vector.empty, None)
+    val keepAliveInterval = config.getDuration("keep-alive-interval").toScala
+    val keepAliveTimeout = config.getDuration("keep-alive-timeout").toScala
+    val keepAliveFailureThreshold = config.getInt("keep-alive-failure-threshold")
+
+    new GrpcQuerySettings(
+      streamId,
+      additionalHeaders,
+      Vector.empty,
+      None,
+      keepAliveInterval,
+      keepAliveTimeout,
+      keepAliveFailureThreshold)
   }
 
   /**
@@ -73,7 +86,10 @@ object GrpcQuerySettings {
       streamId,
       additionalRequestMetadata = None,
       initialConsumerFilter = Vector.empty,
-      fromReplica = None)
+      fromReplica = None,
+      keepAliveInterval = scala.concurrent.duration.Duration.Zero,
+      keepAliveTimeout = scala.concurrent.duration.Duration.Zero,
+      keepAliveFailureThreshold = 3)
   }
 
   /**
@@ -86,7 +102,10 @@ object GrpcQuerySettings {
       streamId,
       additionalRequestMetadata = None,
       initialConsumerFilter = Vector.empty,
-      fromReplica = None)
+      fromReplica = None,
+      keepAliveInterval = scala.concurrent.duration.Duration.Zero,
+      keepAliveTimeout = scala.concurrent.duration.Duration.Zero,
+      keepAliveFailureThreshold = 3)
   }
 }
 
@@ -94,10 +113,14 @@ final class GrpcQuerySettings private (
     val streamId: String,
     val additionalRequestMetadata: Option[Metadata],
     val initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria],
-    val fromReplica: Option[ReplicaId]) {
+    val fromReplica: Option[ReplicaId],
+    val keepAliveInterval: FiniteDuration,
+    val keepAliveTimeout: FiniteDuration,
+    val keepAliveFailureThreshold: Int) {
   require(
     streamId != "",
     "streamId must be an id exposed by the producing side but was undefined on the consuming side.")
+  require(keepAliveFailureThreshold >= 1, s"keepAliveFailureThreshold must be >= 1, was [$keepAliveFailureThreshold]")
 
   /**
    * Additional request metadata, for authentication/authorization of the request on the remote side.
@@ -122,6 +145,39 @@ final class GrpcQuerySettings private (
     copy(initialConsumerFilter = initialConsumerFilter.asScala.toVector)
 
   /**
+   * Enable akka-projection-grpc level keep alive on the eventsBySlices stream. The consumer
+   * sends a keep-alive request every `interval` and verifies that the producer's response
+   * arrives within `timeout`, exercising the gRPC stream and the producer's stream handler
+   * rather than just the TCP connection. The stream fails after `failureThreshold`
+   * consecutive overdue responses (earlier ones log a warning), letting brief network spikes
+   * or a slow producer recover.
+   *
+   * Set `timeout` to `Duration.Zero` to keep sending requests without ever failing the
+   * stream (firewall keep-alive only).
+   *
+   * The deadline measures Pong observation at the consumer-side stage. Pongs share the
+   * inbound channel with Events, so a consumer-side downstream that stalls pulling events
+   * for longer than `timeout * failureThreshold` can also trigger failure even when the
+   * producer is responsive. Pick `timeout` and `failureThreshold` with that in mind.
+   *
+   * Requires an akka-projection producer of version 1.6.24 or newer.
+   */
+  def withKeepAlive(interval: FiniteDuration, timeout: FiniteDuration, failureThreshold: Int): GrpcQuerySettings =
+    copy(keepAliveInterval = interval, keepAliveTimeout = timeout, keepAliveFailureThreshold = failureThreshold)
+
+  /**
+   * Java API: see the Scala `withKeepAlive` overload.
+   */
+  def withKeepAlive(
+      interval: java.time.Duration,
+      timeout: java.time.Duration,
+      failureThreshold: Int): GrpcQuerySettings =
+    copy(
+      keepAliveInterval = interval.toScala,
+      keepAliveTimeout = timeout.toScala,
+      keepAliveFailureThreshold = failureThreshold)
+
+  /**
    * INTERNAL API
    */
   @InternalApi private[akka] def withFromReplica(replica: ReplicaId): GrpcQuerySettings =
@@ -131,7 +187,17 @@ final class GrpcQuerySettings private (
       streamId: String = streamId,
       additionalRequestMetadata: Option[Metadata] = additionalRequestMetadata,
       initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria] = initialConsumerFilter,
-      fromReplica: Option[ReplicaId] = fromReplica): GrpcQuerySettings =
-    new GrpcQuerySettings(streamId, additionalRequestMetadata, initialConsumerFilter, fromReplica)
+      fromReplica: Option[ReplicaId] = fromReplica,
+      keepAliveInterval: FiniteDuration = keepAliveInterval,
+      keepAliveTimeout: FiniteDuration = keepAliveTimeout,
+      keepAliveFailureThreshold: Int = keepAliveFailureThreshold): GrpcQuerySettings =
+    new GrpcQuerySettings(
+      streamId,
+      additionalRequestMetadata,
+      initialConsumerFilter,
+      fromReplica,
+      keepAliveInterval,
+      keepAliveTimeout,
+      keepAliveFailureThreshold)
 
 }

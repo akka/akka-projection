@@ -55,6 +55,9 @@ message StreamIn {
     // events for a specific entity.
     ReplayReq replay = 3;
     Ack ack = 4;
+    // Application level keep alive request, the producer is expected to respond
+    // with a `Pong` carrying the same id.
+    Ping ping = 5;
   }
 }
 
@@ -257,7 +260,18 @@ message StreamOut {
   oneof message {
     Event event = 1;
     FilteredEvent filtered_event = 2;
+    // Application level keep alive response, echoes back the `id` from the
+    // corresponding `Ping` so the consumer can correlate and measure RTT.
+    Pong pong = 3;
   }
+}
+
+message Ping {
+  int64 id = 1;
+}
+
+message Pong {
+  int64 id = 1;
 }
 
 message Event {
