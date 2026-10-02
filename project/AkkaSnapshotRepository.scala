@@ -14,7 +14,7 @@ object AkkaSnapshotRepositories extends AutoPlugin {
       .get("build.akka.version")
       .orElse(sys.props.get("build.alpakka.kafka.version")) match {
       case Some(_) =>
-        Seq("Akka library snapshot repository".at("https://repo.akka.io/snapshots"))
+        Seq("Akka library snapshot repository".at("https://repo.akka.io/snapshots/github_actions"))
       case None => Seq.empty
     })
   }
