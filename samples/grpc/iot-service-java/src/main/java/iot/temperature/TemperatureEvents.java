@@ -2,6 +2,7 @@ package iot.temperature;
 
 import akka.Done;
 import akka.actor.typed.ActorSystem;
+import akka.cluster.sharding.typed.ShardedDaemonProcessSettings;
 import akka.cluster.sharding.typed.javadsl.ClusterSharding;
 import akka.cluster.sharding.typed.javadsl.ShardedDaemonProcess;
 import akka.http.javadsl.model.HttpRequest;
@@ -81,17 +82,20 @@ public final class TemperatureEvents {
     var numberOfSliceRanges =
         system.settings().config().getInt("iot-service.temperature.projections-slice-count");
 
-    var sliceRanges =
-        EventSourcedProvider.sliceRanges(
-            system, R2dbcReadJournal.Identifier(), numberOfSliceRanges);
-
     ShardedDaemonProcess.get(system)
-        .init(
+        .initWithContext(
             ProjectionBehavior.Command.class,
             "TemperatureProjection",
-            sliceRanges.size(),
-            i -> ProjectionBehavior.create(projection(system, sliceRanges.get(i))),
-            ProjectionBehavior.stopMessage());
+            numberOfSliceRanges,
+            daemonContext -> {
+              var sliceRanges =
+                  EventSourcedProvider.sliceRanges(
+                      system, R2dbcReadJournal.Identifier(), daemonContext.totalProcesses());
+              return ProjectionBehavior.create(
+                  projection(system, sliceRanges.get(daemonContext.processNumber())));
+            },
+            ShardedDaemonProcessSettings.create(system),
+            Optional.of(ProjectionBehavior.stopMessage()));
   }
 
   private static Projection<EventEnvelope<TemperatureRead>> projection(

@@ -82,13 +82,16 @@ object RestaurantDeliveries {
       PersistenceId(EntityKey.name, restaurantId),
       None,
       onCommand,
-      onEvent).withTaggerForState {
-      case (Some(state), _) =>
-        // tag events with location id as topic, grpc projection filters makes sure only that location
-        // picks them up for drone delivery
-        Set("t:" + state.localControlLocationId)
-      case _ => Set.empty
-    }.onPersistFailure(SupervisorStrategy.restartWithBackoff(100.millis, 5.seconds, 0.1))
+      onEvent)
+      .withTaggerForState {
+        case (Some(state), _) =>
+          // tag events with location id as topic, grpc projection filters makes sure only that location
+          // picks them up for drone delivery
+          Set("t:" + state.localControlLocationId)
+        case _ => Set.empty
+      }
+      .onPersistFailure(
+        SupervisorStrategy.restartWithBackoff(100.millis, 5.seconds, 0.1))
 
   // #commandHandler
   private def onCommand(

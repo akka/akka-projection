@@ -23,7 +23,8 @@ class SensorTwinServiceImpl(system: ActorSystem[_]) extends SensorTwinService {
 
   override def getTemperature(
       in: proto.GetTemperatureRequest): Future[proto.CurrentTemperature] = {
-    val entityRef = sharding.entityRefFor(SensorTwin.EntityKey, in.sensorEntityId)
+    val entityRef =
+      sharding.entityRefFor(SensorTwin.EntityKey, in.sensorEntityId)
     val reply: Future[Int] =
       entityRef.askWithStatus(SensorTwin.GetTemperature(_))
     val response =

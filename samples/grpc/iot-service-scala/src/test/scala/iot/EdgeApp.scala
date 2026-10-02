@@ -110,8 +110,8 @@ object EdgeApp {
               SensorSimulator.TemperatureRead,
               temperature.proto.TemperatureRead] { envelope =>
               val event = envelope.event
-              Future.successful(Some(
-                temperature.proto.TemperatureRead(event.temperature)))
+              Future.successful(
+                Some(temperature.proto.TemperatureRead(event.temperature)))
             }
 
           val eventProducer = EventProducerPush[SensorSimulator.Event](

@@ -3,6 +3,7 @@ package iot.temperature
 import scala.concurrent.Future
 
 import akka.actor.typed.ActorSystem
+import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
 import akka.http.scaladsl.model.HttpRequest
@@ -39,8 +40,7 @@ object TemperatureEvents {
       TemperatureEventsStreamId,
       proto.TemperatureEventsProto.javaDescriptor.getFile :: Nil)
 
-    EventProducerPushDestination
-      .grpcServiceHandler(destination)(system)
+    EventProducerPushDestination.grpcServiceHandler(destination)(system)
   }
 
   def initPushedEventsConsumer(implicit system: ActorSystem[_]): Unit = {
@@ -98,15 +98,18 @@ object TemperatureEvents {
     // Split the slices into N ranges
     val numberOfSliceRanges: Int = system.settings.config
       .getInt("iot-service.temperature.projections-slice-count")
-    val sliceRanges = EventSourcedProvider.sliceRanges(
-      system,
-      R2dbcReadJournal.Identifier,
-      numberOfSliceRanges)
 
-    ShardedDaemonProcess(system).init(
+    ShardedDaemonProcess(system).initWithContext(
       name = "TemperatureProjection",
-      numberOfInstances = sliceRanges.size,
-      behaviorFactory = i => ProjectionBehavior(projection(sliceRanges(i))),
+      initialNumberOfInstances = numberOfSliceRanges,
+      behaviorFactory = { daemonContext =>
+        val sliceRanges = EventSourcedProvider.sliceRanges(
+          system,
+          R2dbcReadJournal.Identifier,
+          daemonContext.totalProcesses)
+        ProjectionBehavior(projection(sliceRanges(daemonContext.processNumber)))
+      },
+      settings = ShardedDaemonProcessSettings(system),
       stopMessage = ProjectionBehavior.Stop)
 
   }

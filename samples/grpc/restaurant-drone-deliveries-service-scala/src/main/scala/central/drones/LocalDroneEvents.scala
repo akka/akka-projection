@@ -1,6 +1,7 @@
 package central.drones
 
 import akka.actor.typed.ActorSystem
+import akka.cluster.sharding.typed.ShardedDaemonProcessSettings
 import akka.cluster.sharding.typed.scaladsl.ClusterSharding
 import akka.cluster.sharding.typed.scaladsl.ShardedDaemonProcess
 import akka.persistence.query.Offset
@@ -116,15 +117,18 @@ object LocalDroneEvents {
     // Split the slices into N ranges
     val numberOfSliceRanges: Int = system.settings.config.getInt(
       "restaurant-drone-deliveries-service.drones.projections-slice-count")
-    val sliceRanges = EventSourcedProvider.sliceRanges(
-      system,
-      R2dbcReadJournal.Identifier,
-      numberOfSliceRanges)
 
-    ShardedDaemonProcess(system).init(
+    ShardedDaemonProcess(system).initWithContext(
       name = "LocalDronesProjection",
-      numberOfInstances = sliceRanges.size,
-      behaviorFactory = i => ProjectionBehavior(projection(sliceRanges(i))),
+      initialNumberOfInstances = numberOfSliceRanges,
+      behaviorFactory = { daemonContext =>
+        val sliceRanges = EventSourcedProvider.sliceRanges(
+          system,
+          R2dbcReadJournal.Identifier,
+          daemonContext.totalProcesses)
+        ProjectionBehavior(projection(sliceRanges(daemonContext.processNumber)))
+      },
+      settings = ShardedDaemonProcessSettings(system),
       stopMessage = ProjectionBehavior.Stop)
   }
   // #eventProjection
