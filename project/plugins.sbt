@@ -1,4 +1,4 @@
-addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.5.6")
+addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.6.2")
 addSbtPlugin("com.github.sbt" % "sbt-java-formatter" % "0.13.1")
 addSbtPlugin("com.github.sbt" % "sbt-header" % "5.11.0")
 
