@@ -1042,7 +1042,7 @@ private[projection] class R2dbcOffsetStore(
       case (None, None)             => None
       case (s: Some[Instant], None) => s
       case (None, s: Some[Instant]) => s
-      case (Some(x), Some(y))       => Some(if (x.isBefore(y)) x else y)
+      case (Some(x), Some(y))       => Some(if (x.isAfter(y)) x else y)
     }
   }
 
