@@ -33,7 +33,7 @@ object ProjectionBehavior {
    */
   @InternalApi private[projection] object Internal {
 
-    object Stopped extends Command
+    case object Stopped extends Command
 
     sealed trait ProjectionManagementCommand extends Command
     final case class GetOffset[Offset](projectionId: ProjectionId, replyTo: ActorRef[CurrentOffset[Offset]])
@@ -46,6 +46,7 @@ object ProjectionBehavior {
     final case class SetOffset[Offset](projectionId: ProjectionId, offset: Option[Offset], replyTo: ActorRef[Done])
         extends ProjectionManagementCommand
     final case class SetOffsetResult[Offset](replyTo: ActorRef[Done]) extends ProjectionManagementCommand
+    final case class SetOffsetFailed(cause: Throwable) extends ProjectionManagementCommand
 
     final case class IsPaused(projectionId: ProjectionId, replyTo: ActorRef[Boolean])
         extends ProjectionManagementCommand
@@ -54,6 +55,7 @@ object ProjectionBehavior {
     final case class GetManagementStateResult(state: Option[ManagementState], replyTo: ActorRef[Boolean])
         extends ProjectionManagementCommand
     final case class SetPausedResult(replyTo: ActorRef[Done]) extends ProjectionManagementCommand
+    final case class SetPausedFailed(cause: Throwable) extends ProjectionManagementCommand
   }
 
   /**
@@ -103,7 +105,7 @@ object ProjectionBehavior {
 
   private def started(running: RunningProjection): Behavior[Command] =
     Behaviors
-      .receiveMessagePartial[Command] {
+      .receiveMessage[Command] {
         case Stop =>
           context.log.debug("Projection [{}] is being stopped", projectionId)
           val stoppedFut = running.stop()
@@ -181,8 +183,8 @@ object ProjectionBehavior {
             case _ => Behaviors.unhandled
           }
 
-        // Stopped, SetOffsetResult and SetPausedResult are handled in the states that are waiting for them
-        case msg @ (Stopped | _: SetOffsetResult[_] | _: SetPausedResult) =>
+        // handled in the states that are waiting for them
+        case msg @ (Stopped | _: SetOffsetResult[_] | _: SetOffsetFailed | _: SetPausedResult | _: SetPausedFailed) =>
           context.log.warn("Projection [{}] received unexpected [{}] when started", projectionId, msg)
           Behaviors.same
 
@@ -206,7 +208,7 @@ object ProjectionBehavior {
 
         context.pipeToSelf(mgmt.setOffset(setOffset.offset)) {
           case Success(_)   => SetOffsetResult(setOffset.replyTo)
-          case Failure(exc) => ManagementOperationException(setOffset, exc)
+          case Failure(exc) => SetOffsetFailed(exc)
         }
 
         Behaviors.same
@@ -226,9 +228,8 @@ object ProjectionBehavior {
           stashBuffer.unstashAll(started(running))
         }
 
-      // a failure of an earlier operation, such as GetOffset, is handled as other message
-      case ManagementOperationException(op, exc) if op eq setOffset =>
-        context.log.warn("Operation [{}] failed.", op, exc)
+      case SetOffsetFailed(exc) =>
+        context.log.warn("Operation [{}] failed.", setOffset, exc)
         if (stopRequested) {
           context.log.debug("Projection [{}] stopped after failure to set offset", projectionId)
           Behaviors.stopped
@@ -257,7 +258,7 @@ object ProjectionBehavior {
 
       case other =>
         context.log.debug("Projection [{}] is being stopped. Discarding [{}].", projectionId, other)
-        Behaviors.unhandled
+        Behaviors.same
     }
 
   private def receiveGetOffsetResult(result: GetOffsetResult[Offset]): Behavior[Command] = {
@@ -275,7 +276,7 @@ object ProjectionBehavior {
 
         context.pipeToSelf(mgmt.setPaused(setPaused.paused)) {
           case Success(_)   => SetPausedResult(setPaused.replyTo)
-          case Failure(exc) => ManagementOperationException(setPaused, exc)
+          case Failure(exc) => SetPausedFailed(exc)
         }
 
         Behaviors.same
@@ -295,9 +296,8 @@ object ProjectionBehavior {
           stashBuffer.unstashAll(started(running))
         }
 
-      // a failure of an earlier operation, such as IsPaused, is handled as other message
-      case ManagementOperationException(op, exc) if op eq setPaused =>
-        context.log.warn("Operation [{}] failed.", op, exc)
+      case SetPausedFailed(exc) =>
+        context.log.warn("Operation [{}] failed.", setPaused, exc)
         if (stopRequested) {
           context.log.debug("Projection [{}] stopped after failure to pause/resume", projectionId)
           Behaviors.stopped
@@ -319,7 +319,7 @@ object ProjectionBehavior {
     if (stopRequested) {
       // will not be started again, so the stash would never be used
       context.log.debug("Projection [{}] is being stopped. Discarding [{}].", projectionId, msg)
-      Behaviors.unhandled
+      Behaviors.same
     } else {
       stashBuffer.stash(msg)
       Behaviors.same

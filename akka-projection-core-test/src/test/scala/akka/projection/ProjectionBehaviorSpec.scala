@@ -530,6 +530,8 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
     }
 
     "still set the offset when stopped and a late failure of an earlier operation arrives" in {
+      val unhandledProbe = createTestProbe[UnhandledMessage]()
+      system.eventStream ! EventStream.Subscribe(unhandledProbe.ref)
       val (testProbe, projectionRef, _) = setupTestProjection()
       testProbe.expectMessage(StartObserved)
 
@@ -547,6 +549,7 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
       setOffsetProbe.expectMessage(Done)
       testProbe.expectTerminated(projectionRef)
       testProbe.expectNoMessage()
+      unhandledProbe.expectNoMessage()
     }
 
     "stop without restart when stopped while pausing" in {
@@ -581,9 +584,12 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
       val (testProbe, projectionRef, _) = setupTestProjection()
       testProbe.expectMessage(StartObserved)
 
-      LoggingTestKit.warn("received unexpected").withOccurrences(2).expect {
+      LoggingTestKit.warn("received unexpected").withOccurrences(5).expect {
         projectionRef ! Stopped
+        projectionRef ! SetOffsetResult(createTestProbe[Done]().ref)
+        projectionRef ! SetOffsetFailed(new RuntimeException("stale"))
         projectionRef ! SetPausedResult(createTestProbe[Done]().ref)
+        projectionRef ! SetPausedFailed(new RuntimeException("stale"))
       }
 
       val currentOffsetProbe = createTestProbe[CurrentOffset[Int]]()
