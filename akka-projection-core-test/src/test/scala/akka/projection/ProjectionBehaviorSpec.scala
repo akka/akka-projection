@@ -7,6 +7,7 @@ package akka.projection
 import java.util.concurrent.atomic.AtomicReference
 
 import scala.concurrent.Future
+import scala.concurrent.Promise
 import scala.concurrent.duration._
 
 import akka.Done
@@ -73,10 +74,17 @@ object ProjectionBehaviorSpec {
         src: Source[Int, NotUsed],
         probe: TestProbe[ProbeMessage],
         projectionId: ProjectionId = TestProjectionId,
-        failToStop: Boolean = false): ProjectionBehaviourTestProjection = {
+        failToStop: Boolean = false,
+        managementGate: Future[Done] = Future.successful(Done)): ProjectionBehaviourTestProjection = {
       val handlerStrategy = new SingleHandlerStrategy[Int](() => handler(probe))
       val sourceProvider = TestSourceProvider(src, (i: Int) => i)
-      new ProjectionBehaviourTestProjection(projectionId, sourceProvider, handlerStrategy, probe, failToStop)
+      new ProjectionBehaviourTestProjection(
+        projectionId,
+        sourceProvider,
+        handlerStrategy,
+        probe,
+        failToStop,
+        managementGate)
     }
   }
 
@@ -85,7 +93,8 @@ object ProjectionBehaviorSpec {
       sourceProvider: SourceProvider[Int, Int],
       handlerStrategy: HandlerStrategy,
       testProbe: TestProbe[ProbeMessage],
-      failToStop: Boolean)
+      failToStop: Boolean,
+      managementGate: Future[Done])
       extends TestProjectionImpl[Int, Int](
         projectionId,
         sourceProvider,
@@ -104,7 +113,8 @@ object ProjectionBehaviorSpec {
         NoopStatusObserver,
         offsetStoreFactory(),
         testProbe,
-        failToStop)
+        failToStop,
+        managementGate)
 
     private[projection] class ProjectionBehaviourTestInternalProjectionState(
         projectionId: ProjectionId,
@@ -114,7 +124,8 @@ object ProjectionBehaviorSpec {
         statusObserver: StatusObserver[Int],
         offsetStore: TestOffsetStore[Int],
         testProbe: TestProbe[ProbeMessage],
-        failToStop: Boolean)(implicit system: ActorSystem[_])
+        failToStop: Boolean,
+        managementGate: Future[Done])(implicit system: ActorSystem[_])
         extends TestInternalProjectionState[Int, Int](
           projectionId,
           sourceProvider,
@@ -130,7 +141,8 @@ object ProjectionBehaviorSpec {
           killSwitch,
           offsetStore,
           testProbe,
-          failToStop)
+          failToStop,
+          managementGate)
     }
 
     private[projection] class ProjectionBehaviourTestRunningProjection(
@@ -139,7 +151,8 @@ object ProjectionBehaviorSpec {
         killSwitch: SharedKillSwitch,
         offsetStore: TestOffsetStore[Int],
         testProbe: TestProbe[ProbeMessage],
-        failToStop: Boolean)(implicit _system: ActorSystem[_])
+        failToStop: Boolean,
+        managementGate: Future[Done])(implicit _system: ActorSystem[_])
         extends TestRunningProjection(source, killSwitch)
         with RunningProjectionManagement[Int] {
       import system.executionContext
@@ -179,18 +192,15 @@ object ProjectionBehaviorSpec {
         }
       }
 
-      override def setOffset(offset: Option[Int]): Future[Done] = {
+      // the gate makes it possible to deliver other messages before the operation completes
+      override def setOffset(offset: Option[Int]): Future[Done] = managementGate.flatMap { _ =>
         offset match {
           case None =>
             offsetStore.saveOffset(projectionId, 0)
             Future.successful(Done)
           case Some(n) if n < 0 =>
             // this simulates a failure when saving the offset
-            import akka.actor.typed.scaladsl.adapter._
-            import akka.pattern.after
-            after(100.millis, system.toClassic.scheduler) {
-              Future.failed(new RuntimeException("failed to set offset"))
-            }
+            Future.failed(new RuntimeException("failed to set offset"))
           case Some(n) =>
             if (n <= 3) {
               offsetStore.saveOffset(projectionId, n)
@@ -212,7 +222,7 @@ object ProjectionBehaviorSpec {
 
       // RunningProjectionManagement
       override def setPaused(paused: Boolean): Future[Done] =
-        offsetStore.savePaused(projectionId, paused)
+        managementGate.flatMap(_ => offsetStore.savePaused(projectionId, paused))
 
     }
   }
@@ -226,7 +236,8 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
 
   private def setupTestProjection(
       projectionId: ProjectionId = TestProjectionId,
-      earlyMgmtCommand: () => Unit = () => ())
+      earlyMgmtCommand: () => Unit = () => (),
+      managementGate: Future[Done] = Future.successful(Done))
       : (TestProbe[ProbeMessage], ActorRef[ProjectionBehavior.Command], AtomicReference[ActorRef[Int]]) = {
     val srcRef = new AtomicReference[ActorRef[Int]]()
     import akka.actor.typed.scaladsl.adapter._
@@ -238,7 +249,9 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
       }
     val testProbe = testKit.createTestProbe[ProbeMessage]()
     val projectionRef =
-      testKit.spawn(ProjectionBehavior(ProjectionBehaviourTestProjection(src, testProbe, projectionId)))
+      testKit.spawn(
+        ProjectionBehavior(
+          ProjectionBehaviourTestProjection(src, testProbe, projectionId, managementGate = managementGate)))
     earlyMgmtCommand()
     eventually {
       srcRef.get() should not be null
@@ -466,13 +479,14 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
     }
 
     "stop without restart when stopped while setting offset" in {
-      val (testProbe, projectionRef, _) = setupTestProjection()
+      val gate = Promise[Done]()
+      val (testProbe, projectionRef, _) = setupTestProjection(managementGate = gate.future)
       testProbe.expectMessage(StartObserved)
 
       val setOffsetProbe = createTestProbe[Done]()
-      // offset > 3 is saved with a delay in the test projection
-      projectionRef ! SetOffset(TestProjectionId, Some(5), setOffsetProbe.ref)
+      projectionRef ! SetOffset(TestProjectionId, Some(2), setOffsetProbe.ref)
       projectionRef ! ProjectionBehavior.Stop
+      gate.success(Done)
 
       testProbe.expectMessage(StopObserved)
       setOffsetProbe.expectMessage(Done)
@@ -481,13 +495,15 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
     }
 
     "stop without restart and without reply when stopped while setting offset fails" in {
-      val (testProbe, projectionRef, _) = setupTestProjection()
+      val gate = Promise[Done]()
+      val (testProbe, projectionRef, _) = setupTestProjection(managementGate = gate.future)
       testProbe.expectMessage(StartObserved)
 
       val setOffsetProbe = createTestProbe[Done]()
       // negative offset fails in the test projection
       projectionRef ! SetOffset(TestProjectionId, Some(-1), setOffsetProbe.ref)
       projectionRef ! ProjectionBehavior.Stop
+      gate.success(Done)
 
       testProbe.expectMessage(StopObserved)
       testProbe.expectTerminated(projectionRef)
@@ -509,16 +525,17 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
     }
 
     "not handle a late failure of an earlier operation as failure to set offset" in {
-      val (testProbe, projectionRef, _) = setupTestProjection()
+      val gate = Promise[Done]()
+      val (testProbe, projectionRef, _) = setupTestProjection(managementGate = gate.future)
       testProbe.expectMessage(StartObserved)
 
       val setOffsetProbe = createTestProbe[Done]()
       val currentOffsetProbe = createTestProbe[CurrentOffset[Int]]()
-      // offset > 3 is saved with a delay in the test projection
-      projectionRef ! SetOffset(TestProjectionId, Some(5), setOffsetProbe.ref)
+      projectionRef ! SetOffset(TestProjectionId, Some(2), setOffsetProbe.ref)
       projectionRef ! ManagementOperationException(
         GetOffset(TestProjectionId, currentOffsetProbe.ref),
         new RuntimeException("late failure of GetOffset"))
+      gate.success(Done)
 
       testProbe.expectMessage(StopObserved)
       setOffsetProbe.expectMessage(Done)
@@ -526,23 +543,24 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
       testProbe.expectNoMessage()
 
       projectionRef ! GetOffset(TestProjectionId, currentOffsetProbe.ref)
-      currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(5)))
+      currentOffsetProbe.expectMessage(CurrentOffset(TestProjectionId, Some(2)))
     }
 
     "still set the offset when stopped and a late failure of an earlier operation arrives" in {
       val unhandledProbe = createTestProbe[UnhandledMessage]()
       system.eventStream ! EventStream.Subscribe(unhandledProbe.ref)
-      val (testProbe, projectionRef, _) = setupTestProjection()
+      val gate = Promise[Done]()
+      val (testProbe, projectionRef, _) = setupTestProjection(managementGate = gate.future)
       testProbe.expectMessage(StartObserved)
 
       val setOffsetProbe = createTestProbe[Done]()
       val currentOffsetProbe = createTestProbe[CurrentOffset[Int]]()
-      // offset > 3 is saved with a delay in the test projection
-      projectionRef ! SetOffset(TestProjectionId, Some(5), setOffsetProbe.ref)
+      projectionRef ! SetOffset(TestProjectionId, Some(2), setOffsetProbe.ref)
       projectionRef ! ProjectionBehavior.Stop
       projectionRef ! ManagementOperationException(
         GetOffset(TestProjectionId, currentOffsetProbe.ref),
         new RuntimeException("late failure of GetOffset"))
+      gate.success(Done)
 
       testProbe.expectMessage(StopObserved)
       // Done is only sent when the offset has been saved
@@ -553,12 +571,14 @@ class ProjectionBehaviorSpec extends ScalaTestWithActorTestKit("""
     }
 
     "stop without restart when stopped while pausing" in {
-      val (testProbe, projectionRef, _) = setupTestProjection()
+      val gate = Promise[Done]()
+      val (testProbe, projectionRef, _) = setupTestProjection(managementGate = gate.future)
       testProbe.expectMessage(StartObserved)
 
       val pauseProbe = createTestProbe[Done]()
       projectionRef ! SetPaused(TestProjectionId, paused = true, pauseProbe.ref)
       projectionRef ! ProjectionBehavior.Stop
+      gate.success(Done)
 
       testProbe.expectMessage(StopObserved)
       pauseProbe.expectMessage(Done)
