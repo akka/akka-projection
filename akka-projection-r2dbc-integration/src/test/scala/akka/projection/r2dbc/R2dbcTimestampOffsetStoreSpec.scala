@@ -647,10 +647,55 @@ class R2dbcTimestampOffsetStoreSpec
       // even when there are no previously stored offsets
       eventTimestampQueryClock.setInstant(startTime.minusSeconds(3600).minusMillis(1))
       offsetStore.validate(env1).futureValue shouldBe Accepted
-      offsetStore.saveOffset(OffsetPidSeqNr(offset1, "p1", 3L)).futureValue
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, p1, 7L)).futureValue
 
       // and same for another pid of same slice even though there is a stored offset
       val env2 = createEnvelope(p2, 3L, startTime.plusMillis(9), "e2-3")
+      offsetStore.validate(env2).futureValue shouldBe Accepted
+    }
+
+    "accept when previous timestamp is before accept-when-previous-timestamp-before and slice has stored offsets" in {
+      import R2dbcOffsetStore.Validation._
+      val projectionId = genRandomProjectionId()
+      val eventTimestampQueryClock = TestClock.nowMicros()
+      val startTime = TestClock.nowMicros().instant()
+
+      val offsetStore = createOffsetStore(
+        projectionId,
+        eventTimestampQueryClock = eventTimestampQueryClock,
+        customSettings = settings.withAcceptWhenPreviousTimestampBefore(startTime))
+
+      val p1 = "p500" // slice 645
+      val p2 = "p621" // same slice 645
+      val offset1 = TimestampOffset(startTime.plusMillis(8), Map(p1 -> 1L))
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, p1, 1L)).futureValue
+
+      // previous event is before accept-when-previous-timestamp-before, but within delete-after of the slice latest
+      eventTimestampQueryClock.setInstant(startTime.minusSeconds(3600))
+      val env2 = createEnvelope(p2, 3L, startTime.plusMillis(9), "e2-3")
+      offsetStore.validate(env2).futureValue shouldBe Accepted
+    }
+
+    "accept when previous timestamp is outside delete-after window and accept-when-previous-timestamp-before is older" in {
+      import R2dbcOffsetStore.Validation._
+      val projectionId = genRandomProjectionId()
+      val eventTimestampQueryClock = TestClock.nowMicros()
+      val startTime = TestClock.nowMicros().instant()
+
+      val offsetStore = createOffsetStore(
+        projectionId,
+        eventTimestampQueryClock = eventTimestampQueryClock,
+        customSettings = settings.withAcceptWhenPreviousTimestampBefore(startTime))
+
+      val p1 = "p500" // slice 645
+      val p2 = "p621" // same slice 645
+      val latestTime = startTime.plus(settings.deleteAfter).plus(settings.deleteAfter)
+      val offset1 = TimestampOffset(latestTime, Map(p1 -> 1L))
+      offsetStore.saveOffset(OffsetPidSeqNr(offset1, p1, 1L)).futureValue
+
+      // previous event is after accept-when-previous-timestamp-before, but outside delete-after of the slice latest
+      eventTimestampQueryClock.setInstant(startTime.plusSeconds(3600))
+      val env2 = createEnvelope(p2, 3L, latestTime.plusMillis(1), "e2-3")
       offsetStore.validate(env2).futureValue shouldBe Accepted
     }
 
