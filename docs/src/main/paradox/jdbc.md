@@ -41,13 +41,8 @@ The table below shows `akka-projection-jdbc`'s direct dependencies, and the seco
 
 There are two settings that need to be set beforehand in your `application.conf` file.
 
-* `akka.projection.jdbc.dialect` - The dialect type indicating your database of choice. Supported dialects are: `mysql-dialect`, `postgres-dialect`, `oracle-dialect` or `h2-dialect` (testing).
+* `akka.projection.jdbc.dialect` - The dialect type indicating your database of choice. Supported dialects are: `mysql-dialect`, `postgres-dialect`, `mssql-dialect`, `oracle-dialect` or `h2-dialect` (testing).
 * `akka.projection.jdbc.blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size` indicating the size of the blocking JDBC dispatcher. See also @ref:[Blocking JDBC Dispatcher](#blocking-jdbc-dispatcher).
-
-@@@ warning { title="SQL Server support removed" }
-The `mssql-dialect` has been removed and is rejected as an unknown dialect at startup.
-Stay on Akka Projection 1.6.25 if you need SQL Server.
-@@@
 
 ## Defining a JdbcSession
 
@@ -230,6 +225,9 @@ PostgreSQL
 
 MySQL
 :  @@snip [create-table-mysql.sql](/examples/src/test/resources/create-table-mysql.sql) { #create-table-mysql }
+
+Microsoft SQL Server
+:  @@snip [create-table-mssql.sql](/examples/src/test/resources/create-table-mssql.sql) { #create-table-mssql }
 
 Oracle
 :  @@snip [create-table-oracle.sql](/examples/src/test/resources/create-table-oracle.sql) { #create-table-oracle }

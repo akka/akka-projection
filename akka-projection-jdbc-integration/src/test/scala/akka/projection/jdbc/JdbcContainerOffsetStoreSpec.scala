@@ -90,6 +90,14 @@ object JdbcContainerOffsetStoreSpec {
       new MySQLContainer("mysql:8.0.22").withDatabaseName(schemaName)
   }
 
+  object MSSQLServerSpecConfig extends ContainerJdbcSpecConfig("mssql-dialect") {
+    val name = "MS SQL Server Database"
+    override val tag: Tag = TestTags.FlakyDb
+    override def newContainer(): JdbcDatabaseContainer[_] =
+      new MSSQLServerContainer("mcr.microsoft.com/mssql/server:2022-CU13-ubuntu-22.04")
+        .withInitScript("db/default-init.sql")
+  }
+
   object OracleSpecConfig extends ContainerJdbcSpecConfig("oracle-dialect") {
     val name = "Oracle Database"
 
@@ -115,6 +123,8 @@ class PostgresJdbcOffsetStoreLegacySchemaSpec
 class MySQLJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcContainerOffsetStoreSpec.MySQLSpecConfig) {
   override def selectLastStatement: String = Dialect.removeQuotes(super.selectLastStatement)
 }
+
+class MSSQLServerJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcContainerOffsetStoreSpec.MSSQLServerSpecConfig)
 
 class OracleJdbcOffsetStoreSpec extends JdbcOffsetStoreSpec(JdbcContainerOffsetStoreSpec.OracleSpecConfig) {
 

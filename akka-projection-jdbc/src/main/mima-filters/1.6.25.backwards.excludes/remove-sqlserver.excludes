@@ -1,3 +1,0 @@
-# internals, removal of SQL Server dialect
-ProblemFilters.exclude[MissingClassProblem]("akka.projection.jdbc.internal.MSSQLServerDialect")
-ProblemFilters.exclude[MissingClassProblem]("akka.projection.jdbc.internal.MSSQLServerDialect$")

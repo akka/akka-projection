@@ -107,6 +107,7 @@ object Dependencies {
     val h2Driver = "com.h2database" % "h2" % "2.2.224" % sbt.Test
     val postgresDriver = "org.postgresql" % "postgresql" % "42.7.1" % sbt.Test
     val mysqlDriver = "com.mysql" % "mysql-connector-j" % "8.2.0" % sbt.Test
+    val msSQLServerDriver = "com.microsoft.sqlserver" % "mssql-jdbc" % "7.4.1.jre8" % sbt.Test
     val oracleDriver = "com.oracle.ojdbc" % "ojdbc8" % "19.3.0.0" % sbt.Test
 
     val logback = "ch.qos.logback" % "logback-classic" % "1.6.4" % sbt.Test
@@ -117,6 +118,8 @@ object Dependencies {
       "org.testcontainers" % "postgresql" % Versions.testContainers % sbt.Test
     val mysqlContainer =
       "org.testcontainers" % "mysql" % Versions.testContainers % sbt.Test
+    val msSQLServerContainer =
+      "org.testcontainers" % "mssqlserver" % Versions.testContainers % sbt.Test
 
     val oracleDbContainer =
       "org.testcontainers" % "oracle-xe" % Versions.testContainers % sbt.Test
@@ -187,6 +190,8 @@ object Dependencies {
         Test.postgresContainer,
         Test.mysqlDriver,
         Test.mysqlContainer,
+        Test.msSQLServerDriver,
+        Test.msSQLServerContainer,
         Test.oracleDriver,
         Test.oracleDbContainer,
         Test.logback)
@@ -211,6 +216,8 @@ object Dependencies {
         Test.postgresContainer,
         Test.mysqlDriver,
         Test.mysqlContainer,
+        Test.msSQLServerDriver,
+        Test.msSQLServerContainer,
         Test.oracleDriver,
         Test.oracleDbContainer,
         Test.logback)

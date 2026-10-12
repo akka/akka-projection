@@ -39,6 +39,7 @@ case class JdbcSettings(config: Config, executionContext: ExecutionContext) {
       case "h2-dialect"       => H2Dialect(schema, table, managementTable, useLowerCaseSchema)
       case "postgres-dialect" => PostgresDialect(schema, table, managementTable, useLowerCaseSchema)
       case "mysql-dialect"    => MySQLDialect(schema, table, managementTable)
+      case "mssql-dialect"    => MSSQLServerDialect(schema, table, managementTable)
       case "oracle-dialect"   => OracleDialect(schema, table, managementTable)
       case unknown =>
         throw new IllegalArgumentException(

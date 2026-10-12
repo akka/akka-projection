@@ -8,6 +8,7 @@ import scala.io.Source
 
 import akka.projection.jdbc.internal.Dialect
 import akka.projection.jdbc.internal.H2Dialect
+import akka.projection.jdbc.internal.MSSQLServerDialect
 import akka.projection.jdbc.internal.MySQLDialect
 import akka.projection.jdbc.internal.OracleDialect
 import akka.projection.jdbc.internal.PostgresDialect
@@ -40,6 +41,13 @@ class OffsetSchemaSpec extends AnyWordSpecLike with Matchers {
           (opt, s) => PostgresDialect(opt, s"${s}_offset_store", s"${s}_management", lowerCase = false),
           "postgres-uppercase")
       val fromSqlFile = Source.fromResource("create-table-postgres-uppercase.sql").mkString
+      normalize(fromSqlFile) shouldBe normalize(fromDialect)
+    }
+
+    "match the version used in code (MSSQL Server)" in {
+      val fromDialect =
+        asFileContent((opt, s) => MSSQLServerDialect(opt, s"${s}_offset_store", s"${s}_management"), "mssql")
+      val fromSqlFile = Source.fromResource("create-table-mssql.sql").mkString
       normalize(fromSqlFile) shouldBe normalize(fromDialect)
     }
 
