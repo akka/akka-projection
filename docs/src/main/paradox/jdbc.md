@@ -44,6 +44,11 @@ There are two settings that need to be set beforehand in your `application.conf`
 * `akka.projection.jdbc.dialect` - The dialect type indicating your database of choice. Supported dialects are: `mysql-dialect`, `postgres-dialect`, `oracle-dialect` or `h2-dialect` (testing).
 * `akka.projection.jdbc.blocking-jdbc-dispatcher.thread-pool-executor.fixed-pool-size` indicating the size of the blocking JDBC dispatcher. See also @ref:[Blocking JDBC Dispatcher](#blocking-jdbc-dispatcher).
 
+@@@ warning { title="SQL Server support removed" }
+The `mssql-dialect` has been removed and is rejected as an unknown dialect at startup.
+Stay on Akka Projection 1.6.25 if you need SQL Server.
+@@@
+
 ## Defining a JdbcSession
 
 Before using Akka Projections JDBC you must implement a `JdbcSession` @scala[trait]@java[interface]. `JdbcSession` is used to open a connection and start a transaction. A new `JdbcSession` will be created for each call to the handler. At the end of the processing, the transaction will be committed (or rolled back). 

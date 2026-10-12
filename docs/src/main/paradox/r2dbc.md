@@ -57,6 +57,11 @@ The table below shows `akka-projection-r2dbc`'s direct dependencies, and the sec
 The `akka_projection_offset_store`, `akka_projection_timestamp_offset_store` and `akka_projection_management` tables
 need to be created in the configured database:
 
+@@@ warning { title="SQL Server support removed" }
+The SQL Server dialect has been removed, because the underlying R2DBC driver never became stable. `dialect = "sqlserver"`
+is rejected as an unknown dialect at startup. Stay on Akka Projection 1.6.25 if you need SQL Server.
+@@@
+
 PostgreSQL
 :  @@snip [PostgreSQL Schema](/akka-projection-r2dbc/ddl-scripts/create_tables_postgres.sql)
 

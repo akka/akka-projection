@@ -180,6 +180,11 @@ Oracle
 H2
 :  @@snip [create-table-h2.sql](/examples/src/test/resources/create-table-h2.sql) { #create-table-h2 }
 
+@@@ warning { title="SQL Server support removed" }
+`slick.jdbc.SQLServerProfile` is no longer supported and fails at startup as an unsupported profile.
+Stay on Akka Projection 1.6.25 if you need SQL Server.
+@@@
+
 The schema can be created and dropped using the methods `SlickProjection.createTablesIfNotExists` and `SlickProjection.dropTablesIfExists`. This is particularly useful when writting tests. For production enviornments, we recommend creating the schema before deploying the application.
 
 @@@ warning { title=Important }
