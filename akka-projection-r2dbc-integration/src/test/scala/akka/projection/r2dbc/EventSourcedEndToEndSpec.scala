@@ -23,8 +23,7 @@ import akka.persistence.query.Offset
 import akka.persistence.query.TimestampOffset.toTimestampOffset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.R2dbcSettings
-import akka.persistence.r2dbc.internal.Sql.InterpolationWithAdapter
-import akka.persistence.r2dbc.internal.codec.TimestampCodec.TimestampCodecRichStatement
+import akka.persistence.r2dbc.internal.Sql.Interpolation
 import akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal
 import akka.persistence.typed.PersistenceId
 import akka.persistence.typed.scaladsl.Effect
@@ -220,8 +219,6 @@ class EventSourcedEndToEndSpec
   private val projectionSettings = R2dbcProjectionSettings(system)
   private val stringSerializer = SerializationExtension(system).serializerFor(classOf[String])
 
-  import journalSettings.codecSettings.JournalImplicits._
-
   private var processedEventsPerProjection: Map[ProjectionId, ConcurrentHashMap[String, java.lang.Boolean]] = Map.empty
 
   override protected def beforeEach(): Unit = {
@@ -258,7 +255,7 @@ class EventSourcedEndToEndSpec
         .bind(1, entityType)
         .bind(2, persistenceId)
         .bind(3, seqNr)
-        .bindTimestamp(4, timestamp)
+        .bind(4, timestamp)
         .bind(5, stringSerializer.identifier)
         .bind(6, stringSerializer.toBinary(event))
     }

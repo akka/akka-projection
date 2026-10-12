@@ -27,7 +27,7 @@ private[projection] final class H2OffsetStoreDao(
     extends PostgresOffsetStoreDao(settings, sourceProvider, system, executor, projectionId) {
   override protected def createUpsertOffsetSql(): String =
     sql"""
-      MERGE INTO ${settings.offsetTable}
+      MERGE INTO ${settings.offsetTableWithSchema}
       (projection_name, projection_key, current_offset, manifest, mergeable, last_updated)
       KEY(projection_name, projection_key)
       VALUES (?,?,?,?,?,?)
@@ -41,7 +41,7 @@ private[projection] final class H2OffsetStoreDao(
 
   override protected def createUpdateManagementStateSql(): String =
     sql"""
-     MERGE INTO ${settings.managementTable}
+     MERGE INTO ${settings.managementTableWithSchema}
      (projection_name, projection_key, paused, last_updated)
      KEY(projection_name, projection_key)
      VALUES (?,?,?,?)

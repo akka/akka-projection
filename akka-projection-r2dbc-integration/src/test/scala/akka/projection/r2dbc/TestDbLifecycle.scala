@@ -16,9 +16,6 @@ import akka.persistence.r2dbc.ConnectionFactoryProvider
 import akka.persistence.r2dbc.R2dbcSettings
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.r2dbc.internal.codec.PayloadCodec
-import akka.persistence.r2dbc.internal.codec.QueryAdapter
-import akka.persistence.r2dbc.internal.codec.TimestampCodec
-import akka.persistence.r2dbc.internal.codec.TimestampCodec.PostgresTimestampCodec
 import akka.persistence.typed.PersistenceId
 import akka.serialization.SerializationExtension
 import org.scalatest.BeforeAndAfterAll
@@ -88,11 +85,8 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
   // to be able to store events with specific timestamps
   def writeEvent(slice: Int, persistenceId: String, seqNr: Long, timestamp: Instant, event: String): Unit = {
     implicit val payloadCodec: PayloadCodec = r2dbcSettings.codecSettings.JournalImplicits.journalPayloadCodec
-    implicit val queryAdapter: QueryAdapter = r2dbcSettings.codecSettings.JournalImplicits.queryAdapter
     import PayloadCodec.RichStatement
-    import TimestampCodec.TimestampCodecRichStatement
-    import akka.persistence.r2dbc.internal.Sql.InterpolationWithAdapter
-    implicit val timestampCodec: TimestampCodec = PostgresTimestampCodec
+    import akka.persistence.r2dbc.internal.Sql.Interpolation
     val stringSerializer = SerializationExtension(typedSystem).serializerFor(classOf[String])
 
     log.debug("Write test event [{}] [{}] [{}] at time [{}]", persistenceId, seqNr, event, timestamp)
@@ -109,7 +103,7 @@ trait TestDbLifecycle extends BeforeAndAfterAll { this: Suite =>
         .bind(1, entityType)
         .bind(2, persistenceId)
         .bind(3, seqNr)
-        .bindTimestamp(4, timestamp)
+        .bind(4, timestamp)
         .bind(5, stringSerializer.identifier)
         .bindPayload(6, stringSerializer.toBinary(event))
     }

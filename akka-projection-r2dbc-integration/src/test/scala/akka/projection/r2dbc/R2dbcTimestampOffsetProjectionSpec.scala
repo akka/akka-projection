@@ -248,10 +248,9 @@ class R2dbcTimestampOffsetProjectionSpec
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-    val dialectName = system.settings.config.getConfig(settings.useConnectionFactory).getString("dialect")
 
     Await.result(r2dbcExecutor.executeDdl("beforeAll createTable") { conn =>
-      conn.createStatement(TestRepository.createTableSql(dialectName))
+      conn.createStatement(TestRepository.createTableSql)
     }, 10.seconds)
     Await.result(
       r2dbcExecutor.updateOne("beforeAll delete")(_.createStatement(s"delete from ${TestRepository.table}")),

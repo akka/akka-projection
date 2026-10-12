@@ -57,10 +57,9 @@ The table below shows `akka-projection-r2dbc`'s direct dependencies, and the sec
 The `akka_projection_offset_store`, `akka_projection_timestamp_offset_store` and `akka_projection_management` tables
 need to be created in the configured database:
 
-@@@ warning
-
-The SQL Server dialect is marked `experimental` and not yet production ready until various [issues](https://github.com/akka/akka-persistence-r2dbc/issues?q=is%3Aopen+label%3Asqlserver+label%3Abug) with the integration of the `r2dbc-mssql` plugin have been resolved.
-
+@@@ warning { title="SQL Server support removed" }
+The SQL Server dialect has been removed, because the underlying R2DBC driver never became stable. `dialect = "sqlserver"`
+is rejected as an unknown dialect at startup. Stay on Akka Projection 1.6.25 if you need SQL Server.
 @@@
 
 PostgreSQL
@@ -71,9 +70,6 @@ YugaByte
 
 H2
 :  @@snip [H2 Schema](/akka-projection-r2dbc/src/main/resources/h2-default-projection-schema.conf) { #schema }
-
-SQLServer
-:  @@snip [SQLServer Schema](/akka-projection-r2dbc/ddl-scripts/create_tables_sqlserver.sql)
 
 For H2 the schema need to be defined as the `additional-init` setting in your config. This means it is created on first
 connection instead of up front (needed as there is no way to connect to the database from outside the JVM process):
