@@ -89,10 +89,10 @@ private[projection] class PostgresOffsetStoreDao(
   /**
    * delete less than a timestamp for a given slice
    */
-  private def deleteOldTimestampOffsetSql(deleteAfterConsumed: Duration): String =
+  private val deleteOldTimestampOffsetSql: String =
     sql"""
     DELETE FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? AND timestamp_offset < ? ${whereTimestampConsumed(
-      deleteAfterConsumed)}"""
+      settings.deleteAfterConsumed)}"""
 
   // delete greater than or equal a timestamp
   private val deleteNewTimestampOffsetSql: String =
@@ -310,7 +310,7 @@ private[projection] class PostgresOffsetStoreDao(
   override def deleteOldTimestampOffset(slice: Int, until: Instant): Future[Long] = {
     r2dbcExecutor.updateOne("delete old timestamp offset") { conn =>
       conn
-        .createStatement(deleteOldTimestampOffsetSql(settings.deleteAfterConsumed))
+        .createStatement(deleteOldTimestampOffsetSql)
         .bind(0, slice)
         .bind(1, projectionId.name)
         .bind(2, until)
