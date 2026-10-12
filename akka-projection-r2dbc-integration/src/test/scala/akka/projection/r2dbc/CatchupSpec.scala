@@ -121,7 +121,7 @@ class CatchupSpec
       // note config replay-on-rejected-sequence-numbers=off
       // so if there is an invalid rejection the test will fail
 
-      if (r2dbcSettings.dialectName == "yugabyte" || r2dbcSettings.dialectName == "sqlserver")
+      if (r2dbcSettings.dialectName == "yugabyte")
         pending
 
       // increase this to 50k for more thorough testing

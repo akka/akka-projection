@@ -12,7 +12,6 @@ import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.Tag
 import org.testcontainers.containers.JdbcDatabaseContainer
-import org.testcontainers.containers.MSSQLServerContainer
 import org.testcontainers.containers.MySQLContainer
 import org.testcontainers.containers.OracleContainer
 import org.testcontainers.containers.PostgreSQLContainer
@@ -93,20 +92,6 @@ object SlickContainerOffsetStoreSpec {
         }
         """))
   }
-  class MSSQLServerSpecConfig extends ContainerJdbcSpecConfig {
-
-    val name = "MS SQL Server Database"
-    override val tag = TestTags.FlakyDb
-
-    val container = initContainer(new MSSQLServerContainer("mcr.microsoft.com/mssql/server:2022-CU13-ubuntu-22.04"))
-
-    override def config: Config =
-      super.config.withFallback(ConfigFactory.parseString("""
-        akka.projection.slick {
-           profile = "slick.jdbc.SQLServerProfile$"
-        }
-        """))
-  }
   class OracleSpecConfig extends ContainerJdbcSpecConfig {
 
     val name = "Oracle Database"
@@ -132,8 +117,5 @@ class PostgresSlickOffsetStoreLegacySchemaSpec
     extends SlickOffsetStoreSpec(new SlickContainerOffsetStoreSpec.PostgresLegacySchemaSpecConfig)
 
 class MySQLSlickOffsetStoreSpec extends SlickOffsetStoreSpec(new SlickContainerOffsetStoreSpec.MySQLSpecConfig)
-
-class MSSQLServerSlickOffsetStoreSpec
-    extends SlickOffsetStoreSpec(new SlickContainerOffsetStoreSpec.MSSQLServerSpecConfig)
 
 class OracleSlickOffsetStoreSpec extends SlickOffsetStoreSpec(new SlickContainerOffsetStoreSpec.OracleSpecConfig)

@@ -174,9 +174,6 @@ PostgreSQL
 MySQL
 :  @@snip [create-table-mysql.sql](/examples/src/test/resources/create-table-mysql.sql) { #create-table-mysql }
 
-Microsoft SQL Server
-:  @@snip [create-table-mssql.sql](/examples/src/test/resources/create-table-mssql.sql) { #create-table-mssql }
-
 Oracle
 :  @@snip [create-table-oracle.sql](/examples/src/test/resources/create-table-oracle.sql) { #create-table-oracle }
 

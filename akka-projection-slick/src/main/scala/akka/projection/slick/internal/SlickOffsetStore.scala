@@ -17,7 +17,6 @@ import akka.projection.internal.OffsetSerialization
 import akka.projection.jdbc.internal.Dialect
 import akka.projection.jdbc.internal.H2Dialect
 import akka.projection.jdbc.internal.JdbcSessionUtil
-import akka.projection.jdbc.internal.MSSQLServerDialect
 import akka.projection.jdbc.internal.MySQLDialect
 import akka.projection.jdbc.internal.OracleDialect
 import akka.projection.jdbc.internal.PostgresDialect
@@ -56,9 +55,7 @@ import slick.jdbc.JdbcProfile
         (
           PostgresDialect(slickSettings.schema, slickSettings.table, slickSettings.managementTable, useLowerCase),
           useLowerCase)
-      // mysql and Sql server are case insensitive, we favor lower case
-      case _: slick.jdbc.SQLServerProfile =>
-        (MSSQLServerDialect(slickSettings.schema, slickSettings.table, slickSettings.managementTable), true)
+      // mysql is case insensitive, we favor lower case
       case _: slick.jdbc.MySQLProfile =>
         (MySQLDialect(slickSettings.schema, slickSettings.table, slickSettings.managementTable), true)
       // oracle must always use quoted + uppercase

@@ -52,10 +52,6 @@ jobs:
           git fetch origin pull/${{ github.event.pull_request.number }}/merge:scratch
           git checkout scratch
 
-      - name: Copy license acceptance
-        run: |-
-          cp container-license-acceptance.txt akka-projection-slick-integration/src/test/resources/container-license-acceptance.txt
-
       - name: Cache Coursier cache
         # https://github.com/coursier/cache-action/releases
         uses: coursier/cache-action@v8.1.0

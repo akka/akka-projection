@@ -1,0 +1,4 @@
+# internals, removal of SQL Server dialect
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.r2dbc.internal.SqlServerDialect")
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.r2dbc.internal.SqlServerDialect$")
+ProblemFilters.exclude[MissingClassProblem]("akka.projection.r2dbc.internal.SqlServerOffsetStoreDao")

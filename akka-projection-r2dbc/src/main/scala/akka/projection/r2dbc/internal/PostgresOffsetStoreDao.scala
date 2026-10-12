@@ -19,13 +19,7 @@ import akka.actor.typed.ActorSystem
 import akka.annotation.InternalApi
 import akka.persistence.Persistence
 import akka.persistence.r2dbc.internal.R2dbcExecutor
-import akka.persistence.r2dbc.internal.Sql.InterpolationWithAdapter
-import akka.persistence.r2dbc.internal.codec.IdentityAdapter
-import akka.persistence.r2dbc.internal.codec.QueryAdapter
-import akka.persistence.r2dbc.internal.codec.TimestampCodec
-import akka.persistence.r2dbc.internal.codec.TimestampCodec.PostgresTimestampCodec
-import akka.persistence.r2dbc.internal.codec.TimestampCodec.TimestampCodecRichRow
-import akka.persistence.r2dbc.internal.codec.TimestampCodec.TimestampCodecRichStatement
+import akka.persistence.r2dbc.internal.Sql.Interpolation
 import akka.projection.BySlicesSourceProvider
 import akka.projection.ProjectionId
 import akka.projection.internal.ManagementState
@@ -53,30 +47,23 @@ private[projection] class PostgresOffsetStoreDao(
 
   private val persistenceExt = Persistence(system)
 
-  protected val timestampOffsetTable: String = settings.timestampOffsetTableWithSchema
-  protected val offsetTable: String = settings.offsetTableWithSchema
-  protected val managementTable: String = settings.managementTableWithSchema
-
-  protected implicit def queryAdapter: QueryAdapter = IdentityAdapter
-  protected implicit def timestampCodec: TimestampCodec = PostgresTimestampCodec
+  private val timestampOffsetTable: String = settings.timestampOffsetTableWithSchema
+  private val offsetTable: String = settings.offsetTableWithSchema
+  private val managementTable: String = settings.managementTableWithSchema
 
   private implicit val ec: ExecutionContext = system.executionContext
 
-  protected def createSelectTimestampOffsetSql: String =
+  private val selectTimestampOffsetSql: String =
     sql"""
     SELECT projection_key, persistence_id, seq_nr, timestamp_offset
     FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? ORDER BY timestamp_offset DESC LIMIT ?"""
 
-  private val selectTimestampOffsetSql: String = createSelectTimestampOffsetSql
-
-  protected def createSelectOneTimestampOffsetSql: String =
+  private val selectOneTimestampOffsetSql: String =
     sql"""
     SELECT seq_nr, timestamp_offset
     FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? AND persistence_id = ?
     ORDER BY seq_nr DESC
     LIMIT 1"""
-
-  private val selectOneTimestampOffsetSql: String = createSelectOneTimestampOffsetSql
 
   private val insertTimestampOffsetSql: String =
     sql"""
@@ -102,17 +89,10 @@ private[projection] class PostgresOffsetStoreDao(
   /**
    * delete less than a timestamp for a given slice
    */
-  protected def deleteOldTimestampOffsetSql(deleteAfterConsumed: Duration): String =
+  private def deleteOldTimestampOffsetSql(deleteAfterConsumed: Duration): String =
     sql"""
     DELETE FROM $timestampOffsetTable WHERE slice = ? AND projection_name = ? AND timestamp_offset < ? ${whereTimestampConsumed(
       deleteAfterConsumed)}"""
-
-  protected def bindDeleteOldTimestampOffsetSql(stmt: Statement, slice: Int, until: Instant): Statement = {
-    stmt
-      .bind(0, slice)
-      .bind(1, projectionId.name)
-      .bindTimestamp(2, until)
-  }
 
   // delete greater than or equal a timestamp
   private val deleteNewTimestampOffsetSql: String =
@@ -173,27 +153,9 @@ private[projection] class PostgresOffsetStoreDao(
       paused = excluded.paused,
       last_updated = excluded.last_updated"""
 
-  protected def bindCreateUpdateManagementStateSql(
-      stmt: Statement,
-      projectionId: ProjectionId,
-      paused: Boolean,
-      lastUpdated: Long): Statement = {
-    bindUpdateManagementStateSql(stmt, projectionId, paused, lastUpdated)
-  }
+  private val updateManagementStateSql: String = createUpdateManagementStateSql()
 
-  protected def bindUpdateManagementStateSql(
-      stmt: Statement,
-      projectionId: ProjectionId,
-      paused: Boolean,
-      lastUpdated: Long): Statement = {
-    stmt
-      .bind(0, projectionId.name)
-      .bind(1, projectionId.key)
-      .bind(2, paused)
-      .bind(3, lastUpdated)
-  }
-
-  protected def timestampOffsetBySlicesSourceProvider: BySlicesSourceProvider =
+  private def timestampOffsetBySlicesSourceProvider: BySlicesSourceProvider =
     sourceProvider match {
       case Some(provider) => provider
       case None =>
@@ -201,25 +163,24 @@ private[projection] class PostgresOffsetStoreDao(
           s"Expected BySlicesSourceProvider to be defined when TimestampOffset is used.")
     }
 
-  protected def bindSelectTimestampOffsetSql(stmt: Statement, slice: Int): Statement = {
-    stmt
-      .bind(0, slice)
-      .bind(1, projectionId.name)
-      .bind(2, settings.offsetSliceReadLimit)
-  }
-
   override def readTimestampOffset(
       slice: Int): Future[immutable.IndexedSeq[R2dbcOffsetStore.RecordWithProjectionKey]] = {
-    r2dbcExecutor.select("read timestamp offset")(conn => {
-      logger.trace("reading timestamp offset slice [{}] for [{}]", slice, projectionId)
-      bindSelectTimestampOffsetSql(conn.createStatement(selectTimestampOffsetSql), slice)
-    }, row => {
-      val projectionKey = row.get("projection_key", classOf[String])
-      val pid = row.get("persistence_id", classOf[String])
-      val seqNr = row.get("seq_nr", classOf[java.lang.Long])
-      val timestamp = row.getTimestamp("timestamp_offset")
-      R2dbcOffsetStore.RecordWithProjectionKey(R2dbcOffsetStore.Record(slice, pid, seqNr, timestamp), projectionKey)
-    })
+    r2dbcExecutor.select("read timestamp offset")(
+      conn => {
+        logger.trace("reading timestamp offset slice [{}] for [{}]", slice, projectionId)
+        conn
+          .createStatement(selectTimestampOffsetSql)
+          .bind(0, slice)
+          .bind(1, projectionId.name)
+          .bind(2, settings.offsetSliceReadLimit)
+      },
+      row => {
+        val projectionKey = row.get("projection_key", classOf[String])
+        val pid = row.get("persistence_id", classOf[String])
+        val seqNr = row.get("seq_nr", classOf[java.lang.Long])
+        val timestamp = row.get("timestamp_offset", classOf[Instant])
+        R2dbcOffsetStore.RecordWithProjectionKey(R2dbcOffsetStore.Record(slice, pid, seqNr, timestamp), projectionKey)
+      })
   }
 
   def readTimestampOffset(slice: Int, pid: String): Future[Option[R2dbcOffsetStore.Record]] = {
@@ -234,7 +195,7 @@ private[projection] class PostgresOffsetStoreDao(
       },
       row => {
         val seqNr = row.get("seq_nr", classOf[java.lang.Long])
-        val timestamp = row.getTimestamp("timestamp_offset")
+        val timestamp = row.get("timestamp_offset", classOf[Instant])
         R2dbcOffsetStore.Record(slice, pid, seqNr, timestamp)
       })
   }
@@ -275,7 +236,7 @@ private[projection] class PostgresOffsetStoreDao(
         .bind(bindStartIndex + 2, slice)
         .bind(bindStartIndex + 3, record.pid)
         .bind(bindStartIndex + 4, record.seqNr)
-        .bindTimestamp(bindStartIndex + 5, record.timestamp)
+        .bind(bindStartIndex + 5, record.timestamp)
     }
 
     require(records.nonEmpty)
@@ -323,23 +284,19 @@ private[projection] class PostgresOffsetStoreDao(
     }
   }
 
-  protected def bindUpsertOffsetSql(stmt: Statement, singleOffset: SingleOffset, toEpochMilli: Long): Statement = {
-    stmt
-      .bind(0, singleOffset.id.name)
-      .bind(1, singleOffset.id.key)
-      .bind(2, singleOffset.offsetStr)
-      .bind(3, singleOffset.manifest)
-      .bind(4, java.lang.Boolean.valueOf(singleOffset.mergeable))
-      .bind(5, toEpochMilli)
-  }
-
   override def updatePrimitiveOffsetInTx(
       connection: Connection,
       timestamp: Instant,
       storageRepresentation: StorageRepresentation): Future[Done] = {
     def upsertStmt(singleOffset: SingleOffset): Statement = {
-      val stmt = connection.createStatement(upsertOffsetSql)
-      bindUpsertOffsetSql(stmt, singleOffset, timestamp.toEpochMilli)
+      connection
+        .createStatement(upsertOffsetSql)
+        .bind(0, singleOffset.id.name)
+        .bind(1, singleOffset.id.key)
+        .bind(2, singleOffset.offsetStr)
+        .bind(3, singleOffset.manifest)
+        .bind(4, java.lang.Boolean.valueOf(singleOffset.mergeable))
+        .bind(5, timestamp.toEpochMilli)
     }
 
     val statements = storageRepresentation match {
@@ -352,8 +309,11 @@ private[projection] class PostgresOffsetStoreDao(
 
   override def deleteOldTimestampOffset(slice: Int, until: Instant): Future[Long] = {
     r2dbcExecutor.updateOne("delete old timestamp offset") { conn =>
-      val stmt = conn.createStatement(deleteOldTimestampOffsetSql(settings.deleteAfterConsumed))
-      bindDeleteOldTimestampOffsetSql(stmt, slice, until)
+      conn
+        .createStatement(deleteOldTimestampOffsetSql(settings.deleteAfterConsumed))
+        .bind(0, slice)
+        .bind(1, projectionId.name)
+        .bind(2, until)
     }
   }
 
@@ -366,7 +326,7 @@ private[projection] class PostgresOffsetStoreDao(
         .bind(0, minSlice)
         .bind(1, maxSlice)
         .bind(2, projectionId.name)
-        .bindTimestamp(3, timestamp))
+        .bind(3, timestamp))
   }
 
   override def adoptTimestampOffsets(latestBySlice: Seq[LatestBySlice]): Future[Long] = {
@@ -438,7 +398,11 @@ private[projection] class PostgresOffsetStoreDao(
   override def updateManagementState(paused: Boolean, timestamp: Instant): Future[Long] =
     r2dbcExecutor
       .updateOne("update management state") { conn =>
-        val stmt = conn.createStatement(createUpdateManagementStateSql())
-        bindCreateUpdateManagementStateSql(stmt, projectionId, paused, timestamp.toEpochMilli)
+        conn
+          .createStatement(updateManagementStateSql)
+          .bind(0, projectionId.name)
+          .bind(1, projectionId.key)
+          .bind(2, paused)
+          .bind(3, timestamp.toEpochMilli)
       }
 }
