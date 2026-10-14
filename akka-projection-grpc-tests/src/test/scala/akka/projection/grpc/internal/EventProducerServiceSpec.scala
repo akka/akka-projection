@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.Promise
+import scala.concurrent.duration._
 
 import akka.Done
 import akka.NotUsed
@@ -225,9 +226,23 @@ class EventProducerServiceSpec
   val streamId6 = "stream_id_" + entityType6
   val entityType7 = nextEntityType()
   val streamId7 = "stream_id_" + entityType7
+  val entityType8 = nextEntityType()
+  val streamId8 = "stream_id_" + entityType8
+  val entityType9 = nextEntityType()
+  val streamId9 = "stream_id_" + entityType9
+  val entityType10 = nextEntityType()
+  val streamId10 = "stream_id_" + entityType10
 
   private val eventsBySlicesQueries =
-    Map(streamId1 -> query, streamId2 -> query, streamId3 -> query, streamId6 -> query, streamId7 -> query)
+    Map(
+      streamId1 -> query,
+      streamId2 -> query,
+      streamId3 -> query,
+      streamId6 -> query,
+      streamId7 -> query,
+      streamId8 -> query,
+      streamId9 -> query,
+      streamId10 -> query)
   private val eventsBySlicesStartingFromSnapshotsQueries =
     Map(streamId4 -> query, streamId5 -> query)
   private val currentEventsByPersistenceIdQueries =
@@ -267,7 +282,10 @@ class EventProducerServiceSpec
                 originSequenceNr = env.sequenceNr,
                 version = VersionVector(ReplicaId.empty.id, env.sequenceNr),
                 concurrent = false))
-          }))
+          }),
+    EventProducerSource(entityType8, streamId8, transformation, settings),
+    EventProducerSource(entityType9, streamId9, transformation, settings),
+    EventProducerSource(entityType10, streamId10, transformation, settings))
 
   private val eventProducerService =
     new EventProducerServiceImpl(
@@ -294,6 +312,55 @@ class EventProducerServiceSpec
   }
 
   "EventProducerService" must {
+    "emit keep alive when requested by consumer" in {
+      val initReq = InitReq(streamId8, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 1000)
+      val streamIn = Source
+        .single(StreamIn(StreamIn.Message.Init(initReq)))
+        .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+      probe.request(100)
+      val testPublisher = query.testPublisher(entityType8).futureValue
+
+      val keepAlive = probe.expectNext(2.seconds)
+      keepAlive.message.isKeepAlive shouldBe true
+
+      val env1 = createEnvelope(nextPid(entityType8), 1L, "e-1")
+      testPublisher.sendNext(env1)
+      val out1 = probe.expectNext()
+      out1.getEvent.persistenceId shouldBe env1.persistenceId
+      out1.getEvent.seqNr shouldBe env1.sequenceNr
+
+      probe.expectNext(2.seconds).message.isKeepAlive shouldBe true
+    }
+
+    "not emit keep alive unless requested by consumer" in {
+      val initReq = InitReq(streamId9, 0, 1023, offset = Seq.empty)
+      val streamIn = Source
+        .single(StreamIn(StreamIn.Message.Init(initReq)))
+        .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+      probe.request(100)
+      query.testPublisher(entityType9).futureValue
+
+      probe.expectNoMessage(2.seconds)
+    }
+
+    "not emit keep alive more often than the minimum interval" in {
+      val initReq = InitReq(streamId10, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 10)
+      val streamIn = Source
+        .single(StreamIn(StreamIn.Message.Init(initReq)))
+        .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+      probe.request(100)
+      query.testPublisher(entityType10).futureValue
+
+      probe.expectNoMessage(500.millis)
+      probe.expectNext(2.seconds).message.isKeepAlive shouldBe true
+    }
+
     "emit events" in {
       val initReq = InitReq(streamId1, 0, 1023, offset = Seq.empty)
       val streamIn = Source

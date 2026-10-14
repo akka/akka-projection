@@ -119,6 +119,21 @@ No new gRPC client is created once the coordinated shutdown of the `ActorSystem`
 If there is a need to close the gRPC client before `ActorSystem` termination the `close()` method of the @apidoc[GrpcReadJournal]
 can be called. After closing the `GrpcReadJournal` instance cannot be used again.
 
+### Keep alive
+
+The event stream from the producer only carries data when there are events, and a stream that is idle for a long time
+may be closed by proxies, load balancers or firewalls in between. The gRPC client uses HTTP/2 level keep alive pings, but
+those are hop-by-hop and only keep the connection to the nearest proxy alive.
+
+The consumer can request that the producer sends application level keep alive messages at a given interval when there
+are no events, so that the connection is kept alive end-to-end. This is disabled by default and enabled with the
+`akka.projection.grpc.consumer.keep-alive-interval` configuration or `withKeepAliveInterval` on the @apidoc[GrpcQuerySettings].
+The producer must support keep alives (Akka Projections 1.6.26 or later), older producers ignore the request.
+
+Additionally, the consumer can fail the stream, so that it is restarted by the Projection, if neither events nor keep
+alive messages are received within `akka.projection.grpc.consumer.keep-alive-timeout` or `withKeepAliveTimeout`. This can be
+used to detect stale connections. Note that the stream will also fail and restart if the producer does not support keep alives.
+
 ## Producer
 
 Akka Projections gRPC provides the gRPC service implementation that is used by the consumer side. It is created with the @apidoc[EventProducer$]:

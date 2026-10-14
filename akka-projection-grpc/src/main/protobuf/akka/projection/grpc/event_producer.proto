@@ -77,6 +77,10 @@ message InitReq {
   repeated FilterCriteria filter = 5;
   ReplicaInfo replica_info = 6;
   optional string correlation_id = 7;
+  // if greater than 0 the producer will emit `StreamOut.keep_alive` messages
+  // when no events have been emitted for this many milliseconds, to keep the
+  // connection alive end-to-end through proxies and load balancers
+  int64 keep_alive_interval_millis = 8;
 }
 
 // Add filter criteria to exclude and include events for matching entities.
@@ -257,8 +261,12 @@ message StreamOut {
   oneof message {
     Event event = 1;
     FilteredEvent filtered_event = 2;
+    // only sent if requested by the consumer with `InitReq.keep_alive_interval_millis`
+    KeepAlive keep_alive = 3;
   }
 }
+
+message KeepAlive { }
 
 message Event {
   string persistence_id = 1;

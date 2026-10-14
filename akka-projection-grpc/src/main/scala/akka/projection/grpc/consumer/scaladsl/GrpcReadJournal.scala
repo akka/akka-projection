@@ -59,6 +59,7 @@ import org.slf4j.event.Level
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
@@ -448,7 +449,15 @@ final class GrpcReadJournal private (
         .futureSource {
           initFilter.map { filter =>
             val protoCriteria = toProtoFilterCriteria(filter.criteria)
-            val initReq = InitReq(streamId, minSlice, maxSlice, protoOffset, protoCriteria, replicaInfo, correlationId)
+            val initReq = InitReq(
+              streamId,
+              minSlice,
+              maxSlice,
+              protoOffset,
+              protoCriteria,
+              replicaInfo,
+              correlationId,
+              keepAliveIntervalMillis = settings.keepAliveInterval.fold(0L)(_.toMillis))
 
             Source
               .single(StreamIn(StreamIn.Message.Init(initReq)))
@@ -458,21 +467,30 @@ final class GrpcReadJournal private (
         .mapMaterializedValue(_ => NotUsed)
     }
 
-    val streamOut: Source[StreamOut, NotUsed] =
-      addRequestHeaders(currentClient().eventsBySlices())
-        .invoke(streamIn)
+    val streamOut: Source[StreamOut, NotUsed] = {
+      val invoked = addRequestHeaders(currentClient().eventsBySlices()).invoke(streamIn)
+      settings.keepAliveTimeout
+        .fold(invoked)(timeout => invoked.idleTimeout(timeout))
         .recover {
           case ex: akka.grpc.GrpcServiceException if ex.status.getCode == Status.Code.UNAVAILABLE =>
             val port = clientSettings.servicePortName.getOrElse(clientSettings.defaultPort.toString)
             throw new ConnectionException(clientSettings.serviceName, port, streamId)
+
+          case ex: TimeoutException if settings.keepAliveTimeout.isDefined =>
+            throw new RuntimeException(
+              s"No events or keep alive messages received within [${settings.keepAliveTimeout.get.toCoarsest}] " +
+              s"for gRPC event stream [$streamId]${CorrelationId.toLogText(correlationId)}, " +
+              "connection may be stale or producer does not support keep alive",
+              ex)
 
           case th: Throwable =>
             throw new RuntimeException(
               s"Failure to consume gRPC event stream for [$streamId]${CorrelationId.toLogText(correlationId)}",
               th)
         }
+    }
 
-    streamOut.map {
+    streamOut.filterNot(_.message.isKeepAlive).map {
       case StreamOut(StreamOut.Message.Event(event), _) =>
         if (log.isTraceEnabled)
           log.trace(

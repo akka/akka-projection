@@ -62,4 +62,3 @@ message ConsumerEventStart {
   ReplicaInfo replica_info = 2;
 }
 
-message KeepAlive { }

@@ -24,6 +24,7 @@ import akka.projection.grpc.internal.proto.EventTimestampRequest
 import akka.projection.grpc.internal.proto.EventTimestampResponse
 import akka.projection.grpc.internal.proto.FilteredEvent
 import akka.projection.grpc.internal.proto.InitReq
+import akka.projection.grpc.internal.proto.KeepAlive
 import akka.projection.grpc.internal.proto.LoadEventRequest
 import akka.projection.grpc.internal.proto.LoadEventResponse
 import akka.projection.grpc.internal.proto.StreamIn
@@ -40,6 +41,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
+import scala.concurrent.duration._
 import akka.persistence.FilteredPayload
 import akka.persistence.query.QueryCorrelationId
 import akka.persistence.query.typed.scaladsl.LatestEventTimestampQuery
@@ -57,6 +59,11 @@ import akka.projection.internal.CorrelationId
   val log: Logger =
     LoggerFactory.getLogger(classOf[EventProducerServiceImpl])
   private val futureDone = Future.successful(Done)
+
+  // lower bound for consumer requested keep alive interval, to protect against misconfigured consumers
+  private val MinKeepAliveInterval = 1.second
+
+  private val KeepAliveStreamOut = StreamOut(StreamOut.Message.KeepAlive(KeepAlive.defaultInstance))
 }
 
 /**
@@ -123,7 +130,20 @@ import akka.projection.internal.CorrelationId
   override def eventsBySlices(in: Source[StreamIn, NotUsed], metadata: Metadata): Source[StreamOut, NotUsed] = {
     in.prefixAndTail(1).flatMapConcat {
       case (Seq(StreamIn(StreamIn.Message.Init(init), _)), tail) =>
-        tail.via(runEventsBySlices(init, metadata))
+        val events = tail.via(runEventsBySlices(init, metadata))
+        if (init.keepAliveIntervalMillis > 0) {
+          val requested = init.keepAliveIntervalMillis.millis
+          val interval =
+            if (requested < MinKeepAliveInterval) {
+              log.debug(
+                "Consumer of stream [{}] requested keep alive interval [{}], using minimum [{}]",
+                init.streamId,
+                requested,
+                MinKeepAliveInterval)
+              MinKeepAliveInterval
+            } else requested
+          events.keepAlive(interval, () => KeepAliveStreamOut)
+        } else events
       case (Seq(), _) =>
         // if error during recovery in proxy the stream will be completed before init
         log.warn("Event stream closed before init.")
