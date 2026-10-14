@@ -12,11 +12,14 @@ import org.scalatest.wordspec.AnyWordSpecLike
 class GrpcQuerySettingsSpec extends AnyWordSpecLike with Matchers {
   "The GrpcQuerySettings" should {
     "parse from config" in {
-      val config = ConfigFactory.parseString(""" 
+      val config = ConfigFactory.parseString("""
         stream-id = "my-stream-id"
         additional-request-headers {
           "x-auth-header" = "secret"
         }
+        keep-alive-interval = 0s
+        keep-alive-timeout = 5s
+        keep-alive-failure-threshold = 3
       """)
 
       val settings = GrpcQuerySettings(config)
