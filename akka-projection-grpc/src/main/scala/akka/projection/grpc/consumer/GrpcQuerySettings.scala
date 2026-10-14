@@ -8,16 +8,16 @@ import akka.actor.ClassicActorSystemProvider
 import akka.grpc.scaladsl.Metadata
 import akka.grpc.scaladsl.MetadataBuilder
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
+import akka.projection.grpc.internal.ConfigHelpers
+import akka.projection.grpc.internal.KeepAliveSettings
 import com.typesafe.config.Config
 import scala.collection.immutable
+import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters._
+import scala.jdk.DurationConverters._
 
 import akka.annotation.InternalApi
 import akka.persistence.typed.ReplicaId
-
-import java.util.Locale
-import scala.concurrent.duration.FiniteDuration
-import scala.jdk.DurationConverters._
 
 object GrpcQuerySettings {
 
@@ -54,23 +54,12 @@ object GrpcQuerySettings {
 
     new GrpcQuerySettings(
       streamId,
-      additionalHeaders,
-      Vector.empty,
-      None,
-      keepAliveInterval = optionalDuration(config, "keep-alive-interval"),
-      keepAliveTimeout = optionalDuration(config, "keep-alive-timeout"))
+      additionalRequestMetadata = additionalHeaders,
+      initialConsumerFilter = Vector.empty,
+      fromReplica = None,
+      keepAliveInterval = ConfigHelpers.optionalDuration(config, "keep-alive-interval"),
+      keepAliveTimeout = ConfigHelpers.optionalDuration(config, "keep-alive-timeout"))
   }
-
-  /**
-   * INTERNAL API
-   */
-  @InternalApi private[akka] def optionalDuration(config: Config, path: String): Option[FiniteDuration] =
-    if (!config.hasPath(path)) None
-    else
-      config.getString(path).toLowerCase(Locale.ROOT) match {
-        case "off" | "none" | "" => None
-        case _                   => Some(config.getDuration(path).toScala)
-      }
 
   /**
    * Java API: From `Config` `akka.projection.grpc.consumer` configuration section.
@@ -125,12 +114,7 @@ final class GrpcQuerySettings private (
   require(
     streamId != "",
     "streamId must be an id exposed by the producing side but was undefined on the consuming side.")
-  require(
-    keepAliveTimeout.isEmpty || keepAliveInterval.isDefined,
-    "keepAliveTimeout can only be used together with keepAliveInterval")
-  require(
-    keepAliveTimeout.forall(timeout => keepAliveInterval.forall(_ < timeout)),
-    "keepAliveTimeout must be larger than keepAliveInterval")
+  KeepAliveSettings.validate(keepAliveInterval, keepAliveTimeout)
 
   /**
    * Additional request metadata, for authentication/authorization of the request on the remote side.
@@ -156,32 +140,38 @@ final class GrpcQuerySettings private (
 
   /**
    * Scala API: Request that the producer emits keep alive messages at this interval when there are no events,
-   * to keep the event stream connection alive end-to-end through proxies and load balancers. The producer must
-   * support keep alives (akka-projection 1.6.26 or later), older producers will ignore the request.
+   * to keep the event stream connection alive end-to-end through proxies and load balancers. Must be at least
+   * 1 second. The producer must support keep alives (akka-projection 1.6.26 or later), older producers will
+   * ignore the request.
    */
   def withKeepAliveInterval(interval: FiniteDuration): GrpcQuerySettings =
     copy(keepAliveInterval = Some(interval))
 
   /**
    * Java API: Request that the producer emits keep alive messages at this interval when there are no events,
-   * to keep the event stream connection alive end-to-end through proxies and load balancers. The producer must
-   * support keep alives (akka-projection 1.6.26 or later), older producers will ignore the request.
+   * to keep the event stream connection alive end-to-end through proxies and load balancers. Must be at least
+   * 1 second. The producer must support keep alives (akka-projection 1.6.26 or later), older producers will
+   * ignore the request.
    */
   def withKeepAliveInterval(interval: java.time.Duration): GrpcQuerySettings =
     copy(keepAliveInterval = Some(interval.toScala))
 
   /**
    * Scala API: Fail the event stream if neither events nor keep alive messages have been received within this
-   * timeout. Must be larger than the keep alive interval, and can only be used after a keep alive interval has
-   * been set. Note that the stream will also fail if the producer does not support keep alives.
+   * timeout. Can only be used after a keep alive interval has been set. This is an idle timeout on the stream,
+   * so it should be several times the keep alive interval and longer than the slowest expected projection handler
+   * or batch, otherwise the stream is restarted while the handler is busy. Note that the stream will also fail
+   * if the producer does not support keep alives.
    */
   def withKeepAliveTimeout(timeout: FiniteDuration): GrpcQuerySettings =
     copy(keepAliveTimeout = Some(timeout))
 
   /**
    * Java API: Fail the event stream if neither events nor keep alive messages have been received within this
-   * timeout. Must be larger than the keep alive interval, and can only be used after a keep alive interval has
-   * been set. Note that the stream will also fail if the producer does not support keep alives.
+   * timeout. Can only be used after a keep alive interval has been set. This is an idle timeout on the stream,
+   * so it should be several times the keep alive interval and longer than the slowest expected projection handler
+   * or batch, otherwise the stream is restarted while the handler is busy. Note that the stream will also fail
+   * if the producer does not support keep alives.
    */
   def withKeepAliveTimeout(timeout: java.time.Duration): GrpcQuerySettings =
     copy(keepAliveTimeout = Some(timeout.toScala))
@@ -191,6 +181,14 @@ final class GrpcQuerySettings private (
    */
   @InternalApi private[akka] def withFromReplica(replica: ReplicaId): GrpcQuerySettings =
     copy(fromReplica = Option(replica))
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def withKeepAlive(
+      interval: Option[FiniteDuration],
+      timeout: Option[FiniteDuration]): GrpcQuerySettings =
+    copy(keepAliveInterval = interval, keepAliveTimeout = timeout)
 
   private def copy(
       streamId: String = streamId,

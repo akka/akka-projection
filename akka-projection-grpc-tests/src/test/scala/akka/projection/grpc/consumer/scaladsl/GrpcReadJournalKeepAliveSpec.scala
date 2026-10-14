@@ -19,6 +19,7 @@ import akka.http.scaladsl.Http
 import akka.persistence.query.NoOffset
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.consumer.GrpcQuerySettings
+import akka.projection.grpc.internal.KeepAliveTimeoutException
 import akka.projection.grpc.internal.proto.CurrentEventsByPersistenceIdRequest
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApi
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
@@ -41,6 +42,7 @@ import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import akka.testkit.SocketUtil
 import com.google.protobuf.timestamp.Timestamp
+import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.should.Matchers
@@ -49,7 +51,7 @@ import org.scalatest.wordspec.AnyWordSpecLike
 object GrpcReadJournalKeepAliveSpec {
   val grpcPort: Int = SocketUtil.temporaryServerAddress("127.0.0.1").getPort
 
-  val config = ConfigFactory.parseString("""
+  val config: Config = ConfigFactory.parseString("""
     akka.loglevel = DEBUG
     akka.http.server.preview.enable-http2 = on
     """)
@@ -109,6 +111,7 @@ class GrpcReadJournalKeepAliveSpec
   private val initProbe = createTestProbe[InitReq]()
 
   private val streamWithKeepAlives = "stream-with-keep-alives"
+  private val streamWithTwoEvents = "stream-with-two-events"
   private val silentStream = "silent-stream"
 
   private val clientSettings = GrpcClientSettings.connectToServiceAt("127.0.0.1", grpcPort).withTls(false)
@@ -120,6 +123,9 @@ class GrpcReadJournalKeepAliveSpec
         // like a producer supporting keep alives, one event and then only keep alives
         Source
           .single(filteredEvent("pid-1", 1L))
+          .concat(Source.tick(0.millis, 500.millis, KeepAliveStreamOut).mapMaterializedValue(_ => NotUsed))
+      case `streamWithTwoEvents` =>
+        Source(List(filteredEvent("pid-1", 1L), filteredEvent("pid-1", 2L)))
           .concat(Source.tick(0.millis, 500.millis, KeepAliveStreamOut).mapMaterializedValue(_ => NotUsed))
       case _ =>
         // like a producer not supporting keep alives, or a stale connection
@@ -167,7 +173,32 @@ class GrpcReadJournalKeepAliveSpec
       initProbe.receiveMessage().keepAliveIntervalMillis shouldBe 1000L
 
       val error = probe.within(5.seconds)(probe.expectError())
+      error shouldBe a[KeepAliveTimeoutException]
       error.getMessage should include("No events or keep alive messages received within [2 seconds]")
+    }
+
+    "fail stream when downstream does not request within the timeout while an event is pending" in {
+      val probe = eventsBySlices(
+        GrpcQuerySettings(streamWithTwoEvents).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds))
+      probe.request(1)
+      initProbe.receiveMessage().keepAliveIntervalMillis shouldBe 1000L
+      probe.expectNext().sequenceNr shouldBe 1L
+
+      // like a slow handler with the second event pending: the keep alives behind it never pass the idle timeout
+      val error = probe.within(5.seconds)(probe.expectError())
+      error shouldBe a[KeepAliveTimeoutException]
+    }
+
+    "not fail stream when downstream does not request but no event is pending" in {
+      val probe = eventsBySlices(
+        GrpcQuerySettings(streamWithKeepAlives).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds))
+      probe.request(1)
+      initProbe.receiveMessage().keepAliveIntervalMillis shouldBe 1000L
+      probe.expectNext().persistenceId shouldBe "pid-1"
+
+      // keep alives are still dropped before the stream and keep it from timing out
+      probe.expectNoMessage(4.seconds)
+      probe.cancel()
     }
 
     "not fail silent stream when no keep alive timeout is set" in {

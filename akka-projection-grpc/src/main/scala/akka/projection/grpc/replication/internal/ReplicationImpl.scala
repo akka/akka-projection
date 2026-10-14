@@ -178,8 +178,7 @@ private[akka] object ReplicationImpl {
         case Some(metadata) => s2.withAdditionalRequestMetadata(metadata)
         case None           => s2
       }
-      val s4 = settings.keepAliveInterval.fold(s3)(interval => s3.withKeepAliveInterval(interval))
-      settings.keepAliveTimeout.fold(s4)(timeout => s4.withKeepAliveTimeout(timeout))
+      s3.withKeepAlive(settings.keepAliveInterval, settings.keepAliveTimeout)
     }
 
     val wireSerialization = new DelegateToAkkaSerialization(system)

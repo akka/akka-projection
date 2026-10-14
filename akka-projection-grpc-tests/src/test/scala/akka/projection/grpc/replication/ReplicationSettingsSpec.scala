@@ -8,8 +8,11 @@ import scala.concurrent.duration._
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.persistence.typed.ReplicaId
+import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.replication.javadsl.{ ReplicationProjectionProvider => JReplicationProjectionProvider }
 import akka.projection.grpc.replication.javadsl.{ ReplicationSettings => JReplicationSettings }
+import akka.projection.grpc.replication.scaladsl.Replica
 import akka.projection.grpc.replication.scaladsl.ReplicationProjectionProvider
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import com.typesafe.config.ConfigFactory
@@ -176,12 +179,12 @@ class ReplicationSettingsSpec
       settings.keepAliveTimeout should ===(Some(9.seconds))
     }
 
-    "default to no keep alive when created programmatically" in {
+    "Default to no keep alive when created programmatically" in {
       val settings = ReplicationSettings[MyCommand](
         "my-replicated-entity",
-        selfReplicaId = akka.persistence.typed.ReplicaId("dca"),
-        eventProducerSettings = akka.projection.grpc.producer.EventProducerSettings(system),
-        replicas = Set.empty[akka.projection.grpc.replication.scaladsl.Replica],
+        selfReplicaId = ReplicaId("dca"),
+        eventProducerSettings = EventProducerSettings(system),
+        replicas = Set.empty[Replica],
         entityEventReplicationTimeout = 10.seconds,
         parallelUpdates = 8,
         replicationProjectionProvider = null: ReplicationProjectionProvider)
@@ -194,6 +197,26 @@ class ReplicationSettingsSpec
 
       intercept[IllegalArgumentException] {
         settings.withKeepAliveTimeout(15.seconds)
+      }
+      intercept[IllegalArgumentException] {
+        settings.withKeepAliveInterval(500.millis)
+      }
+    }
+
+    "Validate keep alive settings eagerly in javadsl" in {
+      val javaSettings = JReplicationSettings.create(
+        classOf[MyCommand],
+        "my-replicated-entity",
+        // never actually used, just passed along
+        null: JReplicationProjectionProvider,
+        system)
+
+      // config sets keep-alive-interval = 3s
+      intercept[IllegalArgumentException] {
+        javaSettings.withKeepAliveTimeout(java.time.Duration.ofSeconds(1))
+      }
+      intercept[IllegalArgumentException] {
+        javaSettings.withKeepAliveInterval(java.time.Duration.ofMillis(500))
       }
     }
 

@@ -128,11 +128,16 @@ those are hop-by-hop and only keep the connection to the nearest proxy alive.
 The consumer can request that the producer sends application level keep alive messages at a given interval when there
 are no events, so that the connection is kept alive end-to-end. This is disabled by default and enabled with the
 `akka.projection.grpc.consumer.keep-alive-interval` configuration or `withKeepAliveInterval` on the @apidoc[GrpcQuerySettings].
-The producer must support keep alives (Akka Projections 1.6.26 or later), older producers ignore the request.
+The minimum interval is 1 second. The producer must support keep alives (Akka Projections 1.6.26 or later), older
+producers ignore the request.
 
 Additionally, the consumer can fail the stream, so that it is restarted by the Projection, if neither events nor keep
 alive messages are received within `akka.projection.grpc.consumer.keep-alive-timeout` or `withKeepAliveTimeout`. This can be
-used to detect stale connections. Note that the stream will also fail and restart if the producer does not support keep alives.
+used to detect stale connections. The timeout is an idle timeout on the event stream rather than a check of the connection,
+so it also triggers when the Projection handler takes longer than the timeout to process an event while further events
+are waiting. The timeout should therefore be several times the keep alive interval and longer than the slowest expected
+handler invocation or batch.
+Note that the stream will also fail and restart if the producer does not support keep alives.
 
 ## Producer
 
