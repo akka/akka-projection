@@ -87,7 +87,6 @@ object DroneEvents {
 
     val nrOfEventProducers =
       system.settings.config.getInt("local-drone-control.nr-of-event-producers")
-    val sliceRanges = Persistence(system).sliceRanges(nrOfEventProducers)
 
     // turn events into a public protocol (protobuf) type before publishing
     val eventTransformation =
@@ -112,36 +111,34 @@ object DroneEvents {
           envelope.event.isInstanceOf[Drone.CoarseGrainedLocationChanged]),
       GrpcClientSettings.fromConfig("central-drone-control"))
 
-    def projectionForPartition(
-        partition: Int): Behavior[ProjectionBehavior.Command] = {
-      val sliceRange = sliceRanges(partition)
-      val minSlice = sliceRange.min
-      val maxSlice = sliceRange.max
-
-      ProjectionBehavior(
-        R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[Drone.Event]](
-          ProjectionId("drone-event-push", s"$minSlice-$maxSlice"),
-          settings = None,
-          sourceProvider = EventSourcedProvider
-            .eventsBySlicesStartingFromSnapshots[Drone.State, Drone.Event](
-              system,
-              R2dbcReadJournal.Identifier,
-              eventProducer.eventProducerSource.entityType,
-              minSlice,
-              maxSlice,
-              // start from latest drone snapshot and don't replay history
-              { (state: Drone.State) =>
-                Drone.CoarseGrainedLocationChanged(
-                  state.coarseGrainedCoordinates.get)
-              }),
-          handler = eventProducer.handler()))
-
-    }
-
-    ShardedDaemonProcess(system).init(
+    ShardedDaemonProcess(system).initWithContext(
       "drone-event-push",
       nrOfEventProducers,
-      projectionForPartition)
+      { daemonContext =>
+        val sliceRanges =
+          Persistence(system).sliceRanges(daemonContext.totalProcesses)
+        val sliceRange = sliceRanges(daemonContext.processNumber)
+        val minSlice = sliceRange.min
+        val maxSlice = sliceRange.max
+
+        ProjectionBehavior(
+          R2dbcProjection.atLeastOnceFlow[Offset, EventEnvelope[Drone.Event]](
+            ProjectionId("drone-event-push", s"$minSlice-$maxSlice"),
+            settings = None,
+            sourceProvider = EventSourcedProvider
+              .eventsBySlicesStartingFromSnapshots[Drone.State, Drone.Event](
+                system,
+                R2dbcReadJournal.Identifier,
+                eventProducer.eventProducerSource.entityType,
+                minSlice,
+                maxSlice,
+                // start from latest drone snapshot and don't replay history
+                { (state: Drone.State) =>
+                  Drone.CoarseGrainedLocationChanged(
+                    state.coarseGrainedCoordinates.get)
+                }),
+            handler = eventProducer.handler()))
+      })
 
   }
 
