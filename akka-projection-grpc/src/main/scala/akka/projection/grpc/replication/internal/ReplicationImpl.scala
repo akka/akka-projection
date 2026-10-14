@@ -174,10 +174,12 @@ private[akka] object ReplicationImpl {
       val s = GrpcQuerySettings(settings.streamId).withFromReplica(remoteReplica.replicaId)
       val s2 =
         if (settings.initialConsumerFilter.isEmpty) s else s.withInitialConsumerFilter(settings.initialConsumerFilter)
-      remoteReplica.additionalQueryRequestMetadata match {
+      val s3 = remoteReplica.additionalQueryRequestMetadata match {
         case Some(metadata) => s2.withAdditionalRequestMetadata(metadata)
         case None           => s2
       }
+      val s4 = settings.keepAliveInterval.fold(s3)(interval => s3.withKeepAliveInterval(interval))
+      settings.keepAliveTimeout.fold(s4)(timeout => s4.withKeepAliveTimeout(timeout))
     }
 
     val wireSerialization = new DelegateToAkkaSerialization(system)

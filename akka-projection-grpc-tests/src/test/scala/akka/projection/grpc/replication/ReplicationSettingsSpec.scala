@@ -19,6 +19,11 @@ import org.scalatest.wordspec.AnyWordSpecLike
 object ReplicationSettingsSpec {
   val config = ConfigFactory
     .parseString("""
+    akka.projection.grpc.replication {
+      keep-alive-interval = 3s
+      keep-alive-timeout = 9s
+    }
+
     my-replicated-entity {
       # which of the replicas this node belongs to, should be the same
       # across the nodes of each replica Akka cluster.
@@ -166,6 +171,30 @@ class ReplicationSettingsSpec
       replicaB.grpcClientSettings.defaultPort should ===(8444)
       replicaB.grpcClientSettings.serviceName should ===("dcb.example.com")
       replicaB.consumersOnClusterRole should ===(Some("dcb-consumer"))
+
+      settings.keepAliveInterval should ===(Some(3.seconds))
+      settings.keepAliveTimeout should ===(Some(9.seconds))
+    }
+
+    "default to no keep alive when created programmatically" in {
+      val settings = ReplicationSettings[MyCommand](
+        "my-replicated-entity",
+        selfReplicaId = akka.persistence.typed.ReplicaId("dca"),
+        eventProducerSettings = akka.projection.grpc.producer.EventProducerSettings(system),
+        replicas = Set.empty[akka.projection.grpc.replication.scaladsl.Replica],
+        entityEventReplicationTimeout = 10.seconds,
+        parallelUpdates = 8,
+        replicationProjectionProvider = null: ReplicationProjectionProvider)
+      settings.keepAliveInterval should ===(None)
+      settings.keepAliveTimeout should ===(None)
+
+      val withKeepAlive = settings.withKeepAliveInterval(5.seconds).withKeepAliveTimeout(15.seconds)
+      withKeepAlive.keepAliveInterval should ===(Some(5.seconds))
+      withKeepAlive.keepAliveTimeout should ===(Some(15.seconds))
+
+      intercept[IllegalArgumentException] {
+        settings.withKeepAliveTimeout(15.seconds)
+      }
     }
 
     "Parse from config with javadsl" in {
@@ -198,6 +227,8 @@ class ReplicationSettingsSpec
       }
 
       converted.entityEventReplicationTimeout should ===(settings.entityEventReplicationTimeout)
+      converted.keepAliveInterval should ===(Some(3.seconds))
+      converted.keepAliveTimeout should ===(Some(9.seconds))
       converted.entityTypeKey === (settings.entityTypeKey)
       converted.eventProducerInterceptor === (settings.eventProducerInterceptor)
       converted.projectionProvider === (settings.projectionProvider)

@@ -28,12 +28,14 @@ import java.util.function.Predicate
 import java.util.{ Set => JSet }
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.consumer.ConsumerFilter
+import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.internal.TopicMatcher
 import akka.projection.grpc.replication.internal.ReplicationProjectionProviderAdapter
 
 import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters._
 import scala.jdk.DurationConverters._
+import scala.jdk.OptionConverters._
 
 object ReplicationSettings {
 
@@ -83,7 +85,9 @@ object ReplicationSettings {
       // no system config to get defaults from, repeating config file defaults
       edgeReplicationDeliveryRetries = 3,
       edgeReplicationDeliveryMinBackoff = 250.millis.toJava,
-      edgeReplicationDeliveryMaxBackoff = 5.seconds.toJava)
+      edgeReplicationDeliveryMaxBackoff = 5.seconds.toJava,
+      keepAliveInterval = Optional.empty(),
+      keepAliveTimeout = Optional.empty())
   }
 
   /**
@@ -142,7 +146,11 @@ object ReplicationSettings {
       initialConsumerFilter = Collections.emptyList,
       edgeReplicationDeliveryRetries = replicationConfig.getInt("edge-replication-delivery-retries"),
       edgeReplicationDeliveryMinBackoff = replicationConfig.getDuration("edge-replication-delivery-min-backoff"),
-      edgeReplicationDeliveryMaxBackoff = replicationConfig.getDuration("edge-replication-delivery-max-backoff"))
+      edgeReplicationDeliveryMaxBackoff = replicationConfig.getDuration("edge-replication-delivery-max-backoff"),
+      keepAliveInterval =
+        GrpcQuerySettings.optionalDuration(replicationConfig, "keep-alive-interval").map(_.toJava).toJava,
+      keepAliveTimeout =
+        GrpcQuerySettings.optionalDuration(replicationConfig, "keep-alive-timeout").map(_.toJava).toJava)
   }
 }
 
@@ -168,7 +176,9 @@ final class ReplicationSettings[Command] private (
     val initialConsumerFilter: JList[ConsumerFilter.FilterCriteria],
     val edgeReplicationDeliveryRetries: Int,
     val edgeReplicationDeliveryMinBackoff: Duration,
-    val edgeReplicationDeliveryMaxBackoff: Duration) {
+    val edgeReplicationDeliveryMaxBackoff: Duration,
+    val keepAliveInterval: Optional[Duration],
+    val keepAliveTimeout: Optional[Duration]) {
 
   def withSelfReplicaId(selfReplicaId: ReplicaId): ReplicationSettings[Command] =
     copy(selfReplicaId = selfReplicaId)
@@ -256,6 +266,22 @@ final class ReplicationSettings[Command] private (
   def withEdgeReplicationDeliveryMaxBackoff(maxBackoff: Duration): ReplicationSettings[Command] =
     copy(edgeReplicationDeliveryMaxBackoff = maxBackoff)
 
+  /**
+   * Request that the other replicas emit keep alive messages at this interval on the replication streams when
+   * there are no events, to keep the connections alive end-to-end through proxies and load balancers.
+   * The other replicas must support keep alives (akka-projection 1.6.26 or later), older versions ignore the request.
+   */
+  def withKeepAliveInterval(interval: Duration): ReplicationSettings[Command] =
+    copy(keepAliveInterval = Optional.of(interval))
+
+  /**
+   * Fail and restart a replication stream if neither events nor keep alive messages have been received within this
+   * timeout. Must be larger than the keep alive interval, and can only be used after a keep alive interval has
+   * been set. Note that the stream will also fail if the other replica does not support keep alives.
+   */
+  def withKeepAliveTimeout(timeout: Duration): ReplicationSettings[Command] =
+    copy(keepAliveTimeout = Optional.of(timeout))
+
   private def copy(
       selfReplicaId: ReplicaId = selfReplicaId,
       entityTypeKey: EntityTypeKey[Command] = entityTypeKey,
@@ -274,7 +300,9 @@ final class ReplicationSettings[Command] private (
       initialConsumerFilter: JList[ConsumerFilter.FilterCriteria] = initialConsumerFilter,
       edgeReplicationDeliveryRetries: Int = edgeReplicationDeliveryRetries,
       edgeReplicationDeliveryMinBackoff: Duration = edgeReplicationDeliveryMinBackoff,
-      edgeReplicationDeliveryMaxBackoff: Duration = edgeReplicationDeliveryMaxBackoff): ReplicationSettings[Command] =
+      edgeReplicationDeliveryMaxBackoff: Duration = edgeReplicationDeliveryMaxBackoff,
+      keepAliveInterval: Optional[Duration] = keepAliveInterval,
+      keepAliveTimeout: Optional[Duration] = keepAliveTimeout): ReplicationSettings[Command] =
     new ReplicationSettings[Command](
       selfReplicaId,
       entityTypeKey,
@@ -291,7 +319,9 @@ final class ReplicationSettings[Command] private (
       initialConsumerFilter,
       edgeReplicationDeliveryRetries,
       edgeReplicationDeliveryMinBackoff,
-      edgeReplicationDeliveryMaxBackoff)
+      edgeReplicationDeliveryMaxBackoff,
+      keepAliveInterval,
+      keepAliveTimeout)
 
   override def toString =
     s"ReplicationSettings($selfReplicaId, $entityTypeKey, $streamId, ${otherReplicas.asScala.mkString(", ")})"
@@ -300,8 +330,8 @@ final class ReplicationSettings[Command] private (
    * INTERNAL API
    */
   @InternalApi
-  private[akka] def toScala: SReplicationSettings[Command] =
-    SReplicationSettings[Command](
+  private[akka] def toScala: SReplicationSettings[Command] = {
+    val scalaSettings = SReplicationSettings[Command](
       entityTypeKey = entityTypeKey.asScala,
       selfReplicaId = selfReplicaId,
       eventProducerSettings = eventProducerSettings,
@@ -315,5 +345,9 @@ final class ReplicationSettings[Command] private (
       .withEdgeReplicationDeliveryRetries(edgeReplicationDeliveryRetries)
       .withEdgeReplicationDeliveryMinBackoff(edgeReplicationDeliveryMinBackoff.toScala)
       .withEdgeReplicationDeliveryMaxBackoff(edgeReplicationDeliveryMaxBackoff.toScala)
+    val withInterval =
+      keepAliveInterval.toScala.fold(scalaSettings)(i => scalaSettings.withKeepAliveInterval(i.toScala))
+    keepAliveTimeout.toScala.fold(withInterval)(t => withInterval.withKeepAliveTimeout(t.toScala))
+  }
 
 }
