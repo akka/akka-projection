@@ -28,7 +28,8 @@ import java.util.function.Predicate
 import java.util.{ Set => JSet }
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.consumer.ConsumerFilter
-import akka.projection.grpc.consumer.GrpcQuerySettings
+import akka.projection.grpc.internal.ConfigHelpers
+import akka.projection.grpc.internal.KeepAliveSettings
 import akka.projection.grpc.internal.TopicMatcher
 import akka.projection.grpc.replication.internal.ReplicationProjectionProviderAdapter
 
@@ -147,10 +148,8 @@ object ReplicationSettings {
       edgeReplicationDeliveryRetries = replicationConfig.getInt("edge-replication-delivery-retries"),
       edgeReplicationDeliveryMinBackoff = replicationConfig.getDuration("edge-replication-delivery-min-backoff"),
       edgeReplicationDeliveryMaxBackoff = replicationConfig.getDuration("edge-replication-delivery-max-backoff"),
-      keepAliveInterval =
-        GrpcQuerySettings.optionalDuration(replicationConfig, "keep-alive-interval").map(_.toJava).toJava,
-      keepAliveTimeout =
-        GrpcQuerySettings.optionalDuration(replicationConfig, "keep-alive-timeout").map(_.toJava).toJava)
+      keepAliveInterval = ConfigHelpers.optionalDuration(replicationConfig, "keep-alive-interval").map(_.toJava).toJava,
+      keepAliveTimeout = ConfigHelpers.optionalDuration(replicationConfig, "keep-alive-timeout").map(_.toJava).toJava)
   }
 }
 
@@ -179,6 +178,8 @@ final class ReplicationSettings[Command] private (
     val edgeReplicationDeliveryMaxBackoff: Duration,
     val keepAliveInterval: Optional[Duration],
     val keepAliveTimeout: Optional[Duration]) {
+
+  KeepAliveSettings.validate(keepAliveInterval.toScala.map(_.toScala), keepAliveTimeout.toScala.map(_.toScala))
 
   def withSelfReplicaId(selfReplicaId: ReplicaId): ReplicationSettings[Command] =
     copy(selfReplicaId = selfReplicaId)
@@ -268,16 +269,19 @@ final class ReplicationSettings[Command] private (
 
   /**
    * Request that the other replicas emit keep alive messages at this interval on the replication streams when
-   * there are no events, to keep the connections alive end-to-end through proxies and load balancers.
-   * The other replicas must support keep alives (akka-projection 1.6.26 or later), older versions ignore the request.
+   * there are no events, to keep the connections alive end-to-end through proxies and load balancers. Must be
+   * at least 1 second. The other replicas must support keep alives (akka-projection 1.6.26 or later), older
+   * versions ignore the request.
    */
   def withKeepAliveInterval(interval: Duration): ReplicationSettings[Command] =
     copy(keepAliveInterval = Optional.of(interval))
 
   /**
    * Fail and restart a replication stream if neither events nor keep alive messages have been received within this
-   * timeout. Must be larger than the keep alive interval, and can only be used after a keep alive interval has
-   * been set. Note that the stream will also fail if the other replica does not support keep alives.
+   * timeout. Can only be used after a keep alive interval has been set. This is an idle timeout on the stream, so it
+   * should be several times the keep alive interval and longer than the slowest expected replication handler,
+   * otherwise the stream is restarted while the handler is busy. Note that the stream will also fail if the other
+   * replica does not support keep alives.
    */
   def withKeepAliveTimeout(timeout: Duration): ReplicationSettings[Command] =
     copy(keepAliveTimeout = Optional.of(timeout))
@@ -345,9 +349,12 @@ final class ReplicationSettings[Command] private (
       .withEdgeReplicationDeliveryRetries(edgeReplicationDeliveryRetries)
       .withEdgeReplicationDeliveryMinBackoff(edgeReplicationDeliveryMinBackoff.toScala)
       .withEdgeReplicationDeliveryMaxBackoff(edgeReplicationDeliveryMaxBackoff.toScala)
-    val withInterval =
-      keepAliveInterval.toScala.fold(scalaSettings)(i => scalaSettings.withKeepAliveInterval(i.toScala))
-    keepAliveTimeout.toScala.fold(withInterval)(t => withInterval.withKeepAliveTimeout(t.toScala))
+    (keepAliveInterval.toScala, keepAliveTimeout.toScala) match {
+      case (Some(interval), Some(timeout)) =>
+        scalaSettings.withKeepAliveInterval(interval.toScala).withKeepAliveTimeout(timeout.toScala)
+      case (Some(interval), None) => scalaSettings.withKeepAliveInterval(interval.toScala)
+      case _                      => scalaSettings
+    }
   }
 
 }

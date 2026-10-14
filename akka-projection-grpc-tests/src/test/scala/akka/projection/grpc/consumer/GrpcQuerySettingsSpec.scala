@@ -4,12 +4,12 @@
 
 package akka.projection.grpc.consumer
 
+import scala.concurrent.duration._
+
 import akka.grpc.scaladsl.StringEntry
 import com.typesafe.config.ConfigFactory
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
-
-import scala.concurrent.duration._
 
 class GrpcQuerySettingsSpec extends AnyWordSpecLike with Matchers {
   "The GrpcQuerySettings" should {
@@ -62,6 +62,27 @@ class GrpcQuerySettingsSpec extends AnyWordSpecLike with Matchers {
       intercept[IllegalArgumentException] {
         GrpcQuerySettings("my-stream-id").withKeepAliveInterval(6.seconds).withKeepAliveTimeout(6.seconds)
       }
+    }
+
+    "reject keep alive interval below the producer minimum" in {
+      intercept[IllegalArgumentException] {
+        GrpcQuerySettings("my-stream-id").withKeepAliveInterval(500.millis)
+      }
+      intercept[IllegalArgumentException] {
+        GrpcQuerySettings("my-stream-id").withKeepAliveInterval(Duration.Zero)
+      }
+    }
+
+    "parse explicitly disabled keep alive from config" in {
+      val config = ConfigFactory.parseString("""
+        stream-id = "my-stream-id"
+        keep-alive-interval = off
+        keep-alive-timeout = none
+      """).withFallback(defaultConfig)
+
+      val settings = GrpcQuerySettings(config)
+      settings.keepAliveInterval shouldBe None
+      settings.keepAliveTimeout shouldBe None
     }
   }
 

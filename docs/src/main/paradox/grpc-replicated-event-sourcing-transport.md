@@ -130,7 +130,8 @@ that the other replicas send application level keep alive messages when there ar
 Optionally `akka.projection.grpc.replication.keep-alive-timeout` or `withKeepAliveTimeout` fails and restarts a
 replication stream when neither events nor keep alive messages are received within the timeout. Both are disabled by default.
 The other replicas must run Akka Projections 1.6.26 or later, older versions ignore the request, which with the timeout
-enabled means idle streams will be restarted. See @ref:[Keep alive](grpc.md#keep-alive) for details.
+enabled means idle streams will be restarted. When upgrading, enable the timeout only after all replicas run a version
+with keep alive support. See @ref:[Keep alive](grpc.md#keep-alive) for details on the minimum interval and how to size the timeout.
 
 ### Fully connected topology
 

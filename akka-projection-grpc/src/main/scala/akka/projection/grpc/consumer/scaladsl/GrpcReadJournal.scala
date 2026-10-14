@@ -30,6 +30,7 @@ import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
 import akka.projection.grpc.internal.ProjectionGrpcSerialization
 import akka.projection.grpc.internal.ConnectionException
+import akka.projection.grpc.internal.KeepAliveTimeoutException
 import akka.projection.grpc.internal.ProtoAnySerialization
 import akka.projection.grpc.internal.ProtobufProtocolConversions
 import akka.projection.grpc.internal.proto.Event
@@ -46,6 +47,7 @@ import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
 import akka.projection.internal.CanTriggerReplay
 import akka.stream.OverflowStrategy
+import akka.stream.StreamIdleTimeoutException
 import akka.stream.scaladsl.Source
 import akka.util.Timeout
 import com.google.protobuf.Descriptors
@@ -57,7 +59,6 @@ import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
 
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
@@ -411,25 +412,26 @@ final class GrpcReadJournal private (
 
     val streamOut: Source[StreamOut, NotUsed] = {
       val invoked = addRequestHeaders(client.eventsBySlices()).invoke(streamIn)
+      // single recover so that the catch-all does not wrap the keep alive timeout failure
+      val keepAliveTimeoutFailure: PartialFunction[Throwable, StreamOut] = settings.keepAliveTimeout match {
+        case Some(timeout) => {
+          case ex: StreamIdleTimeoutException =>
+            throw new KeepAliveTimeoutException(streamId, timeout, correlationId, ex)
+        }
+        case None => PartialFunction.empty
+      }
       settings.keepAliveTimeout
         .fold(invoked)(timeout => invoked.idleTimeout(timeout))
-        .recover {
+        .recover(keepAliveTimeoutFailure.orElse {
           case ex: akka.grpc.GrpcServiceException if ex.status.getCode == Status.Code.UNAVAILABLE =>
             val port = clientSettings.servicePortName.getOrElse(clientSettings.defaultPort.toString)
             throw new ConnectionException(clientSettings.serviceName, port, streamId)
-
-          case ex: TimeoutException if settings.keepAliveTimeout.isDefined =>
-            throw new RuntimeException(
-              s"No events or keep alive messages received within [${settings.keepAliveTimeout.get.toCoarsest}] " +
-              s"for gRPC event stream [$streamId]${CorrelationId.toLogText(correlationId)}, " +
-              "connection may be stale or producer does not support keep alive",
-              ex)
 
           case th: Throwable =>
             throw new RuntimeException(
               s"Failure to consume gRPC event stream for [$streamId]${CorrelationId.toLogText(correlationId)}",
               th)
-        }
+        })
     }
 
     streamOut.filterNot(_.message.isKeepAlive).map {

@@ -60,9 +60,6 @@ import akka.projection.internal.CorrelationId
     LoggerFactory.getLogger(classOf[EventProducerServiceImpl])
   private val futureDone = Future.successful(Done)
 
-  // lower bound for consumer requested keep alive interval, to protect against misconfigured consumers
-  private val MinKeepAliveInterval = 1.second
-
   private val KeepAliveStreamOut = StreamOut(StreamOut.Message.KeepAlive(KeepAlive.defaultInstance))
 }
 
@@ -130,20 +127,7 @@ import akka.projection.internal.CorrelationId
   override def eventsBySlices(in: Source[StreamIn, NotUsed], metadata: Metadata): Source[StreamOut, NotUsed] = {
     in.prefixAndTail(1).flatMapConcat {
       case (Seq(StreamIn(StreamIn.Message.Init(init), _)), tail) =>
-        val events = tail.via(runEventsBySlices(init, metadata))
-        if (init.keepAliveIntervalMillis > 0) {
-          val requested = init.keepAliveIntervalMillis.millis
-          val interval =
-            if (requested < MinKeepAliveInterval) {
-              log.debug(
-                "Consumer of stream [{}] requested keep alive interval [{}], using minimum [{}]",
-                init.streamId,
-                requested,
-                MinKeepAliveInterval)
-              MinKeepAliveInterval
-            } else requested
-          events.keepAlive(interval, () => KeepAliveStreamOut)
-        } else events
+        withKeepAlive(init, tail.via(runEventsBySlices(init, metadata)))
       case (Seq(), _) =>
         // if error during recovery in proxy the stream will be completed before init
         log.warn("Event stream closed before init.")
@@ -157,6 +141,20 @@ import akka.projection.internal.CorrelationId
         throw new IllegalStateException(s"Unexpected Seq prefix with [${seq.size}] elements.")
     }
   }
+
+  private def withKeepAlive(init: InitReq, events: Source[StreamOut, NotUsed]): Source[StreamOut, NotUsed] =
+    if (init.keepAliveIntervalMillis <= 0) events
+    else {
+      val requested = init.keepAliveIntervalMillis.millis
+      val interval = requested.max(KeepAliveSettings.MinInterval)
+      if (interval != requested)
+        log.debug(
+          "Consumer of stream [{}] requested keep alive interval [{}], using minimum [{}]",
+          init.streamId,
+          requested,
+          interval)
+      events.keepAlive(interval, () => KeepAliveStreamOut)
+    }
 
   private def runEventsBySlices(init: InitReq, metadata: Metadata): Flow[StreamIn, StreamOut, NotUsed] = {
     val futureFlow = intercept(init.streamId, metadata).map { _ =>

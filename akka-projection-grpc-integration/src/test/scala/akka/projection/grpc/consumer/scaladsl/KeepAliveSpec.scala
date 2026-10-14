@@ -25,29 +25,19 @@ import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.SocketUtil
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 
 object KeepAliveSpec {
-  val grpcPort: Int = SocketUtil.temporaryServerAddress("127.0.0.1").getPort
-
-  val config: Config = ConfigFactory
-    .parseString(s"""
+  val config: Config =
+    ConfigFactory.parseString("""
     akka.loglevel = DEBUG
-    akka.http.server.preview.enable-http2 = on
-    akka.persistence.r2dbc {
-      query {
-        refresh-interval = 500 millis
-        backtracking.behind-current-time = 3 seconds
-      }
-    }
-    akka.projection.grpc {
-      producer {
-        query-plugin-id = "akka.persistence.r2dbc.query"
-      }
+    # low latency queries so that events show up promptly after the idle period
+    akka.persistence.r2dbc.query {
+      refresh-interval = 500 millis
+      backtracking.behind-current-time = 3 seconds
     }
     akka.actor.testkit.typed.filter-leeway = 10s
     """)
@@ -60,12 +50,12 @@ class KeepAliveSpec(testContainerConf: TestContainerConf)
     with TestData
     with BeforeAndAfterAll
     with LogCapturing {
-  import KeepAliveSpec._
 
   def this() = this(new TestContainerConf)
 
   override def typedSystem: ActorSystem[_] = system
 
+  private val grpcPort = testContainerConf.grpcPort
   private val entityType = nextEntityType()
   private val streamId = "stream_id_keep_alive"
   private val pid = nextPid(entityType)
@@ -87,7 +77,7 @@ class KeepAliveSpec(testContainerConf: TestContainerConf)
     testContainerConf.stop()
   }
 
-  "A gRPC Projection with keep alive" must {
+  "GrpcReadJournal with keep alive" must {
     "keep the event stream alive while idle" in {
       val replyProbe = createTestProbe[Done]()
       val entity = spawn(TestEntity(pid))

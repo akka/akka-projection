@@ -312,55 +312,6 @@ class EventProducerServiceSpec
   }
 
   "EventProducerService" must {
-    "emit keep alive when requested by consumer" in {
-      val initReq = InitReq(streamId8, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 1000)
-      val streamIn = Source
-        .single(StreamIn(StreamIn.Message.Init(initReq)))
-        .concat(Source.maybe)
-
-      val probe = runEventsBySlices(streamIn)
-      probe.request(100)
-      val testPublisher = query.testPublisher(entityType8).futureValue
-
-      val keepAlive = probe.expectNext(2.seconds)
-      keepAlive.message.isKeepAlive shouldBe true
-
-      val env1 = createEnvelope(nextPid(entityType8), 1L, "e-1")
-      testPublisher.sendNext(env1)
-      val out1 = probe.expectNext()
-      out1.getEvent.persistenceId shouldBe env1.persistenceId
-      out1.getEvent.seqNr shouldBe env1.sequenceNr
-
-      probe.expectNext(2.seconds).message.isKeepAlive shouldBe true
-    }
-
-    "not emit keep alive unless requested by consumer" in {
-      val initReq = InitReq(streamId9, 0, 1023, offset = Seq.empty)
-      val streamIn = Source
-        .single(StreamIn(StreamIn.Message.Init(initReq)))
-        .concat(Source.maybe)
-
-      val probe = runEventsBySlices(streamIn)
-      probe.request(100)
-      query.testPublisher(entityType9).futureValue
-
-      probe.expectNoMessage(2.seconds)
-    }
-
-    "not emit keep alive more often than the minimum interval" in {
-      val initReq = InitReq(streamId10, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 10)
-      val streamIn = Source
-        .single(StreamIn(StreamIn.Message.Init(initReq)))
-        .concat(Source.maybe)
-
-      val probe = runEventsBySlices(streamIn)
-      probe.request(100)
-      query.testPublisher(entityType10).futureValue
-
-      probe.expectNoMessage(500.millis)
-      probe.expectNext(2.seconds).message.isKeepAlive shouldBe true
-    }
-
     "emit events" in {
       val initReq = InitReq(streamId1, 0, 1023, offset = Seq.empty)
       val streamIn = Source
@@ -740,6 +691,57 @@ class EventProducerServiceSpec
           .futureValue
       events.size shouldBe 3
       events.map(_.getEvent.persistenceId).toSet shouldBe Set(persistenceId.id)
+    }
+
+    "emit keep alive when requested by consumer" in {
+      val initReq = InitReq(streamId8, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 1000)
+      val streamIn = Source
+        .single(StreamIn(StreamIn.Message.Init(initReq)))
+        .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+      probe.request(100)
+      val testPublisher = query.testPublisher(entityType8).futureValue
+
+      val keepAlive = probe.expectNext(2.seconds)
+      keepAlive.message.isKeepAlive shouldBe true
+
+      val env1 = createEnvelope(nextPid(entityType8), 1L, "e-1")
+      testPublisher.sendNext(env1)
+      val out1 = probe.expectNext()
+      out1.getEvent.persistenceId shouldBe env1.persistenceId
+      out1.getEvent.seqNr shouldBe env1.sequenceNr
+
+      probe.expectNext(2.seconds).message.isKeepAlive shouldBe true
+    }
+
+    "not emit keep alive unless requested by consumer" in {
+      val initReq = InitReq(streamId9, 0, 1023, offset = Seq.empty)
+      val streamIn = Source
+        .single(StreamIn(StreamIn.Message.Init(initReq)))
+        .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+      probe.request(100)
+      query.testPublisher(entityType9).futureValue
+
+      probe.expectNoMessage(2.seconds)
+    }
+
+    "not emit keep alive more often than the minimum interval" in {
+      val initReq = InitReq(streamId10, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 10)
+      val streamIn = Source
+        .single(StreamIn(StreamIn.Message.Init(initReq)))
+        .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+      probe.request(100)
+      query.testPublisher(entityType10).futureValue
+
+      probe.expectNext(2.seconds).message.isKeepAlive shouldBe true
+      val firstKeepAlive = System.nanoTime()
+      probe.expectNext(2.seconds).message.isKeepAlive shouldBe true
+      (System.nanoTime() - firstKeepAlive).nanos should be >= 900.millis
     }
 
   }
