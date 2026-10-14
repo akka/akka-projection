@@ -61,7 +61,10 @@ object GrpcQuerySettings {
       keepAliveTimeout = optionalDuration(config, "keep-alive-timeout"))
   }
 
-  private def optionalDuration(config: Config, path: String): Option[FiniteDuration] =
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def optionalDuration(config: Config, path: String): Option[FiniteDuration] =
     if (!config.hasPath(path)) None
     else
       config.getString(path).toLowerCase(Locale.ROOT) match {

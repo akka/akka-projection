@@ -121,6 +121,17 @@ and other connection options as when using Akka gRPC directly. For more details 
 It is also possible to set up @apidoc[akka.projection.grpc.replication.*.ReplicationSettings] through APIs only and not rely
 on the configuration file at all.
 
+#### Keep alive
+
+Replication streams between replicas that are idle for a long time may be closed by proxies, load balancers or firewalls
+in between, and HTTP/2 level keep alive pings only cover the connection to the nearest proxy. A replica can request
+that the other replicas send application level keep alive messages when there are no events by enabling
+`akka.projection.grpc.replication.keep-alive-interval` or `withKeepAliveInterval` in @apidoc[ReplicationSettings].
+Optionally `akka.projection.grpc.replication.keep-alive-timeout` or `withKeepAliveTimeout` fails and restarts a
+replication stream when neither events nor keep alive messages are received within the timeout. Both are disabled by default.
+The other replicas must run Akka Projections 1.6.26 or later, older versions ignore the request, which with the timeout
+enabled means idle streams will be restarted. See @ref:[Keep alive](grpc.md#keep-alive) for details.
+
 ### Fully connected topology
 
 In a network topology where each replica cluster can connect to each other replica cluster the configuration should
