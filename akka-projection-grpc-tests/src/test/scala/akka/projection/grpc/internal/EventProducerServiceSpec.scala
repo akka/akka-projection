@@ -796,6 +796,33 @@ class EventProducerServiceSpec
       probe.cancel()
     }
 
+    "not send keep alive before the interceptor has accepted the stream" in {
+      val rejectingProducerService =
+        new EventProducerServiceImpl(
+          system,
+          eventsBySlicesQueries,
+          eventsBySlicesStartingFromSnapshotsQueries,
+          currentEventsByPersistenceIdQueries,
+          currentEventsByPersistenceIdStartingFromSnapshotQueries,
+          eventProducerSources,
+          Some(new EventProducerInterceptor {
+            def intercept(streamId: String, requestMetadata: Metadata): Future[Done] =
+              Future.failed(new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("rejected")))
+          }))
+      val initReq = InitReq(streamId9, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 1000)
+
+      // Sink.head would succeed on a keep alive emitted before the rejection
+      val failure = rejectingProducerService
+        .eventsBySlices(
+          Source.single(StreamIn(StreamIn.Message.Init(initReq))).concat(Source.maybe),
+          MetadataBuilder.empty)
+        .runWith(Sink.head)
+        .failed
+        .futureValue
+      failure shouldBe a[GrpcServiceException]
+      failure.asInstanceOf[GrpcServiceException].status.getCode shouldBe Status.Code.PERMISSION_DENIED
+    }
+
     "not fail stream when the consumer never sends keep alives" in {
       val initReq =
         InitReq(streamId13, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 1000, keepAliveTimeoutMillis = 2000)

@@ -121,6 +121,11 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
   }
   private val testSourceIterator = testSources.iterator
 
+  // overridden by IntegrationWithKeepAliveSpec
+  protected def grpcQuerySettings(streamId: String): GrpcQuerySettings =
+    GrpcQuerySettings(streamId).withAdditionalRequestMetadata(
+      new MetadataBuilder().addText("x-secret", "top_secret").build())
+
   class TestFixture {
     val testSource = testSourceIterator.next()
     def streamId = testSource.streamId
@@ -137,8 +142,7 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
       EventSourcedProvider.eventsBySlices[String](
         system,
         GrpcReadJournal(
-          GrpcQuerySettings(streamId).withAdditionalRequestMetadata(
-            new MetadataBuilder().addText("x-secret", "top_secret").build()),
+          grpcQuerySettings(streamId),
           GrpcClientSettings
             .connectToServiceAt("127.0.0.1", grpcPort)
             .withTls(false),
@@ -464,8 +468,7 @@ class IntegrationSpec(testContainerConf: TestContainerConf)
     val sourceProvider2 = EventSourcedProvider.eventsBySlices[String](
       system,
       GrpcReadJournal(
-        GrpcQuerySettings(streamId) // same streamId
-          .withAdditionalRequestMetadata(new MetadataBuilder().addText("x-secret", "top_secret").build()),
+        grpcQuerySettings(streamId), // same streamId
         GrpcClientSettings
           .connectToServiceAt("127.0.0.1", grpcPort)
           .withTls(false),
