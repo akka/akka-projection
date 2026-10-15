@@ -7,7 +7,6 @@ package akka.projection.grpc.internal
 import scala.concurrent.duration._
 
 import akka.annotation.InternalApi
-import akka.projection.grpc.internal.proto.StreamOut
 import akka.stream.Attributes
 import akka.stream.FlowShape
 import akka.stream.Inlet
@@ -32,26 +31,27 @@ import akka.stream.stage.TimerGraphStageLogic
 /**
  * INTERNAL API
  *
- * Drops keep alive messages from the producer and optionally fails the stream when the producer does not answer
- * demand within the timeout. Time is measured from pull to the next push, so a consumer that is busy and not
- * pulling never times out. The timeout is armed by the first keep alive, so producers without keep alive
- * support never trigger it.
+ * Drops keep alive messages from the other side and optionally fails the stream when the other side does not
+ * answer demand within the timeout. Time is measured from pull to the next push, so a downstream that is busy
+ * and not pulling never causes a timeout. The timeout is armed by the first keep alive, so a peer without keep
+ * alive support never triggers it. Used on both the consumer side (StreamOut) and the producer side (StreamIn).
  */
-@InternalApi private[akka] final class KeepAliveStage(
-    streamId: String,
+@InternalApi private[akka] final class KeepAliveStage[T](
+    isKeepAlive: T => Boolean,
     timeout: Option[FiniteDuration],
-    correlationId: Option[String])
-    extends GraphStage[FlowShape[StreamOut, StreamOut]] {
+    timeoutFailure: FiniteDuration => Throwable,
+    onFirstKeepAlive: () => Unit)
+    extends GraphStage[FlowShape[T, T]] {
   import KeepAliveStage._
 
-  private val in = Inlet[StreamOut]("KeepAliveStage.in")
-  private val out = Outlet[StreamOut]("KeepAliveStage.out")
-  override val shape: FlowShape[StreamOut, StreamOut] = FlowShape(in, out)
+  private val in = Inlet[T]("KeepAliveStage.in")
+  private val out = Outlet[T]("KeepAliveStage.out")
+  override val shape: FlowShape[T, T] = FlowShape(in, out)
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     new TimerGraphStageLogic(shape) with InHandler with OutHandler {
       private var armed = false
-      private var waitingForProducer = false
+      private var waitingForPeer = false
       private var deadline = 0L
 
       override def preStart(): Unit =
@@ -59,28 +59,31 @@ import akka.stream.stage.TimerGraphStageLogic
           scheduleWithFixedDelay(CheckTimer, checkInterval(t), checkInterval(t))
         }
 
-      override def onPull(): Unit = pullProducer()
+      override def onPull(): Unit = pullPeer()
 
       override def onPush(): Unit = {
-        waitingForProducer = false
+        waitingForPeer = false
         val elem = grab(in)
-        if (elem.message.isKeepAlive) {
-          armed = true
-          pullProducer()
+        if (isKeepAlive(elem)) {
+          if (!armed) {
+            armed = true
+            onFirstKeepAlive()
+          }
+          pullPeer()
         } else
           push(out, elem)
       }
 
-      private def pullProducer(): Unit = {
+      private def pullPeer(): Unit = {
         timeout.foreach(t => deadline = System.nanoTime() + t.toNanos)
-        waitingForProducer = true
+        waitingForPeer = true
         pull(in)
       }
 
       override protected def onTimer(timerKey: Any): Unit =
         timeout.foreach { t =>
-          if (armed && waitingForProducer && deadline - System.nanoTime() < 0)
-            failStage(new KeepAliveTimeoutException(streamId, t, correlationId))
+          if (armed && waitingForPeer && deadline - System.nanoTime() < 0)
+            failStage(timeoutFailure(t))
         }
 
       setHandlers(in, out, this)

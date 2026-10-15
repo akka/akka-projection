@@ -55,6 +55,9 @@ message StreamIn {
     // events for a specific entity.
     ReplayReq replay = 3;
     Ack ack = 4;
+    // Sent by the consumer at `InitReq.keep_alive_interval_millis` once it has received the
+    // first `StreamOut.keep_alive`, so that the producer can detect a consumer that went away.
+    KeepAlive keep_alive = 5;
   }
 }
 
@@ -83,6 +86,10 @@ message InitReq {
   // The producer clamps the interval to between 1 second and 1 hour, and
   // emits one keep alive right away when the stream starts.
   int64 keep_alive_interval_millis = 8;
+  // if greater than 0 the producer fails the stream when no `StreamIn.keep_alive`
+  // has arrived from the consumer for this many milliseconds, counted once the
+  // consumer has sent its first one. At least twice the interval.
+  int64 keep_alive_timeout_millis = 9;
 }
 
 // Add filter criteria to exclude and include events for matching entities.

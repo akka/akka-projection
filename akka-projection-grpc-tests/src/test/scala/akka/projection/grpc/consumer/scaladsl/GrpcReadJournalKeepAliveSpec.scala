@@ -69,15 +69,19 @@ object GrpcReadJournalKeepAliveSpec {
           offset = Seq(Offset(Some(Timestamp(now.getEpochSecond, now.getNano)), Seq(PersistenceIdSeqNr(pid, seqNr)))))))
   }
 
-  // stand-in for a producer, emitting a canned stream per stream id
-  class StubProducerService(initProbe: ActorRef[InitReq], streamOutFor: String => Source[StreamOut, NotUsed])
+  // stand-in for a producer, emitting a canned stream per stream id and forwarding what the consumer sends
+  class StubProducerService(
+      initProbe: ActorRef[InitReq],
+      streamInProbe: () => ActorRef[StreamIn],
+      streamOutFor: String => Source[StreamOut, NotUsed])
       extends EventProducerServicePowerApi {
 
     override def eventsBySlices(in: Source[StreamIn, NotUsed], metadata: Metadata): Source[StreamOut, NotUsed] =
       in.prefixAndTail(1).flatMapConcat {
         case (Seq(StreamIn(StreamIn.Message.Init(init), _)), tail) =>
           initProbe ! init
-          tail.via(Flow.fromSinkAndSource(Sink.ignore, streamOutFor(init.streamId)))
+          val probe = streamInProbe()
+          tail.via(Flow.fromSinkAndSource(Sink.foreach[StreamIn](probe ! _), streamOutFor(init.streamId)))
         case other =>
           throw new IllegalArgumentException(s"Unexpected first message $other")
       }
@@ -109,6 +113,8 @@ class GrpcReadJournalKeepAliveSpec
   import GrpcReadJournalKeepAliveSpec._
 
   private val initProbe = createTestProbe[InitReq]()
+  // replaced per test that looks at what the consumer sends, so that streams of earlier tests do not pollute it
+  @volatile private var streamInProbe = createTestProbe[StreamIn]()
 
   private val streamWithKeepAlives = "stream-with-keep-alives"
   private val streamWithTwoEvents = "stream-with-two-events"
@@ -119,7 +125,7 @@ class GrpcReadJournalKeepAliveSpec
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-    val service = new StubProducerService(initProbe.ref, {
+    val service = new StubProducerService(initProbe.ref, () => streamInProbe.ref, {
       case `streamWithKeepAlives` =>
         // like a producer supporting keep alives, one event and then only keep alives
         Source(List(KeepAliveStreamOut, filteredEvent("pid-1", 1L)))
@@ -211,6 +217,32 @@ class GrpcReadJournalKeepAliveSpec
       initProbe.receiveMessage().keepAliveIntervalMillis shouldBe 1000L
 
       probe.expectNoMessage(3.seconds)
+      probe.cancel()
+    }
+
+    "send keep alives to the producer once it has sent its first keep alive" in {
+      streamInProbe = createTestProbe[StreamIn]()
+      val probe = eventsBySlices(
+        GrpcQuerySettings(streamWithKeepAlives).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds))
+      probe.request(10)
+      val init = initProbe.receiveMessage()
+      init.keepAliveIntervalMillis shouldBe 1000L
+      init.keepAliveTimeoutMillis shouldBe 2000L
+
+      streamInProbe.receiveMessage(2.seconds).message.isKeepAlive shouldBe true
+      streamInProbe.receiveMessage(2.seconds).message.isKeepAlive shouldBe true
+      probe.cancel()
+    }
+
+    "not send keep alives to a producer that does not support them" in {
+      streamInProbe = createTestProbe[StreamIn]()
+      val probe =
+        eventsBySlices(GrpcQuerySettings(silentStream).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds))
+      probe.request(10)
+      initProbe.receiveMessage().keepAliveIntervalMillis shouldBe 1000L
+
+      // older producers would warn about the unknown message
+      streamInProbe.expectNoMessage(3.seconds)
       probe.cancel()
     }
 

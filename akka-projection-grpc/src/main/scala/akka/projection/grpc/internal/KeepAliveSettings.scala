@@ -34,4 +34,14 @@ import akka.annotation.InternalApi
   def clampInterval(requestedMillis: Long): FiniteDuration =
     if (requestedMillis >= MaxInterval.toMillis) MaxInterval
     else requestedMillis.millis.max(MinInterval)
+
+  // producer side, the limit for keep alives from the consumer, none when the consumer did not ask for a timeout
+  def producerTimeout(requestedIntervalMillis: Long, requestedTimeoutMillis: Long): Option[FiniteDuration] =
+    if (requestedTimeoutMillis <= 0) None
+    else {
+      val minTimeout = clampInterval(requestedIntervalMillis) * 2
+      val maxTimeout = MaxInterval * 2
+      if (requestedTimeoutMillis >= maxTimeout.toMillis) Some(maxTimeout)
+      else Some(requestedTimeoutMillis.millis.max(minTimeout))
+    }
 }

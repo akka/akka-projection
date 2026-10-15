@@ -138,9 +138,10 @@ at least twice the interval. Only time spent waiting for the producer counts, so
 trigger it. The timeout takes effect once the producer has sent its first keep alive, which it does right after the
 stream starts, so producers without keep alive support never trigger it.
 
-Known limitation: keep alives also keep a connection whose network path has broken open on the producer side, since the
-HTTP server idle timeout no longer triggers. Such a stream and its query live on the producer until the TCP connection is
-detected as dead.
+Once the consumer has received the first keep alive it also sends keep alives to the producer at the same interval, and
+the producer closes the stream with the same timeout when they stop. Without this, a consumer that went away on a broken
+network path would keep its stream and query running on the producer until the TCP connection is detected as dead, since
+the keep alives sent by the producer prevent the HTTP server idle timeout from triggering.
 
 ## Producer
 

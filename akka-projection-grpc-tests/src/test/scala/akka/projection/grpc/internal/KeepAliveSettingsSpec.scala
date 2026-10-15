@@ -39,5 +39,14 @@ class KeepAliveSettingsSpec extends AnyWordSpecLike with Matchers {
       clampInterval(1.day.toMillis) shouldBe 1.hour
       clampInterval(Long.MaxValue) shouldBe 1.hour
     }
+
+    "derive producer timeout for consumer keep alives" in {
+      producerTimeout(1000, 0) shouldBe None
+      producerTimeout(1000, 3000) shouldBe Some(3.seconds)
+      // at least twice the clamped interval
+      producerTimeout(10, 500) shouldBe Some(2.seconds)
+      producerTimeout(5000, 6000) shouldBe Some(10.seconds)
+      producerTimeout(1000, Long.MaxValue) shouldBe Some(2.hours)
+    }
   }
 }
