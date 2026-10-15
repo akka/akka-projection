@@ -35,6 +35,9 @@ import akka.stream.stage.TimerGraphStageLogic
  * answer demand within the timeout. Time is measured from pull to the next push, so a downstream that is busy
  * and not pulling never causes a timeout. The timeout is armed by the first keep alive, so a peer without keep
  * alive support never triggers it. Used on both the consumer side (StreamOut) and the producer side (StreamIn).
+ *
+ * The wait is measured in timer ticks rather than clock reads, to keep the pull and push paths free of
+ * `System.nanoTime`, so the timeout is accurate to within one check interval.
  */
 @InternalApi private[akka] final class KeepAliveStage[T](
     isKeepAlive: T => Boolean,
@@ -52,7 +55,12 @@ import akka.stream.stage.TimerGraphStageLogic
     new TimerGraphStageLogic(shape) with InHandler with OutHandler {
       private var armed = false
       private var waitingForPeer = false
-      private var deadline = 0L
+      // ticks since the pull, plus one since the first tick may come right after the pull
+      private var waitedTicks = 0
+      private val timeoutTicks = timeout.fold(0) { t =>
+        val interval = checkInterval(t)
+        ((t.toNanos + interval.toNanos - 1) / interval.toNanos).toInt + 1
+      }
 
       override def preStart(): Unit =
         timeout.foreach { t =>
@@ -75,15 +83,16 @@ import akka.stream.stage.TimerGraphStageLogic
       }
 
       private def pullPeer(): Unit = {
-        timeout.foreach(t => deadline = System.nanoTime() + t.toNanos)
+        waitedTicks = 0
         waitingForPeer = true
         pull(in)
       }
 
       override protected def onTimer(timerKey: Any): Unit =
-        timeout.foreach { t =>
-          if (armed && waitingForPeer && deadline - System.nanoTime() < 0)
-            failStage(timeoutFailure(t))
+        if (armed && waitingForPeer) {
+          waitedTicks += 1
+          if (waitedTicks >= timeoutTicks)
+            failStage(timeoutFailure(timeout.get))
         }
 
       setHandlers(in, out, this)
