@@ -41,6 +41,7 @@ import akka.projection.grpc.internal.proto.EventTimestampRequest
 import akka.projection.grpc.internal.proto.FilterReq
 import akka.projection.grpc.internal.proto.FilteredEvent
 import akka.projection.grpc.internal.proto.InitReq
+import akka.projection.grpc.internal.proto.KeepAlive
 import akka.projection.grpc.internal.proto.LoadEventRequest
 import akka.projection.grpc.internal.proto.LoadEventResponse
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
@@ -64,6 +65,8 @@ import java.util.concurrent.TimeUnit
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.Promise
+import scala.concurrent.duration.FiniteDuration
 
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.LatestEventTimestampQuery
@@ -80,6 +83,8 @@ object GrpcReadJournal {
 
   private val log: Logger =
     LoggerFactory.getLogger(classOf[GrpcReadJournal])
+
+  private val KeepAliveStreamIn = StreamIn(StreamIn.Message.KeepAlive(KeepAlive.defaultInstance))
 
   /**
    * Construct a gRPC read journal from configuration `akka.projection.grpc.consumer`. The `stream-id` must
@@ -389,6 +394,16 @@ final class GrpcReadJournal private (
       consumerFilter.ref.ask[ConsumerFilter.CurrentFilter](ConsumerFilter.GetFilter(streamId, _))
     }
 
+    // completed by the first keep alive from the producer, which shows that it supports keep alives
+    val producerKeepAlive = Promise[Done]()
+
+    // not sent before the producer has shown keep alive support, older producers would warn about them
+    def consumerKeepAlives(interval: FiniteDuration): Source[StreamIn, NotUsed] =
+      Source
+        .futureSource(producerKeepAlive.future.map(_ =>
+          Source.tick(interval, interval, GrpcReadJournal.KeepAliveStreamIn))(ExecutionContext.parasitic))
+        .mapMaterializedValue(_ => NotUsed)
+
     val streamIn: Source[StreamIn, NotUsed] = {
       implicit val ec: ExecutionContext = typedSystem.executionContext
       Source
@@ -403,11 +418,17 @@ final class GrpcReadJournal private (
               protoCriteria,
               replicaInfo,
               correlationId,
-              keepAliveIntervalMillis = settings.keepAliveInterval.fold(0L)(_.toMillis))
+              keepAliveIntervalMillis = settings.keepAliveInterval.fold(0L)(_.toMillis),
+              keepAliveTimeoutMillis = settings.keepAliveTimeout.fold(0L)(_.toMillis))
+
+            val requests = settings.keepAliveInterval match {
+              case Some(interval) => inReqSource(filter.criteria).merge(consumerKeepAlives(interval))
+              case None           => inReqSource(filter.criteria)
+            }
 
             Source
               .single(StreamIn(StreamIn.Message.Init(initReq)))
-              .concat(inReqSource(filter.criteria))
+              .concat(requests)
           }
         }
         .mapMaterializedValue(_ => NotUsed)
@@ -417,7 +438,12 @@ final class GrpcReadJournal private (
       val invoked = addRequestHeaders(client.eventsBySlices()).invoke(streamIn)
       val withKeepAlive =
         if (settings.keepAliveInterval.isDefined)
-          invoked.via(new KeepAliveStage(streamId, settings.keepAliveTimeout, correlationId))
+          invoked.via(
+            new KeepAliveStage[StreamOut](
+              _.message.isKeepAlive,
+              settings.keepAliveTimeout,
+              timeout => new KeepAliveTimeoutException(streamId, timeout, correlationId),
+              onFirstKeepAlive = () => producerKeepAlive.trySuccess(Done)))
         else invoked
       withKeepAlive.recover {
         case ex: akka.grpc.GrpcServiceException if ex.status.getCode == Status.Code.UNAVAILABLE =>

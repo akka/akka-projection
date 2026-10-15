@@ -126,7 +126,7 @@ import akka.projection.internal.CorrelationId
   override def eventsBySlices(in: Source[StreamIn, NotUsed], metadata: Metadata): Source[StreamOut, NotUsed] = {
     in.prefixAndTail(1).flatMapConcat {
       case (Seq(StreamIn(StreamIn.Message.Init(init), _)), tail) =>
-        tail.via(runEventsBySlices(init, metadata))
+        tail.via(consumerKeepAliveFlow(init)).via(runEventsBySlices(init, metadata))
       case (Seq(), _) =>
         // if error during recovery in proxy the stream will be completed before init
         log.warn("Event stream closed before init.")
@@ -140,6 +140,23 @@ import akka.projection.internal.CorrelationId
         throw new IllegalStateException(s"Unexpected Seq prefix with [${seq.size}] elements.")
     }
   }
+
+  // drops keep alives from the consumer, and fails the stream when they stop, so that a consumer that went away
+  // on a broken network path does not leave the query running until the TCP connection is detected as dead
+  private def consumerKeepAliveFlow(init: InitReq): Flow[StreamIn, StreamIn, NotUsed] =
+    if (init.keepAliveIntervalMillis <= 0) Flow[StreamIn]
+    else {
+      val timeout = KeepAliveSettings.producerTimeout(init.keepAliveIntervalMillis, init.keepAliveTimeoutMillis)
+      Flow.fromGraph(new KeepAliveStage[StreamIn](_.message.isKeepAlive, timeout, timeoutFailure = { t =>
+        log.warn(
+          "Stream [{}]: No keep alive from consumer within [{}], closing stream{}",
+          init.streamId,
+          t.toCoarsest,
+          CorrelationId.toLogText(init.correlationId))
+        new GrpcServiceException(
+          Status.UNAVAILABLE.withDescription(s"No keep alive from consumer within [${t.toCoarsest}]"))
+      }, onFirstKeepAlive = () => ()))
+    }
 
   private def keepAliveFlow(init: InitReq): Flow[StreamOut, StreamOut, NotUsed] =
     if (init.keepAliveIntervalMillis <= 0) Flow[StreamOut]
