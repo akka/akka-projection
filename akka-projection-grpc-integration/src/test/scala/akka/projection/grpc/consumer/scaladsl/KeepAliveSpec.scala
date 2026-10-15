@@ -4,6 +4,7 @@
 
 package akka.projection.grpc.consumer.scaladsl
 
+import scala.concurrent.Future
 import scala.concurrent.duration._
 
 import akka.Done
@@ -11,10 +12,13 @@ import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.actor.typed.ActorSystem
 import akka.grpc.GrpcClientSettings
+import akka.grpc.GrpcServiceException
 import akka.http.scaladsl.Http
 import akka.persistence.query.NoOffset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.internal.EnvelopeOrigin
+import akka.projection.ProjectionBehavior
+import akka.projection.eventsourced.scaladsl.EventSourcedProvider
 import akka.projection.grpc.TestContainerConf
 import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
@@ -22,16 +26,20 @@ import akka.projection.grpc.TestEntity
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.internal.proto.EventProducerServiceClient
 import akka.projection.grpc.internal.proto.InitReq
+import akka.projection.grpc.internal.proto.KeepAlive
 import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
+import akka.projection.r2dbc.scaladsl.R2dbcProjection
+import akka.projection.scaladsl.Handler
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
+import io.grpc.Status
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.wordspec.AnyWordSpecLike
 
@@ -133,6 +141,75 @@ class KeepAliveSpec(testContainerConf: TestContainerConf)
 
       probe.cancel()
       client.close().futureValue
+    }
+
+    "close the stream on the producer when keep alives from the consumer stop" in {
+      val client =
+        EventProducerServiceClient(GrpcClientSettings.connectToServiceAt("127.0.0.1", grpcPort).withTls(false))
+      val initReq =
+        InitReq(streamId, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 1000, keepAliveTimeoutMillis = 2000)
+      // like a consumer that went away after its first keep alive
+      val consumerKeepAlive = StreamIn(StreamIn.Message.KeepAlive(KeepAlive.defaultInstance))
+      val probe = client
+        .eventsBySlices(Source(List(StreamIn(StreamIn.Message.Init(initReq)), consumerKeepAlive)).concat(Source.maybe))
+        .runWith(TestSink[StreamOut]())
+      probe.request(100)
+
+      // events and producer keep alives keep coming until the producer gives up on the consumer
+      def awaitError(): Throwable = probe.expectNextOrError() match {
+        case Left(failure) => failure
+        case Right(_)      => awaitError()
+      }
+      val error = probe.within(6.seconds)(awaitError())
+      error shouldBe a[GrpcServiceException]
+      val status = error.asInstanceOf[GrpcServiceException].status
+      status.getCode shouldBe Status.Code.UNAVAILABLE
+      status.getDescription should include("No keep alive from consumer within [2 seconds]")
+
+      client.close().futureValue
+    }
+
+    "not restart a projection whose handler is slower than the keep alive timeout" in {
+      // events already waiting when the projection starts, so the handler is busy with one while more are pending
+      val slowPid = nextPid(entityType)
+      val replyProbe = createTestProbe[Done]()
+      val entity = spawn(TestEntity(slowPid))
+      entity ! TestEntity.Persist("c")
+      entity ! TestEntity.Persist("d")
+      entity ! TestEntity.Persist("e")
+      entity ! TestEntity.Ping(replyProbe.ref)
+      replyProbe.receiveMessage()
+
+      val processedProbe = createTestProbe[String]()
+      val sourceProvider = EventSourcedProvider.eventsBySlices[String](
+        system,
+        GrpcReadJournal(
+          GrpcQuerySettings(streamId).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds),
+          GrpcClientSettings.connectToServiceAt("127.0.0.1", grpcPort).withTls(false),
+          protobufDescriptors = Nil),
+        streamId,
+        0,
+        1023)
+      val handler = () =>
+        new Handler[EventEnvelope[String]] {
+          override def process(envelope: EventEnvelope[String]): Future[Done] =
+            if (envelope.persistenceId == slowPid.id && !EnvelopeOrigin.fromBacktracking(envelope)) {
+              // longer than the keep alive timeout
+              akka.pattern.after(2500.millis) {
+                processedProbe.ref ! envelope.event
+                Future.successful(Done)
+              }
+            } else Future.successful(Done)
+        }
+      val projection = spawn(
+        ProjectionBehavior(
+          R2dbcProjection.atLeastOnceAsync(randomProjectionId(), settings = None, sourceProvider, handler)))
+
+      // a restart would show up as the in-flight event being processed again
+      processedProbe.receiveMessages(3, 15.seconds) shouldBe List("c", "d", "e")
+      processedProbe.expectNoMessage(5.seconds)
+
+      projection ! ProjectionBehavior.Stop
     }
   }
 }
