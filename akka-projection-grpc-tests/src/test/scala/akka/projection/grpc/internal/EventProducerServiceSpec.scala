@@ -703,8 +703,9 @@ class EventProducerServiceSpec
       probe.request(100)
       val testPublisher = query.testPublisher(entityType8).futureValue
 
-      val keepAlive = probe.expectNext(2.seconds)
-      keepAlive.message.isKeepAlive shouldBe true
+      // first keep alive right away, then at the interval
+      probe.expectNext(500.millis).message.isKeepAlive shouldBe true
+      probe.expectNext(2.seconds).message.isKeepAlive shouldBe true
 
       val env1 = createEnvelope(nextPid(entityType8), 1L, "e-1")
       testPublisher.sendNext(env1)
@@ -738,10 +739,10 @@ class EventProducerServiceSpec
       probe.request(100)
       query.testPublisher(entityType10).futureValue
 
-      probe.expectNext(2.seconds).message.isKeepAlive shouldBe true
-      val firstKeepAlive = System.nanoTime()
-      probe.expectNext(2.seconds).message.isKeepAlive shouldBe true
-      (System.nanoTime() - firstKeepAlive).nanos should be >= 900.millis
+      // the immediate one and then at most two at the 1 second minimum, hundreds without the clamp
+      val received = probe.receiveWithin(2500.millis)
+      received.forall(_.message.isKeepAlive) shouldBe true
+      received.size should (be >= 2 and be <= 3)
     }
 
   }

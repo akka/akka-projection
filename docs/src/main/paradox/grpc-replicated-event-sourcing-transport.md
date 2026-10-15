@@ -130,10 +130,10 @@ in between, and HTTP/2 level keep alive pings only cover the connection to the n
 that the other replicas send application level keep alive messages when there are no events by enabling
 `akka.projection.grpc.replication.keep-alive-interval` or `withKeepAliveInterval` in @apidoc[ReplicationSettings].
 Optionally `akka.projection.grpc.replication.keep-alive-timeout` or `withKeepAliveTimeout` fails and restarts a
-replication stream when neither events nor keep alive messages are received within the timeout. Both are disabled by default.
-The other replicas must run Akka Projections 1.6.26 or later, older versions ignore the request, which with the timeout
-enabled means idle streams will be restarted. When upgrading, enable the timeout only after all replicas run a version
-with keep alive support. See @ref:[Keep alive](grpc.md#keep-alive) for details on the minimum interval and how to size the timeout.
+replication stream when the other replica sends neither events nor keep alive messages within the timeout while this
+replica is waiting for events. Both are disabled by default. The other replicas must run Akka Projections 1.6.26 or later,
+older versions ignore the request and never trigger the timeout. See @ref:[Keep alive](grpc.md#keep-alive) for details on
+the interval bounds, how to size the timeout and known limitations.
 
 ### Fully connected topology
 

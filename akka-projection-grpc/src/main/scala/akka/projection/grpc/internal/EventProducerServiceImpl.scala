@@ -41,7 +41,6 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
 import scala.concurrent.Future
-import scala.concurrent.duration._
 import akka.persistence.FilteredPayload
 import akka.persistence.query.QueryCorrelationId
 import akka.persistence.query.typed.scaladsl.LatestEventTimestampQuery
@@ -127,7 +126,7 @@ import akka.projection.internal.CorrelationId
   override def eventsBySlices(in: Source[StreamIn, NotUsed], metadata: Metadata): Source[StreamOut, NotUsed] = {
     in.prefixAndTail(1).flatMapConcat {
       case (Seq(StreamIn(StreamIn.Message.Init(init), _)), tail) =>
-        withKeepAlive(init, tail.via(runEventsBySlices(init, metadata)))
+        tail.via(runEventsBySlices(init, metadata))
       case (Seq(), _) =>
         // if error during recovery in proxy the stream will be completed before init
         log.warn("Event stream closed before init.")
@@ -142,18 +141,18 @@ import akka.projection.internal.CorrelationId
     }
   }
 
-  private def withKeepAlive(init: InitReq, events: Source[StreamOut, NotUsed]): Source[StreamOut, NotUsed] =
-    if (init.keepAliveIntervalMillis <= 0) events
+  private def keepAliveFlow(init: InitReq): Flow[StreamOut, StreamOut, NotUsed] =
+    if (init.keepAliveIntervalMillis <= 0) Flow[StreamOut]
     else {
-      val requested = init.keepAliveIntervalMillis.millis
-      val interval = requested.max(KeepAliveSettings.MinInterval)
-      if (interval != requested)
+      val interval = KeepAliveSettings.clampInterval(init.keepAliveIntervalMillis)
+      if (interval.toMillis != init.keepAliveIntervalMillis)
         log.debug(
-          "Consumer of stream [{}] requested keep alive interval [{}], using minimum [{}]",
+          "Consumer of stream [{}] requested keep alive interval [{}] ms, using [{}]",
           init.streamId,
-          requested,
+          init.keepAliveIntervalMillis,
           interval)
-      events.keepAlive(interval, () => KeepAliveStreamOut)
+      // first keep alive right away, so that the consumer can tell that keep alives are supported
+      Flow[StreamOut].prepend(Source.single(KeepAliveStreamOut)).keepAlive(interval, () => KeepAliveStreamOut)
     }
 
   private def runEventsBySlices(init: InitReq, metadata: Metadata): Flow[StreamIn, StreamOut, NotUsed] = {
@@ -227,7 +226,9 @@ import akka.projection.internal.CorrelationId
               maxAckCacheEntries = producerSource.settings.maxAckCacheEntries))
           .join(Flow.fromSinkAndSource(Sink.ignore, events))
 
-      eventsFlow.via(transformEnvelopeToStreamOut(producerSource, init.replicaInfo, correlationId))
+      eventsFlow
+        .via(transformEnvelopeToStreamOut(producerSource, init.replicaInfo, correlationId))
+        .via(keepAliveFlow(init))
     }
     Flow.futureFlow(futureFlow).mapMaterializedValue(_ => NotUsed)
   }

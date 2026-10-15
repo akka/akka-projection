@@ -52,25 +52,11 @@ class GrpcQuerySettingsSpec extends AnyWordSpecLike with Matchers {
       withKeepAlive.keepAliveTimeout shouldBe Some(6.seconds)
     }
 
-    "reject keep alive timeout without interval" in {
-      intercept[IllegalArgumentException] {
-        GrpcQuerySettings("my-stream-id").withKeepAliveTimeout(6.seconds)
-      }
-    }
-
-    "reject keep alive timeout not larger than interval" in {
-      intercept[IllegalArgumentException] {
-        GrpcQuerySettings("my-stream-id").withKeepAliveInterval(6.seconds).withKeepAliveTimeout(6.seconds)
-      }
-    }
-
-    "reject keep alive interval below the producer minimum" in {
-      intercept[IllegalArgumentException] {
-        GrpcQuerySettings("my-stream-id").withKeepAliveInterval(500.millis)
-      }
-      intercept[IllegalArgumentException] {
-        GrpcQuerySettings("my-stream-id").withKeepAliveInterval(Duration.Zero)
-      }
+    "set keep alive settings in any order" in {
+      // validated when the GrpcReadJournal is created, not here
+      val settings = GrpcQuerySettings("my-stream-id").withKeepAliveTimeout(6.seconds).withKeepAliveInterval(2.seconds)
+      settings.keepAliveInterval shouldBe Some(2.seconds)
+      settings.keepAliveTimeout shouldBe Some(6.seconds)
     }
 
     "parse explicitly disabled keep alive from config" in {

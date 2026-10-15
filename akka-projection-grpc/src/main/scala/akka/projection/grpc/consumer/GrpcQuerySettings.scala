@@ -9,7 +9,6 @@ import akka.grpc.scaladsl.Metadata
 import akka.grpc.scaladsl.MetadataBuilder
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
 import akka.projection.grpc.internal.ConfigHelpers
-import akka.projection.grpc.internal.KeepAliveSettings
 import com.typesafe.config.Config
 import scala.collection.immutable
 import scala.concurrent.duration.FiniteDuration
@@ -114,7 +113,6 @@ final class GrpcQuerySettings private (
   require(
     streamId != "",
     "streamId must be an id exposed by the producing side but was undefined on the consuming side.")
-  KeepAliveSettings.validate(keepAliveInterval, keepAliveTimeout)
 
   /**
    * Additional request metadata, for authentication/authorization of the request on the remote side.
@@ -140,38 +138,38 @@ final class GrpcQuerySettings private (
 
   /**
    * Scala API: Request that the producer emits keep alive messages at this interval when there are no events,
-   * to keep the event stream connection alive end-to-end through proxies and load balancers. Must be at least
-   * 1 second. The producer must support keep alives (akka-projection 1.6.26 or later), older producers will
-   * ignore the request.
+   * to keep the event stream connection alive end-to-end through proxies and load balancers. Must be between
+   * 1 second and 1 hour, validated when the `GrpcReadJournal` is created. The producer must support keep alives
+   * (akka-projection 1.6.26 or later), older producers will ignore the request.
    */
   def withKeepAliveInterval(interval: FiniteDuration): GrpcQuerySettings =
     copy(keepAliveInterval = Some(interval))
 
   /**
    * Java API: Request that the producer emits keep alive messages at this interval when there are no events,
-   * to keep the event stream connection alive end-to-end through proxies and load balancers. Must be at least
-   * 1 second. The producer must support keep alives (akka-projection 1.6.26 or later), older producers will
-   * ignore the request.
+   * to keep the event stream connection alive end-to-end through proxies and load balancers. Must be between
+   * 1 second and 1 hour, validated when the `GrpcReadJournal` is created. The producer must support keep alives
+   * (akka-projection 1.6.26 or later), older producers will ignore the request.
    */
   def withKeepAliveInterval(interval: java.time.Duration): GrpcQuerySettings =
     copy(keepAliveInterval = Some(interval.toScala))
 
   /**
-   * Scala API: Fail the event stream if neither events nor keep alive messages have been received within this
-   * timeout. Can only be used after a keep alive interval has been set. This is an idle timeout on the stream,
-   * so it should be several times the keep alive interval and longer than the slowest expected projection handler
-   * or batch, otherwise the stream is restarted while the handler is busy. Note that the stream will also fail
-   * if the producer does not support keep alives.
+   * Scala API: Fail the event stream if the producer sends neither events nor keep alive messages within this
+   * timeout while the consumer is waiting for events, so that the projection restarts it. Requires a keep alive
+   * interval and must be at least twice the interval, validated when the `GrpcReadJournal` is created. The timeout
+   * only takes effect once the producer has sent its first keep alive, so producers without keep alive support
+   * never trigger it. Time spent in the projection handler does not count.
    */
   def withKeepAliveTimeout(timeout: FiniteDuration): GrpcQuerySettings =
     copy(keepAliveTimeout = Some(timeout))
 
   /**
-   * Java API: Fail the event stream if neither events nor keep alive messages have been received within this
-   * timeout. Can only be used after a keep alive interval has been set. This is an idle timeout on the stream,
-   * so it should be several times the keep alive interval and longer than the slowest expected projection handler
-   * or batch, otherwise the stream is restarted while the handler is busy. Note that the stream will also fail
-   * if the producer does not support keep alives.
+   * Java API: Fail the event stream if the producer sends neither events nor keep alive messages within this
+   * timeout while the consumer is waiting for events, so that the projection restarts it. Requires a keep alive
+   * interval and must be at least twice the interval, validated when the `GrpcReadJournal` is created. The timeout
+   * only takes effect once the producer has sent its first keep alive, so producers without keep alive support
+   * never trigger it. Time spent in the projection handler does not count.
    */
   def withKeepAliveTimeout(timeout: java.time.Duration): GrpcQuerySettings =
     copy(keepAliveTimeout = Some(timeout.toScala))

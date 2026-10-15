@@ -13,15 +13,25 @@ import akka.annotation.InternalApi
  */
 @InternalApi private[akka] object KeepAliveSettings {
 
-  // lower bound for consumer requested keep alive interval, enforced on both sides
+  // bounds for consumer requested keep alive interval, enforced on both sides
   val MinInterval: FiniteDuration = 1.second
+  val MaxInterval: FiniteDuration = 1.hour
 
   def validate(interval: Option[FiniteDuration], timeout: Option[FiniteDuration]): Unit = {
-    require(
-      interval.forall(_ >= MinInterval),
-      s"keepAliveInterval must be at least [${MinInterval.toCoarsest}], was [${interval.fold("")(_.toCoarsest.toString)}]")
-    require(
-      timeout.forall(t => interval.exists(_ < t)),
-      "keepAliveTimeout must be larger than keepAliveInterval and can only be used together with keepAliveInterval")
+    interval.foreach { i =>
+      require(
+        i >= MinInterval && i <= MaxInterval,
+        s"keepAliveInterval must be between [$MinInterval] and [$MaxInterval], was [$i]")
+    }
+    timeout.foreach { t =>
+      require(interval.isDefined, "keepAliveTimeout requires keepAliveInterval")
+      val i = interval.get
+      require(t >= i * 2, s"keepAliveTimeout must be at least twice the keepAliveInterval [$i], was [$t]")
+    }
   }
+
+  // producer side, bounds the consumer requested interval, compares raw millis since huge values overflow FiniteDuration
+  def clampInterval(requestedMillis: Long): FiniteDuration =
+    if (requestedMillis >= MaxInterval.toMillis) MaxInterval
+    else requestedMillis.millis.max(MinInterval)
 }

@@ -20,10 +20,15 @@ import akka.projection.grpc.TestData
 import akka.projection.grpc.TestDbLifecycle
 import akka.projection.grpc.TestEntity
 import akka.projection.grpc.consumer.GrpcQuerySettings
+import akka.projection.grpc.internal.proto.EventProducerServiceClient
+import akka.projection.grpc.internal.proto.InitReq
+import akka.projection.grpc.internal.proto.StreamIn
+import akka.projection.grpc.internal.proto.StreamOut
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducer
 import akka.projection.grpc.producer.scaladsl.EventProducer.EventProducerSource
 import akka.projection.grpc.producer.scaladsl.EventProducer.Transformation
+import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
 import com.typesafe.config.Config
 import com.typesafe.config.ConfigFactory
@@ -110,6 +115,24 @@ class KeepAliveSpec(testContainerConf: TestContainerConf)
 
       probe.cancel()
       readJournal.close().futureValue
+    }
+
+    "send keep alives from the producer when requested" in {
+      // raw client, since the read journal drops the keep alives
+      val client =
+        EventProducerServiceClient(GrpcClientSettings.connectToServiceAt("127.0.0.1", grpcPort).withTls(false))
+      val initReq = InitReq(streamId, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 1000)
+      val probe = client
+        .eventsBySlices(Source.single(StreamIn(StreamIn.Message.Init(initReq))).concat(Source.maybe))
+        .runWith(TestSink[StreamOut]())
+      probe.request(100)
+
+      // first keep alive right away, then at the interval in between the events from the previous test
+      probe.expectNext(2.seconds).message.isKeepAlive shouldBe true
+      probe.receiveWithin(2500.millis).count(_.message.isKeepAlive) should be >= 1
+
+      probe.cancel()
+      client.close().futureValue
     }
   }
 }
