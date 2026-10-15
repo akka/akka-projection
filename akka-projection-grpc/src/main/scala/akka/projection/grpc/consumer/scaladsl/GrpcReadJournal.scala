@@ -394,103 +394,109 @@ final class GrpcReadJournal private (
       consumerFilter.ref.ask[ConsumerFilter.CurrentFilter](ConsumerFilter.GetFilter(streamId, _))
     }
 
-    // completed by the first keep alive from the producer, which shows that it supports keep alives
-    val producerKeepAlive = Promise[Done]()
+    // the keep alive handshake is per materialization, so the source can be materialized more than once
+    def stream(): Source[EventEnvelope[Evt], NotUsed] = {
 
-    // not sent before the producer has shown keep alive support, older producers would warn about them
-    def consumerKeepAlives(interval: FiniteDuration): Source[StreamIn, NotUsed] =
-      Source
-        .futureSource(producerKeepAlive.future.map(_ =>
-          Source.tick(interval, interval, GrpcReadJournal.KeepAliveStreamIn))(ExecutionContext.parasitic))
-        .mapMaterializedValue(_ => NotUsed)
+      // completed by the first keep alive from the producer, which shows that it supports keep alives
+      val producerKeepAlive = Promise[Done]()
 
-    val streamIn: Source[StreamIn, NotUsed] = {
-      implicit val ec: ExecutionContext = typedSystem.executionContext
-      Source
-        .futureSource {
-          initFilter.map { filter =>
-            val protoCriteria = toProtoFilterCriteria(filter.criteria)
-            val initReq = InitReq(
-              streamId,
-              minSlice,
-              maxSlice,
-              protoOffset,
-              protoCriteria,
-              replicaInfo,
-              correlationId,
-              keepAliveIntervalMillis = settings.keepAliveInterval.fold(0L)(_.toMillis),
-              keepAliveTimeoutMillis = settings.keepAliveTimeout.fold(0L)(_.toMillis))
+      // not sent before the producer has shown keep alive support, older producers would warn about them
+      def consumerKeepAlives(interval: FiniteDuration): Source[StreamIn, NotUsed] =
+        Source
+          .futureSource(producerKeepAlive.future.map(_ =>
+            Source.tick(interval, interval, GrpcReadJournal.KeepAliveStreamIn))(ExecutionContext.parasitic))
+          .mapMaterializedValue(_ => NotUsed)
 
-            val requests = settings.keepAliveInterval match {
-              case Some(interval) => inReqSource(filter.criteria).merge(consumerKeepAlives(interval))
-              case None           => inReqSource(filter.criteria)
+      val streamIn: Source[StreamIn, NotUsed] = {
+        implicit val ec: ExecutionContext = typedSystem.executionContext
+        Source
+          .futureSource {
+            initFilter.map { filter =>
+              val protoCriteria = toProtoFilterCriteria(filter.criteria)
+              val initReq = InitReq(
+                streamId,
+                minSlice,
+                maxSlice,
+                protoOffset,
+                protoCriteria,
+                replicaInfo,
+                correlationId,
+                keepAliveIntervalMillis = settings.keepAliveInterval.fold(0L)(_.toMillis),
+                keepAliveTimeoutMillis = settings.keepAliveTimeout.fold(0L)(_.toMillis))
+
+              val requests = settings.keepAliveInterval match {
+                case Some(interval) => inReqSource(filter.criteria).merge(consumerKeepAlives(interval))
+                case None           => inReqSource(filter.criteria)
+              }
+
+              Source
+                .single(StreamIn(StreamIn.Message.Init(initReq)))
+                .concat(requests)
             }
-
-            Source
-              .single(StreamIn(StreamIn.Message.Init(initReq)))
-              .concat(requests)
           }
+          .mapMaterializedValue(_ => NotUsed)
+      }
+
+      val streamOut: Source[StreamOut, NotUsed] = {
+        val invoked = addRequestHeaders(client.eventsBySlices()).invoke(streamIn)
+        val withKeepAlive =
+          if (settings.keepAliveInterval.isDefined)
+            invoked.via(
+              new KeepAliveStage[StreamOut](
+                _.message.isKeepAlive,
+                settings.keepAliveTimeout,
+                timeout => new KeepAliveTimeoutException(streamId, timeout, correlationId),
+                onFirstKeepAlive = () => producerKeepAlive.trySuccess(Done)))
+          else invoked
+        withKeepAlive.recover {
+          case ex: akka.grpc.GrpcServiceException if ex.status.getCode == Status.Code.UNAVAILABLE =>
+            val port = clientSettings.servicePortName.getOrElse(clientSettings.defaultPort.toString)
+            throw new ConnectionException(clientSettings.serviceName, port, streamId)
+
+          case ex: KeepAliveTimeoutException =>
+            throw ex
+
+          case th: Throwable =>
+            throw new RuntimeException(
+              s"Failure to consume gRPC event stream for [$streamId]${CorrelationId.toLogText(correlationId)}",
+              th)
         }
-        .mapMaterializedValue(_ => NotUsed)
-    }
+      }
 
-    val streamOut: Source[StreamOut, NotUsed] = {
-      val invoked = addRequestHeaders(client.eventsBySlices()).invoke(streamIn)
-      val withKeepAlive =
-        if (settings.keepAliveInterval.isDefined)
-          invoked.via(
-            new KeepAliveStage[StreamOut](
-              _.message.isKeepAlive,
-              settings.keepAliveTimeout,
-              timeout => new KeepAliveTimeoutException(streamId, timeout, correlationId),
-              onFirstKeepAlive = () => producerKeepAlive.trySuccess(Done)))
-        else invoked
-      withKeepAlive.recover {
-        case ex: akka.grpc.GrpcServiceException if ex.status.getCode == Status.Code.UNAVAILABLE =>
-          val port = clientSettings.servicePortName.getOrElse(clientSettings.defaultPort.toString)
-          throw new ConnectionException(clientSettings.serviceName, port, streamId)
+      streamOut.map {
+        case StreamOut(StreamOut.Message.Event(event), _) =>
+          if (log.isTraceEnabled)
+            log.trace(
+              "{}: Received event, persistenceId [{}], seqNr [{}], offset [{}], source [{}]{}",
+              logPrefix,
+              event.persistenceId,
+              event.seqNr,
+              timestampOffset(event.offset.head).timestamp,
+              event.source,
+              CorrelationId.toLogText(correlationId))
 
-        case ex: KeepAliveTimeoutException =>
-          throw ex
+          eventToEnvelope(event, streamId)
 
-        case th: Throwable =>
-          throw new RuntimeException(
-            s"Failure to consume gRPC event stream for [$streamId]${CorrelationId.toLogText(correlationId)}",
-            th)
+        case StreamOut(StreamOut.Message.FilteredEvent(filteredEvent), _) =>
+          if (log.isTraceEnabled)
+            log.trace(
+              "{}: Received filtered event, persistenceId [{}], seqNr [{}], offset [{}], source [{}]{}",
+              logPrefix,
+              filteredEvent.persistenceId,
+              filteredEvent.seqNr,
+              timestampOffset(filteredEvent.offset.head).timestamp,
+              filteredEvent.source,
+              CorrelationId.toLogText(correlationId))
+
+          filteredEventToEnvelope(filteredEvent, streamId)
+
+        case other =>
+          throw new IllegalArgumentException(
+            s"Unexpected StreamOut [${other.message.getClass.getName}]${CorrelationId.toLogText(correlationId)}")
       }
     }
 
-    streamOut.map {
-      case StreamOut(StreamOut.Message.Event(event), _) =>
-        if (log.isTraceEnabled)
-          log.trace(
-            "{}: Received event, persistenceId [{}], seqNr [{}], offset [{}], source [{}]{}",
-            logPrefix,
-            event.persistenceId,
-            event.seqNr,
-            timestampOffset(event.offset.head).timestamp,
-            event.source,
-            CorrelationId.toLogText(correlationId))
-
-        eventToEnvelope(event, streamId)
-
-      case StreamOut(StreamOut.Message.FilteredEvent(filteredEvent), _) =>
-        if (log.isTraceEnabled)
-          log.trace(
-            "{}: Received filtered event, persistenceId [{}], seqNr [{}], offset [{}], source [{}]{}",
-            logPrefix,
-            filteredEvent.persistenceId,
-            filteredEvent.seqNr,
-            timestampOffset(filteredEvent.offset.head).timestamp,
-            filteredEvent.source,
-            CorrelationId.toLogText(correlationId))
-
-        filteredEventToEnvelope(filteredEvent, streamId)
-
-      case other =>
-        throw new IllegalArgumentException(
-          s"Unexpected StreamOut [${other.message.getClass.getName}]${CorrelationId.toLogText(correlationId)}")
-    }
+    Source.fromMaterializer((_, _) => stream()).mapMaterializedValue(_ => NotUsed)
   }
 
   private def eventToEnvelope[Evt](

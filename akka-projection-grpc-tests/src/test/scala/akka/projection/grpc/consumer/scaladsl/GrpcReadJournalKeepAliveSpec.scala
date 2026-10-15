@@ -119,6 +119,9 @@ class GrpcReadJournalKeepAliveSpec
   private val streamWithKeepAlives = "stream-with-keep-alives"
   private val streamWithTwoEvents = "stream-with-two-events"
   private val keepAliveThenSilent = "keep-alive-then-silent"
+  private val delayedKeepAliveStream = "delayed-keep-alive-stream"
+  private val eventsOnlyStream = "events-only-stream"
+  private val rejectedStream = "rejected-stream"
   private val silentStream = "silent-stream"
 
   private val clientSettings = GrpcClientSettings.connectToServiceAt("127.0.0.1", grpcPort).withTls(false)
@@ -136,6 +139,22 @@ class GrpcReadJournalKeepAliveSpec
       case `keepAliveThenSilent` =>
         // like a producer supporting keep alives whose connection went stale
         Source.single(KeepAliveStreamOut).concat(Source.maybe[StreamOut])
+      case `delayedKeepAliveStream` =>
+        // like a producer that takes a while before the stream is up
+        Source.tick(3.seconds, 500.millis, KeepAliveStreamOut).mapMaterializedValue(_ => NotUsed)
+      case `eventsOnlyStream` =>
+        // like a producer that is busy and never idle long enough to send keep alives
+        Source
+          .single(KeepAliveStreamOut)
+          .concat(
+            Source
+              .tick(500.millis, 500.millis, NotUsed)
+              .zipWithIndex
+              .map { case (_, seqNr) => filteredEvent("pid-1", seqNr + 1) }
+              .mapMaterializedValue(_ => NotUsed))
+      case `rejectedStream` =>
+        // like an interceptor rejecting the request, before any keep alive
+        Source.failed(new akka.grpc.GrpcServiceException(io.grpc.Status.PERMISSION_DENIED))
       case _ =>
         // like a producer not supporting keep alives
         Source.maybe[StreamOut].mapMaterializedValue(_ => NotUsed)
@@ -244,6 +263,54 @@ class GrpcReadJournalKeepAliveSpec
       // older producers would warn about the unknown message
       streamInProbe.expectNoMessage(3.seconds)
       probe.cancel()
+    }
+
+    "not fail stream while events flow without keep alives" in {
+      val probe = eventsBySlices(
+        GrpcQuerySettings(eventsOnlyStream).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds))
+      probe.request(100)
+      initProbe.receiveMessage().keepAliveIntervalMillis shouldBe 1000L
+
+      val received = probe.receiveWithin(4.seconds)
+      received.size should be >= 5
+      received.map(_.sequenceNr) shouldBe (1L to received.size)
+      probe.cancel()
+    }
+
+    "not send keep alives when the producer rejects the stream" in {
+      streamInProbe = createTestProbe[StreamIn]()
+      val probe =
+        eventsBySlices(
+          GrpcQuerySettings(rejectedStream).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds))
+      probe.request(10)
+      initProbe.receiveMessage().keepAliveIntervalMillis shouldBe 1000L
+
+      // note: combining the within call and the matcher in one expression made expectError time out
+      val error = probe.within(10.seconds)(probe.expectError())
+      error should not be a[KeepAliveTimeoutException]
+      streamInProbe.expectNoMessage(2.seconds)
+    }
+
+    "start a fresh keep alive handshake for each materialization" in {
+      val source = GrpcReadJournal(
+        GrpcQuerySettings(delayedKeepAliveStream).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds),
+        clientSettings,
+        protobufDescriptors = Nil).eventsBySlices[String](delayedKeepAliveStream, 0, 1023, NoOffset)
+
+      streamInProbe = createTestProbe[StreamIn]()
+      val probe1 = source.runWith(TestSink[EventEnvelope[String]]())
+      probe1.request(10)
+      // first producer keep alive after 3 seconds, consumer keep alive one interval later
+      streamInProbe.receiveMessage(6.seconds).message.isKeepAlive shouldBe true
+      probe1.cancel()
+
+      // same source again, must wait for the first producer keep alive of the new stream
+      streamInProbe = createTestProbe[StreamIn]()
+      val probe2 = source.runWith(TestSink[EventEnvelope[String]]())
+      probe2.request(10)
+      streamInProbe.expectNoMessage(2500.millis)
+      streamInProbe.receiveMessage(4.seconds).message.isKeepAlive shouldBe true
+      probe2.cancel()
     }
 
     "reject invalid keep alive settings when the read journal is created" in {

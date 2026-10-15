@@ -211,5 +211,55 @@ class KeepAliveSpec(testContainerConf: TestContainerConf)
 
       projection ! ProjectionBehavior.Stop
     }
+
+    "keep both directions alive with a large backlog and a handler slower than the timeouts" in {
+      // enough pending payload to fill the HTTP/2 window towards the consumer while the handler is blocked,
+      // the consumer keep alives still have to reach the producer on the other direction
+      val backlogPid = nextPid(entityType)
+      val numberOfEvents = 400
+      val payload = "x" * 4000
+      val replyProbe = createTestProbe[Done]()
+      val entity = spawn(TestEntity(backlogPid))
+      (1 to numberOfEvents).foreach(_ => entity ! TestEntity.Persist(payload))
+      entity ! TestEntity.Ping(replyProbe.ref)
+      replyProbe.receiveMessage(20.seconds)
+
+      val processedProbe = createTestProbe[Long]()
+      val sourceProvider = EventSourcedProvider.eventsBySlices[String](
+        system,
+        GrpcReadJournal(
+          GrpcQuerySettings(streamId).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds),
+          GrpcClientSettings.connectToServiceAt("127.0.0.1", grpcPort).withTls(false),
+          protobufDescriptors = Nil),
+        streamId,
+        0,
+        1023)
+      val handler = () =>
+        new Handler[EventEnvelope[String]] {
+          private var blockedOnce = false
+          override def process(envelope: EventEnvelope[String]): Future[Done] =
+            if (envelope.persistenceId == backlogPid.id && !EnvelopeOrigin.fromBacktracking(envelope)) {
+              if (!blockedOnce) {
+                blockedOnce = true
+                // longer than both the consumer and the producer timeout
+                akka.pattern.after(3.seconds) {
+                  processedProbe.ref ! envelope.sequenceNr
+                  Future.successful(Done)
+                }
+              } else {
+                processedProbe.ref ! envelope.sequenceNr
+                Future.successful(Done)
+              }
+            } else Future.successful(Done)
+        }
+      val projection = spawn(
+        ProjectionBehavior(
+          R2dbcProjection.atLeastOnceAsync(randomProjectionId(), settings = None, sourceProvider, handler)))
+
+      processedProbe.receiveMessages(numberOfEvents, 30.seconds) shouldBe (1L to numberOfEvents)
+      processedProbe.expectNoMessage(3.seconds)
+
+      projection ! ProjectionBehavior.Stop
+    }
   }
 }

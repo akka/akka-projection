@@ -10,7 +10,7 @@ import com.typesafe.config.ConfigFactory
 import org.testcontainers.containers.PostgreSQLContainer
 import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy
 
-class TestContainerConf {
+class TestContainerConf(extraConfig: Config = ConfigFactory.empty()) {
   val grpcPort: Int = SocketUtil.temporaryServerAddress("127.0.0.1").getPort
 
   private val container: PostgreSQLContainer[_] = new PostgreSQLContainer("postgres:13.1")
@@ -20,8 +20,9 @@ class TestContainerConf {
   container.start()
 
   def config: Config =
-    ConfigFactory
-      .parseString(s"""
+    extraConfig.withFallback(
+      ConfigFactory
+        .parseString(s"""
      akka.http.server.preview.enable-http2 = on
      akka.projection.grpc {
        consumer.client {
@@ -42,8 +43,8 @@ class TestContainerConf {
        password = "${container.getPassword}"
      }
      """)
-      .withFallback(ConfigFactory.load("persistence.conf"))
-      .resolve()
+        .withFallback(ConfigFactory.load("persistence.conf"))
+        .resolve())
 
   def stop(): Unit = container.stop()
 }
