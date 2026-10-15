@@ -117,6 +117,8 @@ with details about how to reach the replicas across the network.
 
 The `grpc.client` section for each of the replicas is used for setting up the Akka gRPC client and supports the same discovery, TLS
 and other connection options as when using Akka gRPC directly. For more details see @extref:[Akka gRPC configuration](akka-grpc:client/configuration.html#by-configuration).
+Note that `connection-attempts` is always overridden with `-1` (retry forever), so that the replication streams never
+give up reconnecting to a replica that is unavailable for a long time.
 
 It is also possible to set up @apidoc[akka.projection.grpc.replication.*.ReplicationSettings] through APIs only and not rely
 on the configuration file at all.

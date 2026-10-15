@@ -17,6 +17,7 @@ object Replica {
    * @param replicaId          The unique logical identifier of the replica
    * @param numberOfConsumers  How many consumers to start for consuming events from this replica
    * @param grpcClientSettings Settings for how to connect to the replica, host, port, TLS etc.
+   *                           `connectionAttempts` is always overridden with -1 (retry forever).
    */
   def apply(replicaId: ReplicaId, numberOfConsumers: Int, grpcClientSettings: GrpcClientSettings): Replica =
     new ReplicaImpl(replicaId, numberOfConsumers, grpcClientSettings, None, None)
