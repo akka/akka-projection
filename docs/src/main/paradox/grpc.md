@@ -122,16 +122,19 @@ those are hop-by-hop and only keep the connection to the nearest proxy alive.
 The consumer can request that the producer sends application level keep alive messages at a given interval when there
 are no events, so that the connection is kept alive end-to-end. This is disabled by default and enabled with the
 `akka.projection.grpc.consumer.keep-alive-interval` configuration or `withKeepAliveInterval` on the @apidoc[GrpcQuerySettings].
-The minimum interval is 1 second. The producer must support keep alives (Akka Projections 1.6.26 or later), older
-producers ignore the request.
+The interval must be between 1 second and 1 hour. The producer must support keep alives (Akka Projections 1.6.26 or
+later), older producers ignore the request.
 
-Additionally, the consumer can fail the stream, so that it is restarted by the Projection, if neither events nor keep
-alive messages are received within `akka.projection.grpc.consumer.keep-alive-timeout` or `withKeepAliveTimeout`. This can be
-used to detect stale connections. The timeout is an idle timeout on the event stream rather than a check of the connection,
-so it also triggers when the Projection handler takes longer than the timeout to process an event while further events
-are waiting. The timeout should therefore be several times the keep alive interval and longer than the slowest expected
-handler invocation or batch.
-Note that the stream will also fail and restart if the producer does not support keep alives.
+Additionally, the consumer can fail the stream, so that it is restarted by the Projection, if the producer sends neither
+events nor keep alive messages within `akka.projection.grpc.consumer.keep-alive-timeout` or `withKeepAliveTimeout` while
+the consumer is waiting for events. This detects stale connections. The timeout requires a keep alive interval and must be
+at least twice the interval. Only time spent waiting for the producer counts, so a slow Projection handler does not
+trigger it. The timeout takes effect once the producer has sent its first keep alive, which it does right after the
+stream starts, so producers without keep alive support never trigger it.
+
+Known limitation: keep alives also keep a connection whose network path has broken open on the producer side, since the
+HTTP server idle timeout no longer triggers. Such a stream and its query live on the producer until the TCP connection is
+detected as dead.
 
 ## Producer
 

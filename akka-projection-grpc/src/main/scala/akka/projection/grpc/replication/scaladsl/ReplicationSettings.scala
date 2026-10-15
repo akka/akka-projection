@@ -17,7 +17,6 @@ import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.internal.ConfigHelpers
-import akka.projection.grpc.internal.KeepAliveSettings
 import akka.projection.grpc.internal.TopicMatcher
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducerInterceptor
@@ -193,7 +192,6 @@ final class ReplicationSettings[Command] private (
   require(
     !otherReplicas.exists(_.replicaId == selfReplicaId),
     s"selfReplicaId [$selfReplicaId] must not be in 'otherReplicas'")
-  KeepAliveSettings.validate(keepAliveInterval, keepAliveTimeout)
   require(
     (otherReplicas.map(_.replicaId) + selfReplicaId).size == otherReplicas.size + 1,
     s"selfReplicaId and replica ids of the other replicas must be unique, duplicates found: (${otherReplicas.map(
@@ -293,18 +291,18 @@ final class ReplicationSettings[Command] private (
   /**
    * Request that the other replicas emit keep alive messages at this interval on the replication streams when
    * there are no events, to keep the connections alive end-to-end through proxies and load balancers. Must be
-   * at least 1 second. The other replicas must support keep alives (akka-projection 1.6.26 or later), older
-   * versions ignore the request.
+   * between 1 second and 1 hour, validated when replication is started. The other replicas must support keep
+   * alives (akka-projection 1.6.26 or later), older versions ignore the request.
    */
   def withKeepAliveInterval(interval: FiniteDuration): ReplicationSettings[Command] =
     copy(keepAliveInterval = Some(interval))
 
   /**
-   * Fail and restart a replication stream if neither events nor keep alive messages have been received within this
-   * timeout. Can only be used after a keep alive interval has been set. This is an idle timeout on the stream, so it
-   * should be several times the keep alive interval and longer than the slowest expected replication handler,
-   * otherwise the stream is restarted while the handler is busy. Note that the stream will also fail if the other
-   * replica does not support keep alives.
+   * Fail and restart a replication stream if the other replica sends neither events nor keep alive messages within
+   * this timeout while this replica is waiting for events. Requires a keep alive interval and must be at least
+   * twice the interval, validated when replication is started. The timeout only takes effect once the other
+   * replica has sent its first keep alive, so replicas without keep alive support never trigger it. Time spent
+   * applying replicated events does not count.
    */
   def withKeepAliveTimeout(timeout: FiniteDuration): ReplicationSettings[Command] =
     copy(keepAliveTimeout = Some(timeout))

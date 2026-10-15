@@ -11,6 +11,7 @@ import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.replication.javadsl.{ ReplicationProjectionProvider => JReplicationProjectionProvider }
+import akka.projection.grpc.replication.internal.ReplicationImpl
 import akka.projection.grpc.replication.javadsl.{ ReplicationSettings => JReplicationSettings }
 import akka.projection.grpc.replication.scaladsl.Replica
 import akka.projection.grpc.replication.scaladsl.ReplicationProjectionProvider
@@ -191,33 +192,24 @@ class ReplicationSettingsSpec
       settings.keepAliveInterval should ===(None)
       settings.keepAliveTimeout should ===(None)
 
-      val withKeepAlive = settings.withKeepAliveInterval(5.seconds).withKeepAliveTimeout(15.seconds)
+      // validated when replication is started, so order does not matter here
+      val withKeepAlive = settings.withKeepAliveTimeout(15.seconds).withKeepAliveInterval(5.seconds)
       withKeepAlive.keepAliveInterval should ===(Some(5.seconds))
       withKeepAlive.keepAliveTimeout should ===(Some(15.seconds))
-
-      intercept[IllegalArgumentException] {
-        settings.withKeepAliveTimeout(15.seconds)
-      }
-      intercept[IllegalArgumentException] {
-        settings.withKeepAliveInterval(500.millis)
-      }
     }
 
-    "Validate keep alive settings eagerly in javadsl" in {
-      val javaSettings = JReplicationSettings.create(
-        classOf[MyCommand],
+    "Pass keep alive settings on to the GrpcQuerySettings for each replica" in {
+      val settings = ReplicationSettings[MyCommand](
         "my-replicated-entity",
         // never actually used, just passed along
-        null: JReplicationProjectionProvider,
-        system)
+        null: ReplicationProjectionProvider)
+      val replica = settings.otherReplicas.find(_.replicaId.id == "dcb").get
 
-      // config sets keep-alive-interval = 3s
-      intercept[IllegalArgumentException] {
-        javaSettings.withKeepAliveTimeout(java.time.Duration.ofSeconds(1))
-      }
-      intercept[IllegalArgumentException] {
-        javaSettings.withKeepAliveInterval(java.time.Duration.ofMillis(500))
-      }
+      val querySettings = ReplicationImpl.grpcQuerySettingsFor(replica, settings)
+      querySettings.streamId should ===(settings.streamId)
+      querySettings.fromReplica should ===(Some(replica.replicaId))
+      querySettings.keepAliveInterval should ===(Some(3.seconds))
+      querySettings.keepAliveTimeout should ===(Some(9.seconds))
     }
 
     "Parse from config with javadsl" in {

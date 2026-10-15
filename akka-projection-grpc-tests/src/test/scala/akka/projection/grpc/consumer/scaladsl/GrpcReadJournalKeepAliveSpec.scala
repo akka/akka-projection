@@ -112,6 +112,7 @@ class GrpcReadJournalKeepAliveSpec
 
   private val streamWithKeepAlives = "stream-with-keep-alives"
   private val streamWithTwoEvents = "stream-with-two-events"
+  private val keepAliveThenSilent = "keep-alive-then-silent"
   private val silentStream = "silent-stream"
 
   private val clientSettings = GrpcClientSettings.connectToServiceAt("127.0.0.1", grpcPort).withTls(false)
@@ -121,14 +122,16 @@ class GrpcReadJournalKeepAliveSpec
     val service = new StubProducerService(initProbe.ref, {
       case `streamWithKeepAlives` =>
         // like a producer supporting keep alives, one event and then only keep alives
-        Source
-          .single(filteredEvent("pid-1", 1L))
-          .concat(Source.tick(0.millis, 500.millis, KeepAliveStreamOut).mapMaterializedValue(_ => NotUsed))
+        Source(List(KeepAliveStreamOut, filteredEvent("pid-1", 1L)))
+          .concat(Source.tick(500.millis, 500.millis, KeepAliveStreamOut).mapMaterializedValue(_ => NotUsed))
       case `streamWithTwoEvents` =>
-        Source(List(filteredEvent("pid-1", 1L), filteredEvent("pid-1", 2L)))
-          .concat(Source.tick(0.millis, 500.millis, KeepAliveStreamOut).mapMaterializedValue(_ => NotUsed))
+        Source(List(KeepAliveStreamOut, filteredEvent("pid-1", 1L), filteredEvent("pid-1", 2L)))
+          .concat(Source.tick(500.millis, 500.millis, KeepAliveStreamOut).mapMaterializedValue(_ => NotUsed))
+      case `keepAliveThenSilent` =>
+        // like a producer supporting keep alives whose connection went stale
+        Source.single(KeepAliveStreamOut).concat(Source.maybe[StreamOut])
       case _ =>
-        // like a producer not supporting keep alives, or a stale connection
+        // like a producer not supporting keep alives
         Source.maybe[StreamOut].mapMaterializedValue(_ => NotUsed)
     })
     Http()
@@ -166,38 +169,39 @@ class GrpcReadJournalKeepAliveSpec
       probe.cancel()
     }
 
-    "fail stream when no keep alives are received within the timeout" in {
-      val probe =
-        eventsBySlices(GrpcQuerySettings(silentStream).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds))
+    "fail stream when the producer stops sending keep alives" in {
+      val probe = eventsBySlices(
+        GrpcQuerySettings(keepAliveThenSilent).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds))
       probe.request(10)
       initProbe.receiveMessage().keepAliveIntervalMillis shouldBe 1000L
 
       val error = probe.within(5.seconds)(probe.expectError())
       error shouldBe a[KeepAliveTimeoutException]
-      error.getMessage should include("No events or keep alive messages received within [2 seconds]")
+      error.getMessage should include("No keep alive or event received from producer within [2 seconds]")
     }
 
-    "fail stream when downstream does not request within the timeout while an event is pending" in {
+    "not fail stream when the producer does not support keep alives" in {
+      val probe =
+        eventsBySlices(GrpcQuerySettings(silentStream).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds))
+      probe.request(10)
+      initProbe.receiveMessage().keepAliveIntervalMillis shouldBe 1000L
+
+      // timeout is never armed since no keep alive arrived, like an older producer
+      probe.expectNoMessage(4.seconds)
+      probe.cancel()
+    }
+
+    "not fail stream while downstream is busy and not requesting" in {
       val probe = eventsBySlices(
         GrpcQuerySettings(streamWithTwoEvents).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds))
       probe.request(1)
       initProbe.receiveMessage().keepAliveIntervalMillis shouldBe 1000L
       probe.expectNext().sequenceNr shouldBe 1L
 
-      // like a slow handler with the second event pending: the keep alives behind it never pass the idle timeout
-      val error = probe.within(5.seconds)(probe.expectError())
-      error shouldBe a[KeepAliveTimeoutException]
-    }
-
-    "not fail stream when downstream does not request but no event is pending" in {
-      val probe = eventsBySlices(
-        GrpcQuerySettings(streamWithKeepAlives).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds))
+      // like a slow handler with the second event pending, no demand so no timeout
+      probe.expectNoMessage(5.seconds)
       probe.request(1)
-      initProbe.receiveMessage().keepAliveIntervalMillis shouldBe 1000L
-      probe.expectNext().persistenceId shouldBe "pid-1"
-
-      // keep alives are still dropped before the stream and keep it from timing out
-      probe.expectNoMessage(4.seconds)
+      probe.expectNext().sequenceNr shouldBe 2L
       probe.cancel()
     }
 
@@ -208,6 +212,21 @@ class GrpcReadJournalKeepAliveSpec
 
       probe.expectNoMessage(3.seconds)
       probe.cancel()
+    }
+
+    "reject invalid keep alive settings when the read journal is created" in {
+      def create(settings: GrpcQuerySettings): GrpcReadJournal =
+        GrpcReadJournal(settings, clientSettings, protobufDescriptors = Nil)
+
+      intercept[IllegalArgumentException](create(GrpcQuerySettings(silentStream).withKeepAliveTimeout(2.seconds)))
+      intercept[IllegalArgumentException](create(GrpcQuerySettings(silentStream).withKeepAliveInterval(500.millis)))
+      intercept[IllegalArgumentException](create(GrpcQuerySettings(silentStream).withKeepAliveInterval(2.hours)))
+      intercept[IllegalArgumentException](
+        create(GrpcQuerySettings(silentStream).withKeepAliveInterval(1.second).withKeepAliveTimeout(1500.millis)))
+      // order of setters does not matter
+      create(GrpcQuerySettings(silentStream).withKeepAliveTimeout(2.seconds).withKeepAliveInterval(1.second))
+        .close()
+        .futureValue
     }
   }
 }

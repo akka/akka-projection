@@ -79,7 +79,9 @@ message InitReq {
   optional string correlation_id = 7;
   // if greater than 0 the producer will emit `StreamOut.keep_alive` messages
   // when no events have been emitted for this many milliseconds, to keep the
-  // connection alive end-to-end through proxies and load balancers
+  // connection alive end-to-end through proxies and load balancers.
+  // The producer clamps the interval to between 1 second and 1 hour, and
+  // emits one keep alive right away when the stream starts.
   int64 keep_alive_interval_millis = 8;
 }
 
@@ -261,12 +263,11 @@ message StreamOut {
   oneof message {
     Event event = 1;
     FilteredEvent filtered_event = 2;
-    // only sent if requested by the consumer with `InitReq.keep_alive_interval_millis`
+    // only sent if requested by the consumer with `InitReq.keep_alive_interval_millis`,
+    // the first one right after init so that the consumer can tell that keep alives are supported
     KeepAlive keep_alive = 3;
   }
 }
-
-message KeepAlive { }
 
 message Event {
   string persistence_id = 1;
@@ -352,4 +353,5 @@ message CurrentEventsByPersistenceIdRequest {
   optional string correlation_id = 5;
 }
 
-
+// used both in StreamOut (pull based consumers) and ConsumeEventIn (event producer push)
+message KeepAlive { }
