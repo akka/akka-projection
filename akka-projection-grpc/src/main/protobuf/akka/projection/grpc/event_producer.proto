@@ -55,6 +55,9 @@ message StreamIn {
     // events for a specific entity.
     ReplayReq replay = 3;
     Ack ack = 4;
+    // Sent by the consumer at `InitReq.keep_alive_interval_millis` once it has received the
+    // first `StreamOut.keep_alive`, so that the producer can detect a consumer that went away.
+    KeepAlive keep_alive = 5;
   }
 }
 
@@ -77,6 +80,16 @@ message InitReq {
   repeated FilterCriteria filter = 5;
   ReplicaInfo replica_info = 6;
   optional string correlation_id = 7;
+  // if greater than 0 the producer will emit `StreamOut.keep_alive` messages
+  // when no events have been emitted for this many milliseconds, to keep the
+  // connection alive end-to-end through proxies and load balancers.
+  // The producer clamps the interval to between 1 second and 1 hour, and
+  // emits one keep alive right away when the stream starts.
+  int64 keep_alive_interval_millis = 8;
+  // if greater than 0 the producer fails the stream when no `StreamIn.keep_alive`
+  // has arrived from the consumer for this many milliseconds, counted once the
+  // consumer has sent its first one. At least twice the interval.
+  int64 keep_alive_timeout_millis = 9;
 }
 
 // Add filter criteria to exclude and include events for matching entities.
@@ -257,6 +270,9 @@ message StreamOut {
   oneof message {
     Event event = 1;
     FilteredEvent filtered_event = 2;
+    // only sent if requested by the consumer with `InitReq.keep_alive_interval_millis`,
+    // the first one right after init so that the consumer can tell that keep alives are supported
+    KeepAlive keep_alive = 3;
   }
 }
 
@@ -344,4 +360,5 @@ message CurrentEventsByPersistenceIdRequest {
   optional string correlation_id = 5;
 }
 
-
+// used both in StreamOut (pull based consumers) and ConsumeEventIn (event producer push)
+message KeepAlive { }

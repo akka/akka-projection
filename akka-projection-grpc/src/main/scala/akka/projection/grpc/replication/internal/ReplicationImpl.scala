@@ -155,6 +155,19 @@ private[akka] object ReplicationImpl {
 
   }
 
+  private[akka] def grpcQuerySettingsFor(
+      remoteReplica: Replica,
+      settings: ReplicationSettings[_]): GrpcQuerySettings = {
+    val s = GrpcQuerySettings(settings.streamId).withFromReplica(remoteReplica.replicaId)
+    val s2 =
+      if (settings.initialConsumerFilter.isEmpty) s else s.withInitialConsumerFilter(settings.initialConsumerFilter)
+    val s3 = remoteReplica.additionalQueryRequestMetadata match {
+      case Some(metadata) => s2.withAdditionalRequestMetadata(metadata)
+      case None           => s2
+    }
+    s3.withKeepAlive(settings.keepAliveInterval, settings.keepAliveTimeout)
+  }
+
   private def startConsumer[C](
       remoteReplica: Replica,
       settings: ReplicationSettings[C],
@@ -170,15 +183,7 @@ private[akka] object ReplicationImpl {
       "in the database column, must be at most 255 characters. See if you can shorten replica or entity type names.")
     val sliceRanges = Persistence(system).sliceRanges(remoteReplica.numberOfConsumers)
 
-    val grpcQuerySettings = {
-      val s = GrpcQuerySettings(settings.streamId).withFromReplica(remoteReplica.replicaId)
-      val s2 =
-        if (settings.initialConsumerFilter.isEmpty) s else s.withInitialConsumerFilter(settings.initialConsumerFilter)
-      remoteReplica.additionalQueryRequestMetadata match {
-        case Some(metadata) => s2.withAdditionalRequestMetadata(metadata)
-        case None           => s2
-      }
-    }
+    val grpcQuerySettings = grpcQuerySettingsFor(remoteReplica, settings)
 
     val wireSerialization = new DelegateToAkkaSerialization(system)
     val eventsBySlicesQuery =

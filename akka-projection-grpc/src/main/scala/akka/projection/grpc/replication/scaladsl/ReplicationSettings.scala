@@ -16,6 +16,7 @@ import akka.grpc.GrpcClientSettings
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.consumer.ConsumerFilter
+import akka.projection.grpc.internal.ConfigHelpers
 import akka.projection.grpc.internal.TopicMatcher
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.producer.scaladsl.EventProducerInterceptor
@@ -92,7 +93,9 @@ object ReplicationSettings {
       edgeReplicationDeliveryRetries = 3,
       edgeReplicationDeliveryMinBackoff = 250.millis,
       edgeReplicationDeliveryMaxBackoff = 5.seconds,
-      eventOriginFilterEnabled = true)
+      eventOriginFilterEnabled = true,
+      keepAliveInterval = None,
+      keepAliveTimeout = None)
   }
 
   /**
@@ -155,7 +158,9 @@ object ReplicationSettings {
         replicationConfig.getDuration("edge-replication-delivery-min-backoff").toScala,
       edgeReplicationDeliveryMaxBackoff =
         replicationConfig.getDuration("edge-replication-delivery-max-backoff").toScala,
-      eventOriginFilterEnabled = replicationConfig.getBoolean("event-origin-filter-enabled"))
+      eventOriginFilterEnabled = replicationConfig.getBoolean("event-origin-filter-enabled"),
+      keepAliveInterval = ConfigHelpers.optionalDuration(replicationConfig, "keep-alive-interval"),
+      keepAliveTimeout = ConfigHelpers.optionalDuration(replicationConfig, "keep-alive-timeout"))
   }
 
 }
@@ -180,7 +185,9 @@ final class ReplicationSettings[Command] private (
     val edgeReplicationDeliveryRetries: Int,
     val edgeReplicationDeliveryMinBackoff: FiniteDuration,
     val edgeReplicationDeliveryMaxBackoff: FiniteDuration,
-    val eventOriginFilterEnabled: Boolean) {
+    val eventOriginFilterEnabled: Boolean,
+    val keepAliveInterval: Option[FiniteDuration],
+    val keepAliveTimeout: Option[FiniteDuration]) {
 
   require(
     !otherReplicas.exists(_.replicaId == selfReplicaId),
@@ -281,6 +288,25 @@ final class ReplicationSettings[Command] private (
   def withEventOriginFilterEnabled(enabled: Boolean): ReplicationSettings[Command] =
     copy(eventOriginFilterEnabled = enabled)
 
+  /**
+   * Request that the other replicas emit keep alive messages at this interval on the replication streams when
+   * there are no events, to keep the connections alive end-to-end through proxies and load balancers. Must be
+   * between 1 second and 1 hour, validated when replication is started. The other replicas must support keep
+   * alives (akka-projection 1.6.26 or later), older versions ignore the request.
+   */
+  def withKeepAliveInterval(interval: FiniteDuration): ReplicationSettings[Command] =
+    copy(keepAliveInterval = Some(interval))
+
+  /**
+   * Fail and restart a replication stream if the other replica sends neither events nor keep alive messages within
+   * this timeout while this replica is waiting for events. Requires a keep alive interval and must be at least
+   * twice the interval, validated when replication is started. The timeout only takes effect once the other
+   * replica has sent its first keep alive, so replicas without keep alive support never trigger it. Time spent
+   * applying replicated events does not count.
+   */
+  def withKeepAliveTimeout(timeout: FiniteDuration): ReplicationSettings[Command] =
+    copy(keepAliveTimeout = Some(timeout))
+
   private def copy(
       selfReplicaId: ReplicaId = selfReplicaId,
       entityTypeKey: EntityTypeKey[Command] = entityTypeKey,
@@ -299,7 +325,9 @@ final class ReplicationSettings[Command] private (
       edgeReplicationDeliveryRetries: Int = edgeReplicationDeliveryRetries,
       edgeReplicationDeliveryMinBackoff: FiniteDuration = edgeReplicationDeliveryMinBackoff,
       edgeReplicationDeliveryMaxBackoff: FiniteDuration = edgeReplicationDeliveryMaxBackoff,
-      eventOriginFilterEnabled: Boolean = eventOriginFilterEnabled) =
+      eventOriginFilterEnabled: Boolean = eventOriginFilterEnabled,
+      keepAliveInterval: Option[FiniteDuration] = keepAliveInterval,
+      keepAliveTimeout: Option[FiniteDuration] = keepAliveTimeout) =
     new ReplicationSettings[Command](
       selfReplicaId,
       entityTypeKey,
@@ -317,7 +345,9 @@ final class ReplicationSettings[Command] private (
       edgeReplicationDeliveryRetries,
       edgeReplicationDeliveryMinBackoff,
       edgeReplicationDeliveryMaxBackoff,
-      eventOriginFilterEnabled)
+      eventOriginFilterEnabled,
+      keepAliveInterval,
+      keepAliveTimeout)
 
   override def toString = s"ReplicationSettings($selfReplicaId, $entityTypeKey, $streamId, $otherReplicas)"
 

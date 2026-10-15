@@ -101,7 +101,9 @@ public class ReplicationCompileTest {
                 // parallel updates
                 8,
                 projectionProvider)
-            .configureEntity(entity -> entity.withRole("entities"));
+            .configureEntity(entity -> entity.withRole("entities"))
+            .withKeepAliveInterval(Duration.ofSeconds(5))
+            .withKeepAliveTimeout(Duration.ofSeconds(15));
 
     Replication<MyCommand> replication =
         Replication.grpcReplication(settings, MyReplicatedBehavior::create, system);

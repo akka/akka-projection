@@ -8,8 +8,12 @@ import scala.concurrent.duration._
 
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
+import akka.persistence.typed.ReplicaId
+import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.replication.javadsl.{ ReplicationProjectionProvider => JReplicationProjectionProvider }
+import akka.projection.grpc.replication.internal.ReplicationImpl
 import akka.projection.grpc.replication.javadsl.{ ReplicationSettings => JReplicationSettings }
+import akka.projection.grpc.replication.scaladsl.Replica
 import akka.projection.grpc.replication.scaladsl.ReplicationProjectionProvider
 import akka.projection.grpc.replication.scaladsl.ReplicationSettings
 import com.typesafe.config.ConfigFactory
@@ -19,6 +23,11 @@ import org.scalatest.wordspec.AnyWordSpecLike
 object ReplicationSettingsSpec {
   val config = ConfigFactory
     .parseString("""
+    akka.projection.grpc.replication {
+      keep-alive-interval = 3s
+      keep-alive-timeout = 9s
+    }
+
     my-replicated-entity {
       # which of the replicas this node belongs to, should be the same
       # across the nodes of each replica Akka cluster.
@@ -166,6 +175,41 @@ class ReplicationSettingsSpec
       replicaB.grpcClientSettings.defaultPort should ===(8444)
       replicaB.grpcClientSettings.serviceName should ===("dcb.example.com")
       replicaB.consumersOnClusterRole should ===(Some("dcb-consumer"))
+
+      settings.keepAliveInterval should ===(Some(3.seconds))
+      settings.keepAliveTimeout should ===(Some(9.seconds))
+    }
+
+    "Default to no keep alive when created programmatically" in {
+      val settings = ReplicationSettings[MyCommand](
+        "my-replicated-entity",
+        selfReplicaId = ReplicaId("dca"),
+        eventProducerSettings = EventProducerSettings(system),
+        replicas = Set.empty[Replica],
+        entityEventReplicationTimeout = 10.seconds,
+        parallelUpdates = 8,
+        replicationProjectionProvider = null: ReplicationProjectionProvider)
+      settings.keepAliveInterval should ===(None)
+      settings.keepAliveTimeout should ===(None)
+
+      // validated when replication is started, so order does not matter here
+      val withKeepAlive = settings.withKeepAliveTimeout(15.seconds).withKeepAliveInterval(5.seconds)
+      withKeepAlive.keepAliveInterval should ===(Some(5.seconds))
+      withKeepAlive.keepAliveTimeout should ===(Some(15.seconds))
+    }
+
+    "Pass keep alive settings on to the GrpcQuerySettings for each replica" in {
+      val settings = ReplicationSettings[MyCommand](
+        "my-replicated-entity",
+        // never actually used, just passed along
+        null: ReplicationProjectionProvider)
+      val replica = settings.otherReplicas.find(_.replicaId.id == "dcb").get
+
+      val querySettings = ReplicationImpl.grpcQuerySettingsFor(replica, settings)
+      querySettings.streamId should ===(settings.streamId)
+      querySettings.fromReplica should ===(Some(replica.replicaId))
+      querySettings.keepAliveInterval should ===(Some(3.seconds))
+      querySettings.keepAliveTimeout should ===(Some(9.seconds))
     }
 
     "Parse from config with javadsl" in {
@@ -198,6 +242,8 @@ class ReplicationSettingsSpec
       }
 
       converted.entityEventReplicationTimeout should ===(settings.entityEventReplicationTimeout)
+      converted.keepAliveInterval should ===(Some(3.seconds))
+      converted.keepAliveTimeout should ===(Some(9.seconds))
       converted.entityTypeKey === (settings.entityTypeKey)
       converted.eventProducerInterceptor === (settings.eventProducerInterceptor)
       converted.projectionProvider === (settings.projectionProvider)
