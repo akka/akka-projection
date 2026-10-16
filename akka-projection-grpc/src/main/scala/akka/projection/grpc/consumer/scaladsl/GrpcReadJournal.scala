@@ -451,14 +451,15 @@ final class GrpcReadJournal private (
         withKeepAlive.recover {
           case ex: akka.grpc.GrpcServiceException if ex.status.getCode == Status.Code.UNAVAILABLE =>
             val port = clientSettings.servicePortName.getOrElse(clientSettings.defaultPort.toString)
-            throw new ConnectionException(clientSettings.serviceName, port, streamId)
+            throw new ConnectionException(clientSettings.serviceName, port, streamId, ex)
 
           case ex: KeepAliveTimeoutException =>
             throw ex
 
           case th: Throwable =>
+            val details = ConnectionException.causeDetails(th)
             throw new RuntimeException(
-              s"Failure to consume gRPC event stream for [$streamId]${CorrelationId.toLogText(correlationId)}",
+              s"Failure to consume gRPC event stream for [$streamId]${CorrelationId.toLogText(correlationId)}: $details",
               th)
         }
       }
