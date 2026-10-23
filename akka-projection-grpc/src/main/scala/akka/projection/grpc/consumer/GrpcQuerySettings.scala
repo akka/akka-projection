@@ -8,9 +8,12 @@ import akka.actor.ClassicActorSystemProvider
 import akka.grpc.scaladsl.Metadata
 import akka.grpc.scaladsl.MetadataBuilder
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal
+import akka.projection.grpc.internal.ConfigHelpers
 import com.typesafe.config.Config
 import scala.collection.immutable
+import scala.concurrent.duration.FiniteDuration
 import scala.jdk.CollectionConverters._
+import scala.jdk.DurationConverters._
 
 import akka.annotation.InternalApi
 import akka.persistence.typed.ReplicaId
@@ -48,7 +51,13 @@ object GrpcQuerySettings {
             .build())
     }
 
-    new GrpcQuerySettings(streamId, additionalHeaders, Vector.empty, None)
+    new GrpcQuerySettings(
+      streamId,
+      additionalRequestMetadata = additionalHeaders,
+      initialConsumerFilter = Vector.empty,
+      fromReplica = None,
+      keepAliveInterval = ConfigHelpers.optionalDuration(config, "keep-alive-interval"),
+      keepAliveTimeout = ConfigHelpers.optionalDuration(config, "keep-alive-timeout"))
   }
 
   /**
@@ -73,7 +82,9 @@ object GrpcQuerySettings {
       streamId,
       additionalRequestMetadata = None,
       initialConsumerFilter = Vector.empty,
-      fromReplica = None)
+      fromReplica = None,
+      keepAliveInterval = None,
+      keepAliveTimeout = None)
   }
 
   /**
@@ -86,7 +97,9 @@ object GrpcQuerySettings {
       streamId,
       additionalRequestMetadata = None,
       initialConsumerFilter = Vector.empty,
-      fromReplica = None)
+      fromReplica = None,
+      keepAliveInterval = None,
+      keepAliveTimeout = None)
   }
 }
 
@@ -94,7 +107,9 @@ final class GrpcQuerySettings private (
     val streamId: String,
     val additionalRequestMetadata: Option[Metadata],
     val initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria],
-    val fromReplica: Option[ReplicaId]) {
+    val fromReplica: Option[ReplicaId],
+    val keepAliveInterval: Option[FiniteDuration],
+    val keepAliveTimeout: Option[FiniteDuration]) {
   require(
     streamId != "",
     "streamId must be an id exposed by the producing side but was undefined on the consuming side.")
@@ -122,16 +137,70 @@ final class GrpcQuerySettings private (
     copy(initialConsumerFilter = initialConsumerFilter.asScala.toVector)
 
   /**
+   * Scala API: Request that the producer emits keep alive messages at this interval when there are no events,
+   * to keep the event stream connection alive end-to-end through proxies and load balancers. Must be between
+   * 1 second and 1 hour, validated when the `GrpcReadJournal` is created. The producer must support keep alives
+   * (akka-projection 1.6.26 or later), older producers will ignore the request.
+   */
+  def withKeepAliveInterval(interval: FiniteDuration): GrpcQuerySettings =
+    copy(keepAliveInterval = Some(interval))
+
+  /**
+   * Java API: Request that the producer emits keep alive messages at this interval when there are no events,
+   * to keep the event stream connection alive end-to-end through proxies and load balancers. Must be between
+   * 1 second and 1 hour, validated when the `GrpcReadJournal` is created. The producer must support keep alives
+   * (akka-projection 1.6.26 or later), older producers will ignore the request.
+   */
+  def withKeepAliveInterval(interval: java.time.Duration): GrpcQuerySettings =
+    copy(keepAliveInterval = Some(interval.toScala))
+
+  /**
+   * Scala API: Fail the event stream if the producer sends neither events nor keep alive messages within this
+   * timeout while the consumer is waiting for events, so that the projection restarts it. Requires a keep alive
+   * interval and must be at least twice the interval, validated when the `GrpcReadJournal` is created. The timeout
+   * only takes effect once the producer has sent its first keep alive, so producers without keep alive support
+   * never trigger it. Time spent in the projection handler does not count.
+   */
+  def withKeepAliveTimeout(timeout: FiniteDuration): GrpcQuerySettings =
+    copy(keepAliveTimeout = Some(timeout))
+
+  /**
+   * Java API: Fail the event stream if the producer sends neither events nor keep alive messages within this
+   * timeout while the consumer is waiting for events, so that the projection restarts it. Requires a keep alive
+   * interval and must be at least twice the interval, validated when the `GrpcReadJournal` is created. The timeout
+   * only takes effect once the producer has sent its first keep alive, so producers without keep alive support
+   * never trigger it. Time spent in the projection handler does not count.
+   */
+  def withKeepAliveTimeout(timeout: java.time.Duration): GrpcQuerySettings =
+    copy(keepAliveTimeout = Some(timeout.toScala))
+
+  /**
    * INTERNAL API
    */
   @InternalApi private[akka] def withFromReplica(replica: ReplicaId): GrpcQuerySettings =
     copy(fromReplica = Option(replica))
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def withKeepAlive(
+      interval: Option[FiniteDuration],
+      timeout: Option[FiniteDuration]): GrpcQuerySettings =
+    copy(keepAliveInterval = interval, keepAliveTimeout = timeout)
+
   private def copy(
       streamId: String = streamId,
       additionalRequestMetadata: Option[Metadata] = additionalRequestMetadata,
       initialConsumerFilter: immutable.Seq[ConsumerFilter.FilterCriteria] = initialConsumerFilter,
-      fromReplica: Option[ReplicaId] = fromReplica): GrpcQuerySettings =
-    new GrpcQuerySettings(streamId, additionalRequestMetadata, initialConsumerFilter, fromReplica)
+      fromReplica: Option[ReplicaId] = fromReplica,
+      keepAliveInterval: Option[FiniteDuration] = keepAliveInterval,
+      keepAliveTimeout: Option[FiniteDuration] = keepAliveTimeout): GrpcQuerySettings =
+    new GrpcQuerySettings(
+      streamId,
+      additionalRequestMetadata,
+      initialConsumerFilter,
+      fromReplica,
+      keepAliveInterval,
+      keepAliveTimeout)
 
 }

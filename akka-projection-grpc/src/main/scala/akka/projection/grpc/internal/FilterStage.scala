@@ -435,6 +435,9 @@ import akka.util.RecencyList
                 log.warn("Stream [{}]: Init request can only be used as the first message", logPrefix)
                 throw new IllegalStateException("Init request can only be used as the first message")
 
+              case StreamIn(StreamIn.Message.KeepAlive(_), _) =>
+              // normally dropped before reaching this stage
+
               case StreamIn(other, _) =>
                 log.warn("Stream [{}]: Unknown StreamIn request [{}]", logPrefix, other.getClass.getName)
             }

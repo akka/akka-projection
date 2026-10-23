@@ -28,12 +28,14 @@ import java.util.function.Predicate
 import java.util.{ Set => JSet }
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.consumer.ConsumerFilter
+import akka.projection.grpc.internal.ConfigHelpers
 import akka.projection.grpc.internal.TopicMatcher
 import akka.projection.grpc.replication.internal.ReplicationProjectionProviderAdapter
 
 import scala.concurrent.duration.DurationInt
 import scala.jdk.CollectionConverters._
 import scala.jdk.DurationConverters._
+import scala.jdk.OptionConverters._
 
 object ReplicationSettings {
 
@@ -83,7 +85,9 @@ object ReplicationSettings {
       // no system config to get defaults from, repeating config file defaults
       edgeReplicationDeliveryRetries = 3,
       edgeReplicationDeliveryMinBackoff = 250.millis.toJava,
-      edgeReplicationDeliveryMaxBackoff = 5.seconds.toJava)
+      edgeReplicationDeliveryMaxBackoff = 5.seconds.toJava,
+      keepAliveInterval = Optional.empty(),
+      keepAliveTimeout = Optional.empty())
   }
 
   /**
@@ -142,7 +146,9 @@ object ReplicationSettings {
       initialConsumerFilter = Collections.emptyList,
       edgeReplicationDeliveryRetries = replicationConfig.getInt("edge-replication-delivery-retries"),
       edgeReplicationDeliveryMinBackoff = replicationConfig.getDuration("edge-replication-delivery-min-backoff"),
-      edgeReplicationDeliveryMaxBackoff = replicationConfig.getDuration("edge-replication-delivery-max-backoff"))
+      edgeReplicationDeliveryMaxBackoff = replicationConfig.getDuration("edge-replication-delivery-max-backoff"),
+      keepAliveInterval = ConfigHelpers.optionalDuration(replicationConfig, "keep-alive-interval").map(_.toJava).toJava,
+      keepAliveTimeout = ConfigHelpers.optionalDuration(replicationConfig, "keep-alive-timeout").map(_.toJava).toJava)
   }
 }
 
@@ -168,7 +174,9 @@ final class ReplicationSettings[Command] private (
     val initialConsumerFilter: JList[ConsumerFilter.FilterCriteria],
     val edgeReplicationDeliveryRetries: Int,
     val edgeReplicationDeliveryMinBackoff: Duration,
-    val edgeReplicationDeliveryMaxBackoff: Duration) {
+    val edgeReplicationDeliveryMaxBackoff: Duration,
+    val keepAliveInterval: Optional[Duration],
+    val keepAliveTimeout: Optional[Duration]) {
 
   def withSelfReplicaId(selfReplicaId: ReplicaId): ReplicationSettings[Command] =
     copy(selfReplicaId = selfReplicaId)
@@ -256,6 +264,25 @@ final class ReplicationSettings[Command] private (
   def withEdgeReplicationDeliveryMaxBackoff(maxBackoff: Duration): ReplicationSettings[Command] =
     copy(edgeReplicationDeliveryMaxBackoff = maxBackoff)
 
+  /**
+   * Request that the other replicas emit keep alive messages at this interval on the replication streams when
+   * there are no events, to keep the connections alive end-to-end through proxies and load balancers. Must be
+   * between 1 second and 1 hour, validated when replication is started. The other replicas must support keep
+   * alives (akka-projection 1.6.26 or later), older versions ignore the request.
+   */
+  def withKeepAliveInterval(interval: Duration): ReplicationSettings[Command] =
+    copy(keepAliveInterval = Optional.of(interval))
+
+  /**
+   * Fail and restart a replication stream if the other replica sends neither events nor keep alive messages within
+   * this timeout while this replica is waiting for events. Requires a keep alive interval and must be at least
+   * twice the interval, validated when replication is started. The timeout only takes effect once the other
+   * replica has sent its first keep alive, so replicas without keep alive support never trigger it. Time spent
+   * applying replicated events does not count.
+   */
+  def withKeepAliveTimeout(timeout: Duration): ReplicationSettings[Command] =
+    copy(keepAliveTimeout = Optional.of(timeout))
+
   private def copy(
       selfReplicaId: ReplicaId = selfReplicaId,
       entityTypeKey: EntityTypeKey[Command] = entityTypeKey,
@@ -274,7 +301,9 @@ final class ReplicationSettings[Command] private (
       initialConsumerFilter: JList[ConsumerFilter.FilterCriteria] = initialConsumerFilter,
       edgeReplicationDeliveryRetries: Int = edgeReplicationDeliveryRetries,
       edgeReplicationDeliveryMinBackoff: Duration = edgeReplicationDeliveryMinBackoff,
-      edgeReplicationDeliveryMaxBackoff: Duration = edgeReplicationDeliveryMaxBackoff): ReplicationSettings[Command] =
+      edgeReplicationDeliveryMaxBackoff: Duration = edgeReplicationDeliveryMaxBackoff,
+      keepAliveInterval: Optional[Duration] = keepAliveInterval,
+      keepAliveTimeout: Optional[Duration] = keepAliveTimeout): ReplicationSettings[Command] =
     new ReplicationSettings[Command](
       selfReplicaId,
       entityTypeKey,
@@ -291,7 +320,9 @@ final class ReplicationSettings[Command] private (
       initialConsumerFilter,
       edgeReplicationDeliveryRetries,
       edgeReplicationDeliveryMinBackoff,
-      edgeReplicationDeliveryMaxBackoff)
+      edgeReplicationDeliveryMaxBackoff,
+      keepAliveInterval,
+      keepAliveTimeout)
 
   override def toString =
     s"ReplicationSettings($selfReplicaId, $entityTypeKey, $streamId, ${otherReplicas.asScala.mkString(", ")})"
@@ -300,8 +331,8 @@ final class ReplicationSettings[Command] private (
    * INTERNAL API
    */
   @InternalApi
-  private[akka] def toScala: SReplicationSettings[Command] =
-    SReplicationSettings[Command](
+  private[akka] def toScala: SReplicationSettings[Command] = {
+    val scalaSettings = SReplicationSettings[Command](
       entityTypeKey = entityTypeKey.asScala,
       selfReplicaId = selfReplicaId,
       eventProducerSettings = eventProducerSettings,
@@ -315,5 +346,12 @@ final class ReplicationSettings[Command] private (
       .withEdgeReplicationDeliveryRetries(edgeReplicationDeliveryRetries)
       .withEdgeReplicationDeliveryMinBackoff(edgeReplicationDeliveryMinBackoff.toScala)
       .withEdgeReplicationDeliveryMaxBackoff(edgeReplicationDeliveryMaxBackoff.toScala)
+    (keepAliveInterval.toScala, keepAliveTimeout.toScala) match {
+      case (Some(interval), Some(timeout)) =>
+        scalaSettings.withKeepAliveInterval(interval.toScala).withKeepAliveTimeout(timeout.toScala)
+      case (Some(interval), None) => scalaSettings.withKeepAliveInterval(interval.toScala)
+      case _                      => scalaSettings
+    }
+  }
 
 }
