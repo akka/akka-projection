@@ -79,7 +79,9 @@ The gRPC connection to the producer is defined in the [consumer configuration](#
 The @ref:[R2dbcProjection](r2dbc.md) has support for storing the offset in a relational database using R2DBC.
 
 The above example is using the @extref:[ShardedDaemonProcess](akka:typed/cluster-sharded-daemon-process.html) to distribute the instances of the Projection across the cluster.
-There are alternative ways of running the `ProjectionBehavior` as described in @ref:[Running a Projection](running.md)
+There are alternative ways of running the `ProjectionBehavior` as described in @ref:[Running a Projection](running.md).
+
+Note that the `numberOfProjectionInstances` value is only honored the first time the Sharded Daemon Process is started; afterwards the running count is kept in distributed data. See @ref:[Changing the number of projection instances](running.md#changing-the-number-of-projection-instances) for details.
 
 How to implement the `EventHandler` and choose between different processing semantics is described in the @ref:[R2dbcProjection documentation](r2dbc.md).
 
