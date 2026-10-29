@@ -403,12 +403,14 @@ private[akka] object ReplicationImpl {
               concurrent = false))
         })
 
+    // never give up reconnecting, a client that gave up is closed for good
+    val pushClientSettings = remoteReplica.grpcClientSettings.withConnectionAttempts(-1)
     val epp =
       remoteReplica.additionalQueryRequestMetadata match {
         case None =>
-          EventProducerPush[AnyRef](settings.selfReplicaId.id, eps, remoteReplica.grpcClientSettings)
+          EventProducerPush[AnyRef](settings.selfReplicaId.id, eps, pushClientSettings)
         case Some(metadata) =>
-          EventProducerPush[AnyRef](settings.selfReplicaId.id, eps, metadata, remoteReplica.grpcClientSettings)
+          EventProducerPush[AnyRef](settings.selfReplicaId.id, eps, metadata, pushClientSettings)
       }
 
     ShardedDaemonProcess(system).initWithContext[ProjectionBehavior.Command](

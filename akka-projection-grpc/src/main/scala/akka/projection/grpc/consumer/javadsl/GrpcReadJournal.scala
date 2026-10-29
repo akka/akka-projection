@@ -68,6 +68,7 @@ object GrpcReadJournal {
   /**
    * Construct a gRPC read journal for the given settings and explicit `GrpcClientSettings` to control
    * how to reach the Akka Projection gRPC producer service (host, port etc).
+   * Note that `connectionAttempts` of the `clientSettings` is always overridden with -1 (retry forever).
    */
   def create(
       system: ClassicActorSystemProvider,

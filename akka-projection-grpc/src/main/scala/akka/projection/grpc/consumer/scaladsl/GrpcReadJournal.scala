@@ -7,6 +7,7 @@ package akka.projection.grpc.consumer.scaladsl
 import akka.Done
 import akka.NotUsed
 import akka.actor.ClassicActorSystemProvider
+import akka.actor.CoordinatedShutdown
 import akka.actor.ExtendedActorSystem
 import akka.actor.typed.scaladsl.adapter._
 import akka.annotation.InternalApi
@@ -27,7 +28,7 @@ import akka.persistence.query.typed.scaladsl.LoadEventQuery
 import akka.projection.grpc.consumer.ConsumerFilter
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
-import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withChannelBuilderOverrides
+import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withClientDefaults
 import akka.projection.grpc.internal.ProjectionGrpcSerialization
 import akka.projection.grpc.internal.ConnectionException
 import akka.projection.grpc.internal.ProtoAnySerialization
@@ -54,6 +55,7 @@ import io.grpc.Status
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.slf4j.event.Level
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -61,6 +63,8 @@ import java.util.concurrent.TimeUnit
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.duration._
+import scala.util.Failure
 
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
 import akka.persistence.query.typed.scaladsl.LatestEventTimestampQuery
@@ -77,6 +81,8 @@ object GrpcReadJournal {
 
   private val log: Logger =
     LoggerFactory.getLogger(classOf[GrpcReadJournal])
+
+  private val ClientReplacementWarnInterval = 10.seconds
 
   /**
    * Construct a gRPC read journal from configuration `akka.projection.grpc.consumer`. The `stream-id` must
@@ -109,6 +115,7 @@ object GrpcReadJournal {
   /**
    * Construct a gRPC read journal for the given settings and explicit `GrpcClientSettings` to control
    * how to reach the Akka Projection gRPC producer service (host, port etc).
+   * Note that `connectionAttempts` of the `clientSettings` is always overridden with -1 (retry forever).
    *
    * Note that the `protobufDescriptors` is a list of the `javaDescriptor` for the used protobuf messages. It is
    * defined in the ScalaPB generated `Proto` companion object.
@@ -145,14 +152,18 @@ object GrpcReadJournal {
     new scaladsl.GrpcReadJournal(
       system.classicSystem.asInstanceOf[ExtendedActorSystem],
       settings,
-      withChannelBuilderOverrides(clientSettings),
+      withClientDefaults(clientSettings),
       wireSerialization,
       replicationSettings)
   }
 
-  private def withChannelBuilderOverrides(clientSettings: GrpcClientSettings): GrpcClientSettings = {
-    // compose with potential user overrides to allow overriding our defaults
-    clientSettings.withChannelBuilderOverrides(channelBuilderOverrides.andThen(clientSettings.channelBuilderOverrides))
+  private def withClientDefaults(clientSettings: GrpcClientSettings): GrpcClientSettings = {
+    // Never give up reconnecting, a client that gave up is closed for good. Always overrides the user setting
+    // since we can't tell an explicit value from the akka-grpc default.
+    // Channel builder overrides are composed with potential user overrides to allow overriding our defaults.
+    clientSettings
+      .withConnectionAttempts(-1)
+      .withChannelBuilderOverrides(channelBuilderOverrides.andThen(clientSettings.channelBuilderOverrides))
   }
 
   private def channelBuilderOverrides: NettyChannelBuilder => NettyChannelBuilder =
@@ -175,6 +186,7 @@ final class GrpcReadJournal private (
     with CanTriggerReplay
     with LatestEventTimestampQuery
     with CurrentEventsByPersistenceIdTypedQuery {
+  import GrpcReadJournal.ClientReplacementWarnInterval
   import GrpcReadJournal.log
   import ProtobufProtocolConversions._
 
@@ -187,7 +199,7 @@ final class GrpcReadJournal private (
     this(
       system,
       GrpcQuerySettings(config),
-      withChannelBuilderOverrides(GrpcClientSettings.fromConfig(config.getConfig("client"))(system)),
+      withClientDefaults(GrpcClientSettings.fromConfig(config.getConfig("client"))(system)),
       new ProtoAnySerialization(system.toTyped, descriptors = Nil, protoAnyPrefer),
       replicationSettings = None)
 
@@ -209,7 +221,53 @@ final class GrpcReadJournal private (
 
   lazy val consumerFilter: ConsumerFilter = ConsumerFilter(typedSystem)
 
-  private val client = EventProducerServiceClient(clientSettings)
+  // replaced if closed for other reasons than close(), guarded by clientLock for writes
+  @volatile private var client = EventProducerServiceClient(clientSettings)
+  @volatile private var closedByUser = false
+  private val clientLock = new Object
+  // guarded by clientLock, to only log the first of a burst of replacements as warning
+  private var lastClientReplacementNanos = System.nanoTime() - ClientReplacementWarnInterval.toNanos
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi private[akka] def currentClient(): EventProducerServiceClient = {
+    val current = client
+    if (current.closed.isCompleted && !closedByUser && !shutdownStarted)
+      replaceClosedClient(current)
+    else
+      current
+  }
+
+  private def replaceClosedClient(closedClient: EventProducerServiceClient): EventProducerServiceClient =
+    clientLock.synchronized {
+      // shutdown checked again, a client created after close-grpc-channels has run would not be closed
+      if ((client eq closedClient) && !closedByUser && !shutdownStarted) {
+        val reason = closedClient.closed.value match {
+          case Some(Failure(exc)) => exc.toString
+          case _                  => "closed"
+        }
+        val now = System.nanoTime()
+        val logLevel =
+          if (now - lastClientReplacementNanos >= ClientReplacementWarnInterval.toNanos) Level.WARN else Level.DEBUG
+        lastClientReplacementNanos = now
+        log
+          .atLevel(logLevel)
+          .log(
+            "[{}] gRPC client to [{}] was closed ({}), creating a new client",
+            streamId,
+            clientSettings.serviceName,
+            reason)
+        // already closed, but this also deregisters it from the akka-grpc extension
+        closedClient.close()
+        client = EventProducerServiceClient(clientSettings)
+      }
+      client
+    }
+
+  private def shutdownStarted: Boolean =
+    CoordinatedShutdown(system).shutdownReason().isDefined
+
   private val additionalRequestHeaders = settings.additionalRequestMetadata match {
     case Some(meta) => meta.asList
     case None       => Seq.empty
@@ -401,7 +459,7 @@ final class GrpcReadJournal private (
     }
 
     val streamOut: Source[StreamOut, NotUsed] =
-      addRequestHeaders(client.eventsBySlices())
+      addRequestHeaders(currentClient().eventsBySlices())
         .invoke(streamIn)
         .recover {
           case ex: akka.grpc.GrpcServiceException if ex.status.getCode == Status.Code.UNAVAILABLE =>
@@ -484,7 +542,7 @@ final class GrpcReadJournal private (
   override def timestampOf(persistenceId: String, sequenceNr: Long): Future[Option[Instant]] = {
     import system.dispatcher
     val correlationId = QueryCorrelationId.get()
-    addRequestHeaders(client.eventTimestamp())
+    addRequestHeaders(currentClient().eventTimestamp())
       .invoke(EventTimestampRequest(settings.streamId, persistenceId, sequenceNr, correlationId))
       .map(_.timestamp.map(_.asJavaInstant))
   }
@@ -503,7 +561,7 @@ final class GrpcReadJournal private (
         CorrelationId.toLogText(correlationId))
     }
     import system.dispatcher
-    addRequestHeaders(client.loadEvent())
+    addRequestHeaders(currentClient().loadEvent())
       .invoke(LoadEventRequest(settings.streamId, persistenceId, sequenceNr, replicaInfo, correlationId))
       .map {
         case LoadEventResponse(LoadEventResponse.Message.Event(event), _) =>
@@ -528,7 +586,7 @@ final class GrpcReadJournal private (
     require(streamId == settings.streamId, s"Stream id mismatch, was [$streamId], expected [${settings.streamId}]")
     val correlationId = QueryCorrelationId.get()
     import system.dispatcher
-    addRequestHeaders(client.latestEventTimestamp())
+    addRequestHeaders(currentClient().latestEventTimestamp())
       .invoke(LatestEventTimestampRequest(streamId, minSlice, maxSlice, correlationId))
       .map(_.timestamp.map(_.asJavaInstant))
   }
@@ -541,7 +599,7 @@ final class GrpcReadJournal private (
     val fromRemote = settings.fromReplica.getOrElse(clientSettings.serviceName)
     val logPrefix = s"[$streamId] from [$fromRemote]"
     val correlationId = QueryCorrelationId.get()
-    addRequestHeaders(client.currentEventsByPersistenceId())
+    addRequestHeaders(currentClient().currentEventsByPersistenceId())
       .invoke(
         CurrentEventsByPersistenceIdRequest(
           settings.streamId,
@@ -585,6 +643,9 @@ final class GrpcReadJournal private (
    * After closing the `GrpcReadJournal` instance cannot be used again.
    */
   def close(): Future[Done] =
-    client.close()
+    clientLock.synchronized {
+      closedByUser = true
+      client.close()
+    }
 
 }

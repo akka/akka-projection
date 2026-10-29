@@ -110,6 +110,12 @@ instance and its gRPC client should be shared for the same target producer. The 
 between different Projection instances running in the same `ActorSystem`. The gRPC clients will automatically be 
 closed when the `ActorSystem` is terminated.
 
+The gRPC client used by the `GrpcReadJournal` will keep trying to reconnect to the producer for as long as it is
+unavailable, the Akka gRPC `connection-attempts` setting is always overridden with `-1` (retry forever), also when
+explicitly configured. If the gRPC client is still closed for some other reason than an explicit `close()` call, the
+`GrpcReadJournal` will create a new gRPC client the next time it is used, for example when a Projection is restarted.
+No new gRPC client is created once the coordinated shutdown of the `ActorSystem` has started.
+
 If there is a need to close the gRPC client before `ActorSystem` termination the `close()` method of the @apidoc[GrpcReadJournal]
 can be called. After closing the `GrpcReadJournal` instance cannot be used again.
 
