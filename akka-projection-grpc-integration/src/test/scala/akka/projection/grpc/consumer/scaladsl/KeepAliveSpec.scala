@@ -14,6 +14,7 @@ import akka.actor.typed.ActorSystem
 import akka.grpc.GrpcClientSettings
 import akka.grpc.GrpcServiceException
 import akka.http.scaladsl.Http
+import akka.persistence.Persistence
 import akka.persistence.query.NoOffset
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.r2dbc.internal.EnvelopeOrigin
@@ -72,16 +73,21 @@ class KeepAliveSpec(testContainerConf: TestContainerConf)
   private val entityType = nextEntityType()
   private val streamId = "stream_id_keep_alive"
   private val pid = nextPid(entityType)
+  // separate stream so that events of the other tests do not show up
+  private val sharedEntityType = nextEntityType()
+  private val sharedStreamId = "stream_id_keep_alive_shared"
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
 
     val eventProducerSource =
       EventProducerSource(entityType, streamId, Transformation.identity, EventProducerSettings(system))
+    val sharedEventProducerSource =
+      EventProducerSource(sharedEntityType, sharedStreamId, Transformation.identity, EventProducerSettings(system))
 
     Http()
       .newServerAt("127.0.0.1", grpcPort)
-      .bind(EventProducer.grpcServiceHandler(Set(eventProducerSource)))
+      .bind(EventProducer.grpcServiceHandler(Set(eventProducerSource, sharedEventProducerSource)))
       .futureValue
   }
 
@@ -260,6 +266,54 @@ class KeepAliveSpec(testContainerConf: TestContainerConf)
       processedProbe.expectNoMessage(3.seconds)
 
       projection ! ProjectionBehavior.Stop
+    }
+
+    "not time out an idle stream sharing the connection with a stream that has a large unread backlog" in {
+      def pidInSlices(minSlice: Int, maxSlice: Int) =
+        Iterator
+          .continually(nextPid(sharedEntityType))
+          .find { p =>
+            val slice = Persistence(system).sliceForPersistenceId(p.id)
+            slice >= minSlice && slice <= maxSlice
+          }
+          .get
+
+      val backlogPid = pidInSlices(0, 511)
+      val idlePid = pidInSlices(512, 1023)
+      // larger than the maximum HTTP/2 window that grpc-java grows to (8 MB)
+      val numberOfEvents = 400
+      val payload = "x" * 30000
+      val replyProbe = createTestProbe[Done]()
+      val backlogEntity = spawn(TestEntity(backlogPid))
+      (1 to numberOfEvents).foreach(_ => backlogEntity ! TestEntity.Persist(payload))
+      backlogEntity ! TestEntity.Ping(replyProbe.ref)
+      replyProbe.receiveMessage(30.seconds)
+
+      // both slice ranges share the gRPC channel of the read journal
+      val readJournal = GrpcReadJournal(
+        GrpcQuerySettings(sharedStreamId).withKeepAliveInterval(1.second).withKeepAliveTimeout(3.seconds),
+        GrpcClientSettings.connectToServiceAt("127.0.0.1", grpcPort).withTls(false),
+        protobufDescriptors = Nil)
+
+      val backlogProbe = readJournal
+        .eventsBySlices[String](sharedStreamId, 0, 511, NoOffset)
+        .runWith(TestSink[EventEnvelope[String]]())
+      backlogProbe.request(1)
+      backlogProbe.expectNext(10.seconds).persistenceId shouldBe backlogPid.id
+
+      val idleProbe = readJournal
+        .eventsBySlices[String](sharedStreamId, 512, 1023, NoOffset)
+        .runWith(TestSink[EventEnvelope[String]]())
+      idleProbe.request(10)
+      idleProbe.expectNoMessage(10.seconds)
+
+      val idleEntity = spawn(TestEntity(idlePid))
+      idleEntity ! TestEntity.Persist("f")
+      idleProbe.expectNext(10.seconds).event shouldBe "f"
+
+      backlogProbe.cancel()
+      idleProbe.cancel()
+      readJournal.close().futureValue
     }
   }
 }
