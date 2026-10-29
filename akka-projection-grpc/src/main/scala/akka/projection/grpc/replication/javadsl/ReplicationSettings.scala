@@ -346,12 +346,9 @@ final class ReplicationSettings[Command] private (
       .withEdgeReplicationDeliveryRetries(edgeReplicationDeliveryRetries)
       .withEdgeReplicationDeliveryMinBackoff(edgeReplicationDeliveryMinBackoff.toScala)
       .withEdgeReplicationDeliveryMaxBackoff(edgeReplicationDeliveryMaxBackoff.toScala)
-    (keepAliveInterval.toScala, keepAliveTimeout.toScala) match {
-      case (Some(interval), Some(timeout)) =>
-        scalaSettings.withKeepAliveInterval(interval.toScala).withKeepAliveTimeout(timeout.toScala)
-      case (Some(interval), None) => scalaSettings.withKeepAliveInterval(interval.toScala)
-      case _                      => scalaSettings
-    }
+    val withInterval =
+      keepAliveInterval.toScala.fold(scalaSettings)(interval => scalaSettings.withKeepAliveInterval(interval.toScala))
+    keepAliveTimeout.toScala.fold(withInterval)(timeout => withInterval.withKeepAliveTimeout(timeout.toScala))
   }
 
 }
