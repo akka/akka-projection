@@ -98,6 +98,7 @@ class GrpcReadJournalClientRecoverySpec
       val port = SocketUtil.temporaryServerAddress("127.0.0.1").getPort
       // low attempts make the client give up quickly, unless the journal overrides it
       val readJournal = journal(clientSettings(port).withConnectionAttempts(1))
+      val firstClient = readJournal.currentClient()
 
       // keep calling, connection attempts are only made when there are calls
       val deadline = 4.seconds.fromNow
@@ -106,6 +107,9 @@ class GrpcReadJournalClientRecoverySpec
         Future.delegate(readJournal.latestEventTimestamp(streamId, 0, 1023))(system.executionContext).failed.futureValue
         Thread.sleep(200)
       }
+      // the client should never give up, rather than being replaced
+      firstClient.closed.isCompleted shouldBe false
+      (readJournal.currentClient() should be).theSameInstanceAs(firstClient)
 
       val binding = bindProducer(port)
       try {

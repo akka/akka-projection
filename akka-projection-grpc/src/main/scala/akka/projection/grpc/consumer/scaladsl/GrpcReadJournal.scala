@@ -55,6 +55,7 @@ import io.grpc.Status
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import org.slf4j.event.Level
 import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.TimeUnit
@@ -62,6 +63,7 @@ import java.util.concurrent.TimeUnit
 import scala.collection.immutable
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
+import scala.concurrent.duration._
 import scala.util.Failure
 
 import akka.persistence.query.typed.scaladsl.CurrentEventsByPersistenceIdTypedQuery
@@ -79,6 +81,8 @@ object GrpcReadJournal {
 
   private val log: Logger =
     LoggerFactory.getLogger(classOf[GrpcReadJournal])
+
+  private val ClientReplacementWarnInterval = 10.seconds
 
   /**
    * Construct a gRPC read journal from configuration `akka.projection.grpc.consumer`. The `stream-id` must
@@ -182,6 +186,7 @@ final class GrpcReadJournal private (
     with CanTriggerReplay
     with LatestEventTimestampQuery
     with CurrentEventsByPersistenceIdTypedQuery {
+  import GrpcReadJournal.ClientReplacementWarnInterval
   import GrpcReadJournal.log
   import ProtobufProtocolConversions._
 
@@ -220,13 +225,15 @@ final class GrpcReadJournal private (
   @volatile private var client = EventProducerServiceClient(clientSettings)
   @volatile private var closedByUser = false
   private val clientLock = new Object
+  // guarded by clientLock, to only log the first of a burst of replacements as warning
+  private var lastClientReplacementNanos = System.nanoTime() - ClientReplacementWarnInterval.toNanos
 
   /**
    * INTERNAL API
    */
   @InternalApi private[akka] def currentClient(): EventProducerServiceClient = {
     val current = client
-    if (current.closed.isCompleted && !closedByUser && CoordinatedShutdown(system).shutdownReason().isEmpty)
+    if (current.closed.isCompleted && !closedByUser && !shutdownStarted)
       replaceClosedClient(current)
     else
       current
@@ -234,22 +241,32 @@ final class GrpcReadJournal private (
 
   private def replaceClosedClient(closedClient: EventProducerServiceClient): EventProducerServiceClient =
     clientLock.synchronized {
-      if ((client eq closedClient) && !closedByUser) {
+      // shutdown checked again, a client created after close-grpc-channels has run would not be closed
+      if ((client eq closedClient) && !closedByUser && !shutdownStarted) {
         val reason = closedClient.closed.value match {
           case Some(Failure(exc)) => exc.toString
           case _                  => "closed"
         }
-        log.warn(
-          "[{}] gRPC client to [{}] was closed ({}), creating a new client",
-          streamId,
-          clientSettings.serviceName,
-          reason)
+        val now = System.nanoTime()
+        val logLevel =
+          if (now - lastClientReplacementNanos >= ClientReplacementWarnInterval.toNanos) Level.WARN else Level.DEBUG
+        lastClientReplacementNanos = now
+        log
+          .atLevel(logLevel)
+          .log(
+            "[{}] gRPC client to [{}] was closed ({}), creating a new client",
+            streamId,
+            clientSettings.serviceName,
+            reason)
         // already closed, but this also deregisters it from the akka-grpc extension
         closedClient.close()
         client = EventProducerServiceClient(clientSettings)
       }
       client
     }
+
+  private def shutdownStarted: Boolean =
+    CoordinatedShutdown(system).shutdownReason().isDefined
 
   private val additionalRequestHeaders = settings.additionalRequestMetadata match {
     case Some(meta) => meta.asList
