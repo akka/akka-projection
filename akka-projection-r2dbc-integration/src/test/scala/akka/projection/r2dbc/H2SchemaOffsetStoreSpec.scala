@@ -4,7 +4,6 @@
 
 package akka.projection.r2dbc
 
-import java.time.Instant
 import java.util.UUID
 
 import scala.concurrent.duration._
@@ -103,7 +102,7 @@ class H2SchemaOffsetStoreSpec
       // same slice, otherwise the latest for each slice is kept
       val p1 = "p500"
       val p2 = "p621"
-      val startTime = Instant.now()
+      val startTime = clock.instant()
       val offset1 = TimestampOffset(startTime, Map(p1 -> 1L))
       val offset2 = TimestampOffset(startTime.plus(deleteSettings.deleteAfter).plusSeconds(1), Map(p2 -> 1L))
 
