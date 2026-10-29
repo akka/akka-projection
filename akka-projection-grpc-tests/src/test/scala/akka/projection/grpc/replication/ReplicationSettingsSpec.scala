@@ -9,9 +9,11 @@ import scala.concurrent.duration._
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
 import akka.persistence.typed.ReplicaId
+import akka.projection.grpc.internal.KeepAliveSettings
 import akka.projection.grpc.producer.EventProducerSettings
 import akka.projection.grpc.replication.javadsl.{ ReplicationProjectionProvider => JReplicationProjectionProvider }
 import akka.projection.grpc.replication.internal.ReplicationImpl
+import akka.projection.grpc.replication.javadsl.{ Replica => JReplica }
 import akka.projection.grpc.replication.javadsl.{ ReplicationSettings => JReplicationSettings }
 import akka.projection.grpc.replication.scaladsl.Replica
 import akka.projection.grpc.replication.scaladsl.ReplicationProjectionProvider
@@ -248,6 +250,28 @@ class ReplicationSettingsSpec
       converted.eventProducerInterceptor === (settings.eventProducerInterceptor)
       converted.projectionProvider === (settings.projectionProvider)
       converted.parallelUpdates === (settings.parallelUpdates)
+    }
+
+    "Keep a javadsl keep alive timeout without interval so that it is rejected when replication starts" in {
+      val javaSettings = JReplicationSettings
+        .create(
+          classOf[MyCommand],
+          "my-replicated-entity",
+          ReplicaId("dca"),
+          EventProducerSettings(system),
+          java.util.Collections.emptySet[JReplica](),
+          java.time.Duration.ofSeconds(10),
+          8,
+          // never actually used, just passed along
+          null: JReplicationProjectionProvider)
+        .withKeepAliveTimeout(java.time.Duration.ofSeconds(9))
+
+      val converted = javaSettings.toScala
+      converted.keepAliveInterval should ===(None)
+      converted.keepAliveTimeout should ===(Some(9.seconds))
+      intercept[IllegalArgumentException] {
+        KeepAliveSettings.validate(converted.keepAliveInterval, converted.keepAliveTimeout)
+      }
     }
 
     "Parse from doc config" in {
