@@ -33,8 +33,9 @@ import akka.stream.stage.TimerGraphStageLogic
  *
  * Drops keep alive messages from the other side and optionally fails the stream when the other side does not
  * answer demand within the timeout. Time is measured from pull to the next push, so a downstream that is busy
- * and not pulling never causes a timeout. The timeout is armed by the first keep alive, so a peer without keep
- * alive support never triggers it. Used on both the consumer side (StreamOut) and the producer side (StreamIn).
+ * and not pulling never causes a timeout. Unless `armedAtStart`, the timeout is armed by the first keep alive, so a
+ * peer without keep alive support never triggers it. Used on both the consumer side (StreamOut) and the producer side
+ * (StreamIn).
  *
  * The wait is measured in timer ticks rather than clock reads, to keep the pull and push paths free of
  * `System.nanoTime`, so the timeout is accurate to within one check interval.
@@ -42,6 +43,7 @@ import akka.stream.stage.TimerGraphStageLogic
 @InternalApi private[akka] final class KeepAliveStage[T](
     isKeepAlive: T => Boolean,
     timeout: Option[FiniteDuration],
+    armedAtStart: Boolean,
     timeoutFailure: FiniteDuration => Throwable,
     onFirstKeepAlive: () => Unit)
     extends GraphStage[FlowShape[T, T]] {
@@ -53,7 +55,8 @@ import akka.stream.stage.TimerGraphStageLogic
 
   override def createLogic(inheritedAttributes: Attributes): GraphStageLogic =
     new TimerGraphStageLogic(shape) with InHandler with OutHandler {
-      private var armed = false
+      private var armed = armedAtStart
+      private var firstKeepAliveSeen = false
       private var waitingForPeer = false
       // ticks since the pull, plus one since the first tick may come right after the pull
       private var waitedTicks = 0
@@ -73,7 +76,8 @@ import akka.stream.stage.TimerGraphStageLogic
         waitingForPeer = false
         val elem = grab(in)
         if (isKeepAlive(elem)) {
-          if (!armed) {
+          if (!firstKeepAliveSeen) {
+            firstKeepAliveSeen = true
             armed = true
             onFirstKeepAlive()
           }

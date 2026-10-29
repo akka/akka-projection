@@ -5,6 +5,7 @@
 package akka.projection.grpc.consumer.scaladsl
 
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicInteger
 
 import scala.concurrent.Future
 import scala.concurrent.duration._
@@ -123,6 +124,8 @@ class GrpcReadJournalKeepAliveSpec
   private val eventsOnlyStream = "events-only-stream"
   private val rejectedStream = "rejected-stream"
   private val silentStream = "silent-stream"
+  private val silentAfterFirstStream = "silent-after-first-stream"
+  private val silentAfterFirstCount = new AtomicInteger
 
   private val clientSettings = GrpcClientSettings.connectToServiceAt("127.0.0.1", grpcPort).withTls(false)
 
@@ -152,6 +155,12 @@ class GrpcReadJournalKeepAliveSpec
               .zipWithIndex
               .map { case (_, seqNr) => filteredEvent("pid-1", seqNr + 1) }
               .mapMaterializedValue(_ => NotUsed))
+      case `silentAfterFirstStream` =>
+        if (silentAfterFirstCount.getAndIncrement() == 0)
+          Source.tick(0.millis, 500.millis, KeepAliveStreamOut).mapMaterializedValue(_ => NotUsed)
+        else
+          // like a restarted stream that went through the same stale connection
+          Source.maybe[StreamOut].mapMaterializedValue(_ => NotUsed)
       case `rejectedStream` =>
         // like an interceptor rejecting the request, before any keep alive
         Source.failed(new akka.grpc.GrpcServiceException(io.grpc.Status.PERMISSION_DENIED))
@@ -292,8 +301,9 @@ class GrpcReadJournalKeepAliveSpec
     }
 
     "start a fresh keep alive handshake for each materialization" in {
+      // timeout longer than the delay, since the second stream arms it right away
       val source = GrpcReadJournal(
-        GrpcQuerySettings(delayedKeepAliveStream).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds),
+        GrpcQuerySettings(delayedKeepAliveStream).withKeepAliveInterval(1.second).withKeepAliveTimeout(5.seconds),
         clientSettings,
         protobufDescriptors = Nil).eventsBySlices[String](delayedKeepAliveStream, 0, 1023, NoOffset)
 
@@ -311,6 +321,25 @@ class GrpcReadJournalKeepAliveSpec
       streamInProbe.expectNoMessage(2500.millis)
       streamInProbe.receiveMessage(4.seconds).message.isKeepAlive shouldBe true
       probe2.cancel()
+    }
+
+    "arm the timeout right away for later streams once the producer has sent a keep alive" in {
+      val source = GrpcReadJournal(
+        GrpcQuerySettings(silentAfterFirstStream).withKeepAliveInterval(1.second).withKeepAliveTimeout(2.seconds),
+        clientSettings,
+        protobufDescriptors = Nil).eventsBySlices[String](silentAfterFirstStream, 0, 1023, NoOffset)
+
+      streamInProbe = createTestProbe[StreamIn]()
+      val probe1 = source.runWith(TestSink[EventEnvelope[String]]())
+      probe1.request(10)
+      // the consumer keep alive shows that the producer keep alive has arrived
+      streamInProbe.receiveMessage(3.seconds).message.isKeepAlive shouldBe true
+      probe1.cancel()
+
+      // the new stream never gets a keep alive but still times out
+      val probe2 = source.runWith(TestSink[EventEnvelope[String]]())
+      probe2.request(10)
+      probe2.within(5.seconds)(probe2.expectError()) shouldBe a[KeepAliveTimeoutException]
     }
 
     "keep streams independent on the same read journal" in {

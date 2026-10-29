@@ -133,7 +133,7 @@ Optionally `akka.projection.grpc.replication.keep-alive-timeout` or `withKeepAli
 replication stream when the other replica sends neither events nor keep alive messages within the timeout while this
 replica is waiting for events. Both are disabled by default. The other replicas must run Akka Projections 1.6.26 or later,
 older versions ignore the request and never trigger the timeout. See @ref:[Keep alive](grpc.md#keep-alive) for details on
-the interval bounds, how to size the timeout and known limitations.
+the interval bounds, how to size the timeout and how it applies to restarted streams.
 
 ### Fully connected topology
 

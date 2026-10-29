@@ -233,6 +233,8 @@ final class GrpcReadJournal private (
   // replaced if closed for other reasons than close(), guarded by clientLock for writes
   @volatile private var client = EventProducerServiceClient(clientSettings)
   @volatile private var closedByUser = false
+  // once the producer has shown keep alive support, later streams arm the keep alive timeout right away
+  @volatile private var producerSupportsKeepAlive = false
   private val clientLock = new Object
   // guarded by clientLock, to only log the first of a burst of replacements as warning
   private var lastClientReplacementNanos = System.nanoTime() - ClientReplacementWarnInterval.toNanos
@@ -502,8 +504,12 @@ final class GrpcReadJournal private (
               new KeepAliveStage[StreamOut](
                 _.message.isKeepAlive,
                 settings.keepAliveTimeout,
+                armedAtStart = producerSupportsKeepAlive,
                 timeout => new KeepAliveTimeoutException(streamId, timeout, correlationId),
-                onFirstKeepAlive = () => producerKeepAlive.trySuccess(Done)))
+                onFirstKeepAlive = { () =>
+                  producerSupportsKeepAlive = true
+                  producerKeepAlive.trySuccess(Done)
+                }))
           else invoked
         withKeepAlive.recover {
           case ex: akka.grpc.GrpcServiceException if ex.status.getCode == Status.Code.UNAVAILABLE =>

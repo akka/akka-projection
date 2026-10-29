@@ -147,15 +147,16 @@ import akka.projection.internal.CorrelationId
     if (init.keepAliveIntervalMillis <= 0) Flow[StreamIn]
     else {
       val timeout = KeepAliveSettings.producerTimeout(init.keepAliveIntervalMillis, init.keepAliveTimeoutMillis)
-      Flow.fromGraph(new KeepAliveStage[StreamIn](_.message.isKeepAlive, timeout, timeoutFailure = { t =>
-        log.warn(
-          "Stream [{}]: No keep alive from consumer within [{}], closing stream{}",
-          init.streamId,
-          t.toCoarsest,
-          CorrelationId.toLogText(init.correlationId))
-        new GrpcServiceException(
-          Status.UNAVAILABLE.withDescription(s"No keep alive from consumer within [${t.toCoarsest}]"))
-      }, onFirstKeepAlive = () => ()))
+      Flow.fromGraph(
+        new KeepAliveStage[StreamIn](_.message.isKeepAlive, timeout, armedAtStart = false, timeoutFailure = { t =>
+          log.warn(
+            "Stream [{}]: No keep alive from consumer within [{}], closing stream{}",
+            init.streamId,
+            t.toCoarsest,
+            CorrelationId.toLogText(init.correlationId))
+          new GrpcServiceException(
+            Status.UNAVAILABLE.withDescription(s"No keep alive from consumer within [${t.toCoarsest}]"))
+        }, onFirstKeepAlive = () => ()))
     }
 
   private def keepAliveFlow(init: InitReq): Flow[StreamOut, StreamOut, NotUsed] =

@@ -27,10 +27,19 @@ class KeepAliveStageSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike 
   // keep alives are 0, anything else is an element
   private val KeepAlive = 0
 
-  private def run(timeout: Option[FiniteDuration], firstKeepAlives: AtomicInteger = new AtomicInteger) =
+  private def run(
+      timeout: Option[FiniteDuration],
+      firstKeepAlives: AtomicInteger = new AtomicInteger,
+      armedAtStart: Boolean = false) =
     TestSource[Int]()
-      .via(Flow.fromGraph(
-        new KeepAliveStage[Int](_ == KeepAlive, timeout, new StageTimeout(_), () => firstKeepAlives.incrementAndGet())))
+      .via(
+        Flow.fromGraph(
+          new KeepAliveStage[Int](
+            _ == KeepAlive,
+            timeout,
+            armedAtStart,
+            new StageTimeout(_),
+            () => firstKeepAlives.incrementAndGet())))
       .toMat(TestSink[Int]())(Keep.both)
       .run()
 
@@ -74,6 +83,26 @@ class KeepAliveStageSpec extends ScalaTestWithActorTestKit with AnyWordSpecLike 
       in.sendNext(KeepAlive)
       out.within(3.seconds)(out.expectError()) shouldBe a[StageTimeout]
       in.expectCancellation()
+    }
+
+    "fail before the first keep alive when armed at start" in {
+      val firstKeepAlives = new AtomicInteger
+      val (in, out) = run(timeout = Some(1.second), firstKeepAlives, armedAtStart = true)
+      out.request(10)
+      out.within(3.seconds)(out.expectError()) shouldBe a[StageTimeout]
+      in.expectCancellation()
+      firstKeepAlives.get shouldBe 0
+    }
+
+    "call onFirstKeepAlive when armed at start" in {
+      val firstKeepAlives = new AtomicInteger
+      val (in, out) = run(timeout = Some(5.seconds), firstKeepAlives, armedAtStart = true)
+      out.request(10)
+      in.sendNext(KeepAlive)
+      in.sendNext(8)
+      out.expectNext(8)
+      firstKeepAlives.get shouldBe 1
+      out.cancel()
     }
 
     "reset the deadline on elements as well as keep alives" in {

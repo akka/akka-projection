@@ -138,6 +138,13 @@ at least twice the interval. Only time spent waiting for the producer counts, so
 trigger it. The timeout takes effect once the producer has sent its first keep alive, which it does right after the
 stream starts, so producers without keep alive support never trigger it.
 
+Once a producer has sent a keep alive, the `GrpcReadJournal` uses the timeout from the start for its later streams.
+This way a stream restarted after a timeout is also watched, even if it goes through the same broken connection and
+never receives a keep alive. Time spent connecting to the producer then also counts towards the timeout. If the
+`GrpcReadJournal` later reaches a producer without keep alive support, idle streams to it restart at each timeout.
+After a downgrade of the producer, this goes on until the consumer is restarted. During a rolling update of producers
+behind a load balancer, it happens when a stream reaches one of the older instances.
+
 Once the consumer has received the first keep alive it also sends keep alives to the producer at the same interval, and
 the producer closes the stream with the same timeout when they stop. Without this, a consumer that went away on a broken
 network path would keep its stream and query running on the producer until the TCP connection is detected as dead, since
