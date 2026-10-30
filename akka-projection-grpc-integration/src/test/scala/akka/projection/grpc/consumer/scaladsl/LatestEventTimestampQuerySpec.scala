@@ -52,10 +52,12 @@ class LatestEventTimestampQuerySpec(testContainerConf: TestContainerConf)
   private implicit val ec: ExecutionContext = system.executionContext
   private val entityType = nextEntityType()
   private val streamId = "stream_id_" + entityType
-  private val streamIdFromSnapshot = "stream_id_from_snapshot" + entityType
+  // separate entity type because consecutive pids often end up in adjacent slices
+  private val entityTypeFromSnapshot = nextEntityType()
+  private val streamIdFromSnapshot = "stream_id_from_snapshot" + entityTypeFromSnapshot
 
-  class TestFixture {
-    val pid = nextPid(entityType)
+  class TestFixture(pidEntityType: String = entityType) {
+    val pid = nextPid(pidEntityType)
 
     def slice: Int = Persistence(system).sliceForPersistenceId(pid.id)
 
@@ -83,7 +85,11 @@ class LatestEventTimestampQuerySpec(testContainerConf: TestContainerConf)
     val eventProducerSource =
       EventProducerSource(entityType, streamId, Transformation.identity, EventProducerSettings(system))
     val eventProducerSourceFromSnapshot =
-      EventProducerSource(entityType, streamIdFromSnapshot, Transformation.identity, EventProducerSettings(system))
+      EventProducerSource(
+        entityTypeFromSnapshot,
+        streamIdFromSnapshot,
+        Transformation.identity,
+        EventProducerSettings(system))
         .withStartingFromSnapshots[Any, Any](identity)
 
     val eventProducerService =
@@ -120,7 +126,7 @@ class LatestEventTimestampQuerySpec(testContainerConf: TestContainerConf)
       grpcReadJournal.latestEventTimestamp(streamId, wrongSlice, wrongSlice).futureValue shouldBe None
     }
 
-    "lookup event timestamp when StartingFromSnapshots" in new TestFixture {
+    "lookup event timestamp when StartingFromSnapshots" in new TestFixture(entityTypeFromSnapshot) {
       entity ! TestEntity.Persist("c")
       entity ! TestEntity.Persist("d")
       entity ! TestEntity.Ping(replyProbe.ref)
@@ -128,7 +134,7 @@ class LatestEventTimestampQuerySpec(testContainerConf: TestContainerConf)
 
       val timestamp =
         grpcReadJournalFromSnapshot.latestEventTimestamp(streamIdFromSnapshot, slice, slice).futureValue.get
-      val expectedTimestamp = readJournal.latestEventTimestamp(entityType, slice, slice).futureValue.get
+      val expectedTimestamp = readJournal.latestEventTimestamp(entityTypeFromSnapshot, slice, slice).futureValue.get
       timestamp shouldBe expectedTimestamp
 
       grpcReadJournalFromSnapshot
