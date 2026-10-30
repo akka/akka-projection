@@ -10,6 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
 import scala.collection.immutable
 import scala.concurrent.Future
 import scala.concurrent.Promise
+import scala.concurrent.duration._
 
 import akka.Done
 import akka.NotUsed
@@ -35,6 +36,7 @@ import akka.persistence.typed.internal.VersionVector
 import akka.projection.grpc.internal.proto.CurrentEventsByPersistenceIdRequest
 import akka.projection.grpc.internal.proto.EventTimestampRequest
 import akka.projection.grpc.internal.proto.InitReq
+import akka.projection.grpc.internal.proto.KeepAlive
 import akka.projection.grpc.internal.proto.LoadEventRequest
 import akka.projection.grpc.internal.proto.PersistenceIdSeqNr
 import akka.projection.grpc.internal.proto.ReplayPersistenceId
@@ -225,9 +227,32 @@ class EventProducerServiceSpec
   val streamId6 = "stream_id_" + entityType6
   val entityType7 = nextEntityType()
   val streamId7 = "stream_id_" + entityType7
+  val entityType8 = nextEntityType()
+  val streamId8 = "stream_id_" + entityType8
+  val entityType9 = nextEntityType()
+  val streamId9 = "stream_id_" + entityType9
+  val entityType10 = nextEntityType()
+  val streamId10 = "stream_id_" + entityType10
+  val entityType11 = nextEntityType()
+  val streamId11 = "stream_id_" + entityType11
+  val entityType12 = nextEntityType()
+  val streamId12 = "stream_id_" + entityType12
+  val entityType13 = nextEntityType()
+  val streamId13 = "stream_id_" + entityType13
 
   private val eventsBySlicesQueries =
-    Map(streamId1 -> query, streamId2 -> query, streamId3 -> query, streamId6 -> query, streamId7 -> query)
+    Map(
+      streamId1 -> query,
+      streamId2 -> query,
+      streamId3 -> query,
+      streamId6 -> query,
+      streamId7 -> query,
+      streamId8 -> query,
+      streamId9 -> query,
+      streamId10 -> query,
+      streamId11 -> query,
+      streamId12 -> query,
+      streamId13 -> query)
   private val eventsBySlicesStartingFromSnapshotsQueries =
     Map(streamId4 -> query, streamId5 -> query)
   private val currentEventsByPersistenceIdQueries =
@@ -267,7 +292,13 @@ class EventProducerServiceSpec
                 originSequenceNr = env.sequenceNr,
                 version = VersionVector(ReplicaId.empty.id, env.sequenceNr),
                 concurrent = false))
-          }))
+          }),
+    EventProducerSource(entityType8, streamId8, transformation, settings),
+    EventProducerSource(entityType9, streamId9, transformation, settings),
+    EventProducerSource(entityType10, streamId10, transformation, settings),
+    EventProducerSource(entityType11, streamId11, transformation, settings),
+    EventProducerSource(entityType12, streamId12, transformation, settings),
+    EventProducerSource(entityType13, streamId13, transformation, settings))
 
   private val eventProducerService =
     new EventProducerServiceImpl(
@@ -278,6 +309,8 @@ class EventProducerServiceSpec
       currentEventsByPersistenceIdStartingFromSnapshotQueries,
       eventProducerSources,
       None)
+
+  private val ConsumerKeepAlive = StreamIn(StreamIn.Message.KeepAlive(KeepAlive.defaultInstance))
 
   private def runEventsBySlices(streamIn: Source[StreamIn, NotUsed]) = {
     val probePromise = Promise[TestSubscriber.Probe[StreamOut]]()
@@ -673,6 +706,137 @@ class EventProducerServiceSpec
           .futureValue
       events.size shouldBe 3
       events.map(_.getEvent.persistenceId).toSet shouldBe Set(persistenceId.id)
+    }
+
+    "emit keep alive when requested by consumer" in {
+      val initReq = InitReq(streamId8, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 1000)
+      val streamIn = Source
+        .single(StreamIn(StreamIn.Message.Init(initReq)))
+        .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+      probe.request(100)
+      val testPublisher = query.testPublisher(entityType8).futureValue
+
+      // first keep alive right away, then at the interval
+      probe.expectNext(500.millis).message.isKeepAlive shouldBe true
+      probe.expectNext(2.seconds).message.isKeepAlive shouldBe true
+
+      val env1 = createEnvelope(nextPid(entityType8), 1L, "e-1")
+      testPublisher.sendNext(env1)
+      val out1 = probe.expectNext()
+      out1.getEvent.persistenceId shouldBe env1.persistenceId
+      out1.getEvent.seqNr shouldBe env1.sequenceNr
+
+      probe.expectNext(2.seconds).message.isKeepAlive shouldBe true
+    }
+
+    "not emit keep alive unless requested by consumer" in {
+      val initReq = InitReq(streamId9, 0, 1023, offset = Seq.empty)
+      val streamIn = Source
+        .single(StreamIn(StreamIn.Message.Init(initReq)))
+        .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+      probe.request(100)
+      query.testPublisher(entityType9).futureValue
+
+      probe.expectNoMessage(2.seconds)
+    }
+
+    "not emit keep alive more often than the minimum interval" in {
+      val initReq = InitReq(streamId10, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 10)
+      val streamIn = Source
+        .single(StreamIn(StreamIn.Message.Init(initReq)))
+        .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+      probe.request(100)
+      query.testPublisher(entityType10).futureValue
+
+      // the immediate one and then at most two at the 1 second minimum, hundreds without the clamp
+      val received = probe.receiveWithin(2500.millis)
+      received.forall(_.message.isKeepAlive) shouldBe true
+      received.size should (be >= 2 and be <= 3)
+    }
+
+    "fail stream when keep alives from the consumer stop" in {
+      val initReq =
+        InitReq(streamId11, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 1000, keepAliveTimeoutMillis = 2000)
+      // one keep alive from the consumer arms the timeout, then silence
+      val streamIn = Source(List(StreamIn(StreamIn.Message.Init(initReq)), ConsumerKeepAlive)).concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+      probe.request(100)
+      query.testPublisher(entityType11).futureValue
+
+      // producer keep alives keep coming until the failure
+      def awaitError(): Throwable = probe.expectNextOrError() match {
+        case Left(failure) => failure
+        case Right(_)      => awaitError()
+      }
+      val error = probe.within(5.seconds)(awaitError())
+      error shouldBe a[GrpcServiceException]
+      error.asInstanceOf[GrpcServiceException].status.getCode shouldBe Status.Code.UNAVAILABLE
+    }
+
+    "not fail stream while keep alives from the consumer arrive" in {
+      val initReq =
+        InitReq(streamId12, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 1000, keepAliveTimeoutMillis = 2000)
+      val streamIn = Source
+        .single(StreamIn(StreamIn.Message.Init(initReq)))
+        .concat(Source.tick(0.millis, 500.millis, ConsumerKeepAlive).mapMaterializedValue(_ => NotUsed))
+
+      val probe = runEventsBySlices(streamIn)
+      probe.request(100)
+      query.testPublisher(entityType12).futureValue
+
+      // only producer keep alives for longer than the timeout, no failure
+      probe.receiveWithin(4.seconds).forall(_.message.isKeepAlive) shouldBe true
+      probe.cancel()
+    }
+
+    "not send keep alive before the interceptor has accepted the stream" in {
+      val rejectingProducerService =
+        new EventProducerServiceImpl(
+          system,
+          eventsBySlicesQueries,
+          eventsBySlicesStartingFromSnapshotsQueries,
+          currentEventsByPersistenceIdQueries,
+          currentEventsByPersistenceIdStartingFromSnapshotQueries,
+          eventProducerSources,
+          Some(new EventProducerInterceptor {
+            def intercept(streamId: String, requestMetadata: Metadata): Future[Done] =
+              Future.failed(new GrpcServiceException(Status.PERMISSION_DENIED.withDescription("rejected")))
+          }))
+      val initReq = InitReq(streamId9, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 1000)
+
+      // Sink.head would succeed on a keep alive emitted before the rejection
+      val failure = rejectingProducerService
+        .eventsBySlices(
+          Source.single(StreamIn(StreamIn.Message.Init(initReq))).concat(Source.maybe),
+          MetadataBuilder.empty)
+        .runWith(Sink.head)
+        .failed
+        .futureValue
+      failure shouldBe a[GrpcServiceException]
+      failure.asInstanceOf[GrpcServiceException].status.getCode shouldBe Status.Code.PERMISSION_DENIED
+    }
+
+    "not fail stream when the consumer never sends keep alives" in {
+      val initReq =
+        InitReq(streamId13, 0, 1023, offset = Seq.empty, keepAliveIntervalMillis = 1000, keepAliveTimeoutMillis = 2000)
+      val streamIn = Source
+        .single(StreamIn(StreamIn.Message.Init(initReq)))
+        .concat(Source.maybe)
+
+      val probe = runEventsBySlices(streamIn)
+      probe.request(100)
+      query.testPublisher(entityType13).futureValue
+
+      // timeout never armed, like a consumer that did not get the first producer keep alive
+      probe.receiveWithin(4.seconds).forall(_.message.isKeepAlive) shouldBe true
+      probe.cancel()
     }
 
   }

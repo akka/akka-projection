@@ -119,6 +119,37 @@ No new gRPC client is created once the coordinated shutdown of the `ActorSystem`
 If there is a need to close the gRPC client before `ActorSystem` termination the `close()` method of the @apidoc[GrpcReadJournal]
 can be called. After closing the `GrpcReadJournal` instance cannot be used again.
 
+### Keep alive
+
+The event stream from the producer only carries data when there are events, and a stream that is idle for a long time
+may be closed by proxies, load balancers or firewalls in between. The gRPC client uses HTTP/2 level keep alive pings, but
+those are hop-by-hop and only keep the connection to the nearest proxy alive.
+
+The consumer can request that the producer sends application level keep alive messages at a given interval when there
+are no events, so that the connection is kept alive end-to-end. This is disabled by default and enabled with the
+`akka.projection.grpc.consumer.keep-alive-interval` configuration or `withKeepAliveInterval` on the @apidoc[GrpcQuerySettings].
+The interval must be between 1 second and 1 hour. The producer must support keep alives (Akka Projections 1.6.26 or
+later), older producers ignore the request.
+
+Additionally, the consumer can fail the stream, so that it is restarted by the Projection, if the producer sends neither
+events nor keep alive messages within `akka.projection.grpc.consumer.keep-alive-timeout` or `withKeepAliveTimeout` while
+the consumer is waiting for events. This detects stale connections. The timeout requires a keep alive interval and must be
+at least twice the interval. Only time spent waiting for the producer counts, so a slow Projection handler does not
+trigger it. The timeout takes effect once the producer has sent its first keep alive, which it does right after the
+stream starts, so producers without keep alive support never trigger it.
+
+Once a producer has sent a keep alive, the `GrpcReadJournal` uses the timeout from the start for its later streams.
+This way a stream restarted after a timeout is also watched, even if it goes through the same broken connection and
+never receives a keep alive. Time spent connecting to the producer then also counts towards the timeout. If the
+`GrpcReadJournal` later reaches a producer without keep alive support, idle streams to it restart at each timeout.
+After a downgrade of the producer, this goes on until the consumer is restarted. During a rolling update of producers
+behind a load balancer, it happens when a stream reaches one of the older instances.
+
+Once the consumer has received the first keep alive it also sends keep alives to the producer at the same interval, and
+the producer closes the stream with the same timeout when they stop. Without this, a consumer that went away on a broken
+network path would keep its stream and query running on the producer until the TCP connection is detected as dead, since
+the keep alives sent by the producer prevent the HTTP server idle timeout from triggering.
+
 ## Producer
 
 Akka Projections gRPC provides the gRPC service implementation that is used by the consumer side. It is created with the @apidoc[EventProducer$]:

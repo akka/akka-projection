@@ -24,6 +24,7 @@ import akka.projection.javadsl.Handler;
 import akka.projection.javadsl.SourceProvider;
 import akka.projection.r2dbc.javadsl.R2dbcProjection;
 import com.example.shoppingcart.ShoppingcartApiProto;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
@@ -56,7 +57,9 @@ public class ConsumerCompileTest {
     GrpcReadJournal eventsBySlicesQuery =
         GrpcReadJournal.create(
             system,
-            GrpcQuerySettings.create(streamId),
+            GrpcQuerySettings.create(streamId)
+                .withKeepAliveInterval(Duration.ofSeconds(5))
+                .withKeepAliveTimeout(Duration.ofSeconds(15)),
             GrpcClientSettings.fromConfig(
                 system.settings().config().getConfig("akka.projection.grpc.consumer.client"),
                 system),

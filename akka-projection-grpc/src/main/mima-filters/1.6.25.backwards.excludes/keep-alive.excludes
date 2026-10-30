@@ -1,0 +1,3 @@
+# internal protocol classes, keep alive in StreamOut/InitReq
+ProblemFilters.exclude[Problem]("akka.projection.grpc.internal.proto.InitReq*")
+ProblemFilters.exclude[Problem]("akka.projection.grpc.internal.proto.StreamOut*")
