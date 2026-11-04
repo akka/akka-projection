@@ -67,7 +67,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion,
   "com.typesafe.akka" %% "akka-serialization-jackson" % AkkaVersion,
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
-  "io.r2dbc" % "r2dbc-h2" % "1.0.0.RELEASE" % Test,
+  "io.r2dbc" % "r2dbc-h2" % "1.0.1.RELEASE" % Test,
   "com.typesafe.akka" %% "akka-persistence-testkit" % AkkaVersion % Test,
   // 3. Querying and publishing data from Akka Persistence
   "com.typesafe.akka" %% "akka-persistence-query" % AkkaVersion,
