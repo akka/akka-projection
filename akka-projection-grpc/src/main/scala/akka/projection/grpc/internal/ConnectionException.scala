@@ -10,5 +10,8 @@ import akka.annotation.InternalApi
  * INTERNAL API
  */
 @InternalApi
-private[akka] final class ConnectionException(host: String, port: String, streamId: String)
-    extends RuntimeException(s"Connection to $host:$port for stream id $streamId failed or lost, will be retried")
+private[akka] final class ConnectionException(host: String, port: String, streamId: String, cause: Throwable)
+    extends RuntimeException(
+      s"Connection to $host:$port for stream id $streamId failed or lost, will be retried: " +
+      CauseDetails(cause),
+      cause)
