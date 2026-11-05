@@ -28,6 +28,7 @@ object ShoppingCartServer {
     // #bind
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(
+        system,
         replicationService,
         proto.ShoppingCartServiceHandler.partial(grpcService),
         // ServerReflection enabled to support grpcurl without import-path and proto parameters

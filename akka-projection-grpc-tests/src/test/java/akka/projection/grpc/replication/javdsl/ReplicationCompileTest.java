@@ -114,7 +114,7 @@ public class ReplicationCompileTest {
 
     @SuppressWarnings("unchecked")
     Function<HttpRequest, CompletionStage<HttpResponse>> service =
-        ServiceHandler.concatOrNotFound(handler);
+        ServiceHandler.concatOrNotFound(system, handler);
 
     CompletionStage<ServerBinding> bound =
         Http.get(system).newServerAt("127.0.0.1", 8080).bind(service);
@@ -151,7 +151,7 @@ public class ReplicationCompileTest {
 
     @SuppressWarnings("unchecked")
     Function<HttpRequest, CompletionStage<HttpResponse>> handler =
-        ServiceHandler.concatOrNotFound(route);
+        ServiceHandler.concatOrNotFound(system, route);
     // #multi-service
 
     // RES push

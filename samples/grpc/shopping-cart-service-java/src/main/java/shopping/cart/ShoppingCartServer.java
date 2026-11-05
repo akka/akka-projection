@@ -27,6 +27,7 @@ public final class ShoppingCartServer {
     @SuppressWarnings("unchecked")
     Function<HttpRequest, CompletionStage<HttpResponse>> service =
         ServiceHandler.concatOrNotFound(
+            system,
             eventProducerService,
             ShoppingCartServiceHandlerFactory.create(grpcService, system),
             // ServerReflection enabled to support grpcurl without import-path and proto parameters
@@ -61,6 +62,7 @@ public final class ShoppingCartServer {
     @SuppressWarnings("unchecked")
     Function<HttpRequest, CompletionStage<HttpResponse>> service =
         ServiceHandler.concatOrNotFound(
+            system,
             ShoppingCartServiceHandlerFactory.create(grpcService, system),
             // ServerReflection enabled to support grpcurl without import-path and proto parameters
             ServerReflection.create(

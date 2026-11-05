@@ -34,7 +34,7 @@ object ProducerApiSample {
     }
     val route = EventProducer.grpcServiceHandler(allSources)
 
-    val handler = ServiceHandler.concatOrNotFound(route)
+    val handler = ServiceHandler.concatOrNotFound(system, route)
     // #multi-service
 
     // RES push to combine with multiple other services

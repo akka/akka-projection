@@ -33,6 +33,7 @@ object IotServer {
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(
+        system,
         registrationEventProducerService,
         registration.proto.RegistrationServiceHandler
           .partial(registrationService),

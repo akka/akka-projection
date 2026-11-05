@@ -27,6 +27,7 @@ object LocalDroneControlServer {
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(
+        system,
         proto.DroneServiceHandler.partial(droneService),
         proto.DeliveriesQueueServiceHandler.partial(deliveriesQueueService),
         // ServerReflection enabled to support grpcurl without import-path and proto parameters
