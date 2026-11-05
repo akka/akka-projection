@@ -64,7 +64,7 @@
             <dependency>
                 <groupId>com.lightbend.akka.grpc</groupId>
                 <artifactId>akka-grpc-runtime_2.13</artifactId>
-                <version>2.5.10</version>
+                <version>2.5.14</version>
             </dependency>
             <dependency>
                 <groupId>com.thesamet.scalapb</groupId>
@@ -297,7 +297,7 @@
         <dependency>
             <groupId>com.lightbend.akka.grpc</groupId>
             <artifactId>akka-grpc-runtime_2.13</artifactId>
-            <version>2.5.10</version>
+            <version>2.5.14</version>
         </dependency>
         <dependency>
             <groupId>com.thesamet.scalapb</groupId>
