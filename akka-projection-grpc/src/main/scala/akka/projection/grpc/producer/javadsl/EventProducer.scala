@@ -9,15 +9,14 @@ import akka.http.javadsl.model.HttpRequest
 import akka.http.javadsl.model.HttpResponse
 import akka.japi.function.{ Function => JapiFunction }
 import akka.projection.grpc.internal.EventProducerServiceImpl
+import akka.projection.grpc.internal.JavaHandler
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
 
 import java.util.Collections
 import java.util.Optional
 import java.util.concurrent.CompletionStage
 
-import scala.jdk.FutureConverters._
 import scala.jdk.OptionConverters._
-import scala.concurrent.ExecutionContext
 import scala.jdk.CollectionConverters._
 
 /**
@@ -78,13 +77,7 @@ object EventProducer {
       scalaProducerSources,
       interceptor.toScala.map(new EventProducerInterceptorAdapter(_)))
 
-    val handler = EventProducerServicePowerApiHandler(eventProducerService)(system)
-    new JapiFunction[HttpRequest, CompletionStage[HttpResponse]] {
-      override def apply(request: HttpRequest): CompletionStage[HttpResponse] =
-        handler(request.asInstanceOf[akka.http.scaladsl.model.HttpRequest])
-          .map(_.asInstanceOf[HttpResponse])(ExecutionContext.parasitic)
-          .asJava
-    }
+    JavaHandler(EventProducerServicePowerApiHandler.partial(eventProducerService)(system))
   }
 
 }
