@@ -10,6 +10,8 @@ import javax.net.ssl.SSLContext
 
 import scala.concurrent.duration._
 
+import scala.concurrent.Future
+
 import akka.NotUsed
 import akka.actor.testkit.typed.scaladsl.LogCapturing
 import akka.actor.testkit.typed.scaladsl.ScalaTestWithActorTestKit
@@ -21,12 +23,20 @@ import akka.persistence.query.NoOffset
 import akka.persistence.query.typed.EventEnvelope
 import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.internal.ConnectionException
+import akka.grpc.scaladsl.Metadata
+import akka.projection.grpc.internal.proto.CurrentEventsByPersistenceIdRequest
+import akka.projection.grpc.internal.proto.EventProducerServicePowerApi
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
-import akka.projection.grpc.internal.proto.InitReq
+import akka.projection.grpc.internal.proto.EventTimestampRequest
+import akka.projection.grpc.internal.proto.EventTimestampResponse
+import akka.projection.grpc.internal.proto.LatestEventTimestampRequest
+import akka.projection.grpc.internal.proto.LatestEventTimestampResponse
+import akka.projection.grpc.internal.proto.LoadEventRequest
+import akka.projection.grpc.internal.proto.LoadEventResponse
+import akka.projection.grpc.internal.proto.StreamIn
 import akka.projection.grpc.internal.proto.StreamOut
 import akka.stream.scaladsl.Source
 import akka.stream.testkit.scaladsl.TestSink
-import akka.testkit.SocketUtil
 import com.typesafe.config.ConfigFactory
 import io.grpc.Status
 import org.scalatest.BeforeAndAfterAll
@@ -34,10 +44,6 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpecLike
 
 object GrpcReadJournalFailureSpec {
-  val grpcPort: Int = SocketUtil.temporaryServerAddress("127.0.0.1").getPort
-  val tlsPort: Int = SocketUtil.temporaryServerAddress("127.0.0.1").getPort
-  val unusedPort: Int = SocketUtil.temporaryServerAddress("127.0.0.1").getPort
-
   def selfSignedSslContext(): SSLContext = {
     val password = "changeit".toCharArray
     val keyStore = KeyStore.getInstance("PKCS12")
@@ -47,6 +53,28 @@ object GrpcReadJournalFailureSpec {
     val context = SSLContext.getInstance("TLS")
     context.init(keyManagerFactory.getKeyManagers, null, null)
     context
+  }
+
+  // producer failing every event stream
+  class FailingProducerService extends EventProducerServicePowerApi {
+    override def eventsBySlices(in: Source[StreamIn, NotUsed], metadata: Metadata): Source[StreamOut, NotUsed] =
+      Source.failed(new GrpcServiceException(Status.INTERNAL.withDescription("producer side boom details")))
+
+    override def eventTimestamp(in: EventTimestampRequest, metadata: Metadata): Future[EventTimestampResponse] =
+      Future.failed(new UnsupportedOperationException)
+
+    override def loadEvent(in: LoadEventRequest, metadata: Metadata): Future[LoadEventResponse] =
+      Future.failed(new UnsupportedOperationException)
+
+    override def latestEventTimestamp(
+        in: LatestEventTimestampRequest,
+        metadata: Metadata): Future[LatestEventTimestampResponse] =
+      Future.failed(new UnsupportedOperationException)
+
+    override def currentEventsByPersistenceId(
+        in: CurrentEventsByPersistenceIdRequest,
+        metadata: Metadata): Source[StreamOut, NotUsed] =
+      Source.failed(new UnsupportedOperationException)
   }
 }
 
@@ -59,23 +87,26 @@ class GrpcReadJournalFailureSpec
     with BeforeAndAfterAll
     with LogCapturing {
   import GrpcReadJournalFailureSpec._
-  import GrpcReadJournalKeepAliveSpec.StubProducerService
+
+  private var grpcPort = 0
+  private var tlsPort = 0
+  private var unusedPort = 0
 
   override protected def beforeAll(): Unit = {
     super.beforeAll()
-    val service = new StubProducerService(
-      createTestProbe[InitReq]().ref,
-      _ =>
-        Source
-          .failed[StreamOut](new GrpcServiceException(Status.INTERNAL.withDescription("producer side boom details")))
-          .mapMaterializedValue(_ => NotUsed))
-    val handler = EventProducerServicePowerApiHandler(service)
-    Http().newServerAt("127.0.0.1", grpcPort).bind(handler).futureValue
-    Http()
-      .newServerAt("127.0.0.1", tlsPort)
+    val handler = EventProducerServicePowerApiHandler(new FailingProducerService)
+    grpcPort = Http().newServerAt("127.0.0.1", 0).bind(handler).futureValue.localAddress.getPort
+    tlsPort = Http()
+      .newServerAt("127.0.0.1", 0)
       .enableHttps(ConnectionContext.httpsServer(selfSignedSslContext()))
       .bind(handler)
       .futureValue
+      .localAddress
+      .getPort
+    // bound and unbound again, so nothing listens on it
+    val unused = Http().newServerAt("127.0.0.1", 0).bind(handler).futureValue
+    unusedPort = unused.localAddress.getPort
+    unused.unbind().futureValue
   }
 
   private def eventsBySlices(port: Int, tls: Boolean = false) = {

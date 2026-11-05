@@ -30,6 +30,7 @@ import akka.projection.grpc.consumer.GrpcQuerySettings
 import akka.projection.grpc.consumer.scaladsl
 import akka.projection.grpc.consumer.scaladsl.GrpcReadJournal.withClientDefaults
 import akka.projection.grpc.internal.ProjectionGrpcSerialization
+import akka.projection.grpc.internal.CauseDetails
 import akka.projection.grpc.internal.ConnectionException
 import akka.projection.grpc.internal.KeepAliveSettings
 import akka.projection.grpc.internal.KeepAliveStage
@@ -520,7 +521,7 @@ final class GrpcReadJournal private (
             throw ex
 
           case th: Throwable =>
-            val details = ConnectionException.causeDetails(th)
+            val details = CauseDetails(th)
             throw new RuntimeException(
               s"Failure to consume gRPC event stream for [$streamId]${CorrelationId.toLogText(correlationId)}: $details",
               th)
