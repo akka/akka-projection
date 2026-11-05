@@ -33,6 +33,7 @@ object DroneDeliveriesServer {
 
     // #composeAndBind
     val service = ServiceHandler.concatOrNotFound(
+      system,
       DroneOverviewServiceHandler.partial(droneOverviewService),
       RestaurantDeliveriesServiceHandler.partial(restaurantDeliveriesService),
       ChargingStationServiceHandler.partial(chargingStationService),

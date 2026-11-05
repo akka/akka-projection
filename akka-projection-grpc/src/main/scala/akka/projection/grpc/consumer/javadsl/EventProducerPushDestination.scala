@@ -14,6 +14,7 @@ import akka.http.javadsl.model.HttpResponse
 import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
 import akka.projection.grpc.consumer.EventProducerPushDestinationSettings
 import akka.projection.grpc.internal.EventPusherConsumerServiceImpl
+import akka.projection.grpc.internal.JavaHandler
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApiHandler
 import akka.projection.grpc.consumer.scaladsl
 import akka.japi.function.{ Function => JapiFunction }
@@ -30,7 +31,6 @@ import java.util.{ List => JList, Set => JSet }
 import scala.jdk.FutureConverters._
 import scala.jdk.FutureConverters.FutureOps
 import scala.jdk.OptionConverters._
-import scala.concurrent.ExecutionContext
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
 
@@ -77,14 +77,9 @@ object EventProducerPushDestination {
       system: ActorSystem[_]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] = {
 
     val scalaConsumers = eventConsumers.asScala.map(_.asScala).toSet
-    val handler =
-      EventConsumerServicePowerApiHandler(EventPusherConsumerServiceImpl(scalaConsumers, Prefer.Java)(system))(system)
-    new JapiFunction[HttpRequest, CompletionStage[HttpResponse]] {
-      override def apply(request: HttpRequest): CompletionStage[HttpResponse] =
-        handler(request.asInstanceOf[akka.http.scaladsl.model.HttpRequest])
-          .map(_.asInstanceOf[HttpResponse])(ExecutionContext.parasitic)
-          .asJava
-    }
+    JavaHandler(
+      EventConsumerServicePowerApiHandler
+        .partial(EventPusherConsumerServiceImpl(scalaConsumers, Prefer.Java)(system))(system))
   }
 
   /**

@@ -134,7 +134,7 @@ object Replication {
           // Fold in edge push gRPC consumer service if enabled
           val eventProducerPushHandler =
             EventProducerPushDestination.grpcServiceHandler(jEventProducerPushDestination.get(), system)
-          ServiceHandler.concatOrNotFound(handler, eventProducerPushHandler)
+          ServiceHandler.concatOrNotFound(system, handler, eventProducerPushHandler)
         } else handler
       }
 

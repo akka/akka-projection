@@ -23,6 +23,7 @@ public class LocalDroneControlServer {
     @SuppressWarnings("unchecked")
     var service =
         ServiceHandler.concatOrNotFound(
+            system,
             DroneServiceHandlerFactory.create(droneService, system),
             DeliveriesQueueServiceHandlerFactory.create(deliveriesQueueService, system),
             // ServerReflection enabled to support grpcurl without import-path and proto parameters
