@@ -19,10 +19,10 @@ object Dependencies {
     val Akka = sys.props.getOrElse("build.akka.version", "2.11.0")
     val AkkaVersionInDocs = VersionNumber(Akka).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
 
-    val Alpakka = "10.0.0"
+    val Alpakka = "11.0.0"
     val AlpakkaVersionInDocs = VersionNumber(Alpakka).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
 
-    val AlpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "8.0.2")
+    val AlpakkaKafka = sys.props.getOrElse("build.alpakka.kafka.version", "9.0.0")
     val AlpakkaKafkaVersionInDocs = VersionNumber(AlpakkaKafka).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
@@ -32,17 +32,17 @@ object Dependencies {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
 
-    val AkkaProjectionVersionInDocs = "1.6"
+    val AkkaProjectionVersionInDocs = "1.7"
 
-    val AkkaPersistenceCassandra = "1.3.3"
-    val AkkaPersistenceJdbc = "5.5.5"
+    val AkkaPersistenceCassandra = "1.4.0"
+    val AkkaPersistenceJdbc = "5.6.0"
 
-    val AkkaPersistenceR2dbc = "1.3.13"
+    val AkkaPersistenceR2dbc = "1.4.0"
     val AkkaPersistenceR2dbcVersionInDocs = VersionNumber(AkkaPersistenceR2dbc).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
 
-    val AkkaPersistenceDynamodb = "2.0.11"
+    val AkkaPersistenceDynamodb = "2.1.0"
     val AkkaPersistenceDynamodbVersionInDocs = VersionNumber(AkkaPersistenceDynamodb).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
@@ -51,7 +51,7 @@ object Dependencies {
     val scalaTest = "3.2.20"
     val testContainers = "1.19.3"
     val junit = "4.13.2"
-    val jacksonDatabind = "2.18.8" // this should match the version of jackson used by akka-serialization-jackson
+    val jacksonDatabind = "2.21.8" // this should match the version of jackson used by akka-serialization-jackson
   }
 
   object Compile {
