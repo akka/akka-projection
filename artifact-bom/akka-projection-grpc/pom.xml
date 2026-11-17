@@ -39,7 +39,7 @@
             <dependency>
                 <groupId>com.google.guava</groupId>
                 <artifactId>guava</artifactId>
-                <version>33.7.2-android</version>
+                <version>33.7.2-jre</version>
             </dependency>
             <dependency>
                 <groupId>com.google.guava</groupId>
@@ -64,7 +64,7 @@
             <dependency>
                 <groupId>com.lightbend.akka.grpc</groupId>
                 <artifactId>akka-grpc-runtime_2.13</artifactId>
-                <version>2.5.14</version>
+                <version>2.6.0</version>
             </dependency>
             <dependency>
                 <groupId>com.thesamet.scalapb</groupId>
@@ -79,82 +79,82 @@
             <dependency>
                 <groupId>com.typesafe</groupId>
                 <artifactId>config</artifactId>
-                <version>1.4.5</version>
+                <version>1.4.10</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-actor-typed_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-actor_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-discovery_2.13</artifactId>
-                <version>2.10.11</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-http-core_2.13</artifactId>
-                <version>10.7.3</version>
+                <version>10.8.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-http_2.13</artifactId>
-                <version>10.7.3</version>
+                <version>10.8.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-parsing_2.13</artifactId>
-                <version>10.7.3</version>
+                <version>10.8.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-persistence-query_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-persistence-typed_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-persistence_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-pki_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-protobuf-v3_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-remote_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-slf4j_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-stream-typed_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-stream_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>io.grpc</groupId>
@@ -224,7 +224,7 @@
             <dependency>
                 <groupId>org.scala-lang</groupId>
                 <artifactId>scala-library</artifactId>
-                <version>2.13.17</version>
+                <version>2.13.18</version>
             </dependency>
             <dependency>
                 <groupId>org.scala-lang.modules</groupId>
@@ -234,7 +234,7 @@
             <dependency>
                 <groupId>org.slf4j</groupId>
                 <artifactId>slf4j-api</artifactId>
-                <version>2.0.17</version>
+                <version>2.0.20</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
@@ -272,7 +272,7 @@
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
-            <version>33.7.2-android</version>
+            <version>33.7.2-jre</version>
         </dependency>
         <dependency>
             <groupId>com.google.guava</groupId>
@@ -297,7 +297,7 @@
         <dependency>
             <groupId>com.lightbend.akka.grpc</groupId>
             <artifactId>akka-grpc-runtime_2.13</artifactId>
-            <version>2.5.14</version>
+            <version>2.6.0</version>
         </dependency>
         <dependency>
             <groupId>com.thesamet.scalapb</groupId>
@@ -312,82 +312,82 @@
         <dependency>
             <groupId>com.typesafe</groupId>
             <artifactId>config</artifactId>
-            <version>1.4.5</version>
+            <version>1.4.10</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-actor-typed_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-actor_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-discovery_2.13</artifactId>
-            <version>2.10.11</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-http-core_2.13</artifactId>
-            <version>10.7.3</version>
+            <version>10.8.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-http_2.13</artifactId>
-            <version>10.7.3</version>
+            <version>10.8.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-parsing_2.13</artifactId>
-            <version>10.7.3</version>
+            <version>10.8.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-persistence-query_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-persistence-typed_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-persistence_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-pki_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-protobuf-v3_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-remote_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-slf4j_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-stream-typed_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-stream_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>io.grpc</groupId>
@@ -457,7 +457,7 @@
         <dependency>
             <groupId>org.scala-lang</groupId>
             <artifactId>scala-library</artifactId>
-            <version>2.13.17</version>
+            <version>2.13.18</version>
         </dependency>
         <dependency>
             <groupId>org.scala-lang.modules</groupId>
@@ -467,7 +467,7 @@
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
-            <version>2.0.17</version>
+            <version>2.0.20</version>
         </dependency>
     </dependencies>
 </project>
