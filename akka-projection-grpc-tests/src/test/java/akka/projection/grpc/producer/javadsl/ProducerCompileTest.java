@@ -63,7 +63,7 @@ public class ProducerCompileTest {
 
     @SuppressWarnings("unchecked")
     Function<HttpRequest, CompletionStage<HttpResponse>> service =
-        ServiceHandler.concatOrNotFound(eventProducerService);
+        ServiceHandler.concatOrNotFound(system, eventProducerService);
 
     CompletionStage<ServerBinding> bound =
         Http.get(system).newServerAt("127.0.0.1", 8080).bind(service);

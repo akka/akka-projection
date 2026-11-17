@@ -29,6 +29,7 @@ public final class ShoppingCartServer {
     // #bind
     Function<HttpRequest, CompletionStage<HttpResponse>> service =
         ServiceHandler.concatOrNotFound(
+            system,
             replicationService,
             ShoppingCartServiceHandlerFactory.create(grpcService, system),
             // ServerReflection enabled to support grpcurl without import-path and proto parameters

@@ -138,7 +138,7 @@ class ProducerFilterEndToEndSpec(testContainerConf: TestContainerConf)
       val bound =
         Http()(system)
           .newServerAt("127.0.0.1", grpcPort)
-          .bind(ServiceHandler.concatOrNotFound(handler))
+          .bind(ServiceHandler.concatOrNotFound(typedSystem, handler))
           .map(_.addToCoordinatedShutdown(3.seconds))
 
       bound.futureValue

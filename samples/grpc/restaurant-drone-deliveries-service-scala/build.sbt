@@ -4,7 +4,7 @@ organization := "com.lightbend.akka.samples"
 organizationHomepage := Some(url("https://akka.io"))
 licenses := Seq(("CC0", url("https://creativecommons.org/publicdomain/zero/1.0")))
 
-scalaVersion := "2.13.17"
+scalaVersion := "2.13.18"
 
 Compile / scalacOptions ++= Seq(
   "-release:11",
@@ -26,7 +26,7 @@ run / javaOptions ++= sys.props
   .fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
 Global / cancelable := false // ctrl-c
 
-val AkkaVersion = "2.10.13"
+val AkkaVersion = "2.11.0"
 val AkkaHttpVersion = "10.7.3"
 val AkkaManagementVersion = "1.6.4"
 val AkkaPersistenceR2dbcVersion = "1.3.15"

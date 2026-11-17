@@ -9,42 +9,42 @@
             <dependency>
                 <groupId>com.typesafe</groupId>
                 <artifactId>config</artifactId>
-                <version>1.4.5</version>
+                <version>1.4.10</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-actor-typed_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-actor_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-persistence-query_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-persistence_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-protobuf-v3_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-slf4j_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>com.typesafe.akka</groupId>
                 <artifactId>akka-stream_2.13</artifactId>
-                <version>2.10.13</version>
+                <version>2.11.0</version>
             </dependency>
             <dependency>
                 <groupId>org.reactivestreams</groupId>
@@ -54,7 +54,7 @@
             <dependency>
                 <groupId>org.scala-lang</groupId>
                 <artifactId>scala-library</artifactId>
-                <version>2.13.17</version>
+                <version>2.13.18</version>
             </dependency>
             <dependency>
                 <groupId>org.slf4j</groupId>
@@ -67,42 +67,42 @@
         <dependency>
             <groupId>com.typesafe</groupId>
             <artifactId>config</artifactId>
-            <version>1.4.5</version>
+            <version>1.4.10</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-actor-typed_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-actor_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-persistence-query_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-persistence_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-protobuf-v3_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-slf4j_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>com.typesafe.akka</groupId>
             <artifactId>akka-stream_2.13</artifactId>
-            <version>2.10.13</version>
+            <version>2.11.0</version>
         </dependency>
         <dependency>
             <groupId>org.reactivestreams</groupId>
@@ -112,7 +112,7 @@
         <dependency>
             <groupId>org.scala-lang</groupId>
             <artifactId>scala-library</artifactId>
-            <version>2.13.17</version>
+            <version>2.13.18</version>
         </dependency>
         <dependency>
             <groupId>org.slf4j</groupId>

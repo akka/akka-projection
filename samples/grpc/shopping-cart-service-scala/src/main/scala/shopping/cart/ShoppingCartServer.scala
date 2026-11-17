@@ -32,6 +32,7 @@ object ShoppingCartServer {
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(
+        system,
         eventProducerService,
         proto.ShoppingCartServiceHandler.partial(grpcService),
         // ServerReflection enabled to support grpcurl without import-path and proto parameters
@@ -70,6 +71,7 @@ object ShoppingCartServer {
 
     val service: HttpRequest => Future[HttpResponse] =
       ServiceHandler.concatOrNotFound(
+        system,
         proto.ShoppingCartServiceHandler.partial(grpcService),
         // ServerReflection enabled to support grpcurl without import-path and proto parameters
         ServerReflection.partial(List(proto.ShoppingCartService)))

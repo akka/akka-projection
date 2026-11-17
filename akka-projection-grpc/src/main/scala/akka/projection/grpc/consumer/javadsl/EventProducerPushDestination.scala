@@ -14,6 +14,7 @@ import akka.http.javadsl.model.HttpResponse
 import akka.projection.grpc.consumer.ConsumerFilter.FilterCriteria
 import akka.projection.grpc.consumer.EventProducerPushDestinationSettings
 import akka.projection.grpc.internal.EventPusherConsumerServiceImpl
+import akka.projection.grpc.internal.JavaHandler
 import akka.projection.grpc.internal.proto.EventConsumerServicePowerApiHandler
 import akka.projection.grpc.consumer.scaladsl
 import akka.japi.function.{ Function => JapiFunction }
@@ -27,10 +28,10 @@ import java.util.concurrent.CompletionStage
 import java.util.function.BiFunction
 import java.util.{ List => JList, Set => JSet }
 
+import scala.concurrent.Future
 import scala.jdk.FutureConverters._
 import scala.jdk.FutureConverters.FutureOps
 import scala.jdk.OptionConverters._
-import scala.concurrent.ExecutionContext
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
 
@@ -67,24 +68,39 @@ object EventProducerPushDestination {
       EventProducerPushDestinationSettings.create(system),
       None)
 
+  /**
+   * The gRPC route that can be included in an Akka HTTP server.
+   *
+   * The returned handler does not read the request entity of requests it does not handle. To combine it with other
+   * handlers, pass them to `ServiceHandler.concatOrNotFound(system, ...)`, which discards the entity of requests
+   * that no handler handles.
+   */
   def grpcServiceHandler(
       eventConsumer: EventProducerPushDestination,
       system: ActorSystem[_]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] =
     grpcServiceHandler(Collections.singleton(eventConsumer), system)
 
+  /**
+   * The gRPC route that can be included in an Akka HTTP server.
+   *
+   * The returned handler does not read the request entity of requests it does not handle. To combine it with other
+   * handlers, pass them to `ServiceHandler.concatOrNotFound(system, ...)`, which discards the entity of requests
+   * that no handler handles.
+   */
   def grpcServiceHandler(
       eventConsumers: JSet[EventProducerPushDestination],
-      system: ActorSystem[_]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] = {
+      system: ActorSystem[_]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] =
+    JavaHandler(partialHandler(eventConsumers, system))
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] def partialHandler(eventConsumers: JSet[EventProducerPushDestination], system: ActorSystem[_])
+      : PartialFunction[akka.http.scaladsl.model.HttpRequest, Future[akka.http.scaladsl.model.HttpResponse]] = {
     val scalaConsumers = eventConsumers.asScala.map(_.asScala).toSet
-    val handler =
-      EventConsumerServicePowerApiHandler(EventPusherConsumerServiceImpl(scalaConsumers, Prefer.Java)(system))(system)
-    new JapiFunction[HttpRequest, CompletionStage[HttpResponse]] {
-      override def apply(request: HttpRequest): CompletionStage[HttpResponse] =
-        handler(request.asInstanceOf[akka.http.scaladsl.model.HttpRequest])
-          .map(_.asInstanceOf[HttpResponse])(ExecutionContext.parasitic)
-          .asJava
-    }
+    EventConsumerServicePowerApiHandler.partial(EventPusherConsumerServiceImpl(scalaConsumers, Prefer.Java)(system))(
+      system)
   }
 
   /**

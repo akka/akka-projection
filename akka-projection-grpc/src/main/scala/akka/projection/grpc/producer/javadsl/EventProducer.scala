@@ -5,19 +5,20 @@
 package akka.projection.grpc.producer.javadsl
 
 import akka.actor.typed.ActorSystem
+import akka.annotation.InternalApi
 import akka.http.javadsl.model.HttpRequest
 import akka.http.javadsl.model.HttpResponse
 import akka.japi.function.{ Function => JapiFunction }
 import akka.projection.grpc.internal.EventProducerServiceImpl
+import akka.projection.grpc.internal.JavaHandler
 import akka.projection.grpc.internal.proto.EventProducerServicePowerApiHandler
 
 import java.util.Collections
 import java.util.Optional
 import java.util.concurrent.CompletionStage
 
-import scala.jdk.FutureConverters._
+import scala.concurrent.Future
 import scala.jdk.OptionConverters._
-import scala.concurrent.ExecutionContext
 import scala.jdk.CollectionConverters._
 
 /**
@@ -25,8 +26,15 @@ import scala.jdk.CollectionConverters._
  */
 object EventProducer {
 
+  private type ScalaRequest = akka.http.scaladsl.model.HttpRequest
+  private type ScalaResponse = akka.http.scaladsl.model.HttpResponse
+
   /**
    * The gRPC route that can be included in an Akka HTTP server.
+   *
+   * The returned handler does not read the request entity of requests it does not handle. To combine it with other
+   * handlers, pass them to `ServiceHandler.concatOrNotFound(system, ...)`, which discards the entity of requests
+   * that no handler handles.
    *
    * @param source The source that should be available from this event producer
    */
@@ -38,6 +46,10 @@ object EventProducer {
   /**
    * The gRPC route that can be included in an Akka HTTP server.
    *
+   * The returned handler does not read the request entity of requests it does not handle. To combine it with other
+   * handlers, pass them to `ServiceHandler.concatOrNotFound(system, ...)`, which discards the entity of requests
+   * that no handler handles.
+   *
    * @param sources All sources that should be available from this event producer
    */
   def grpcServiceHandler(
@@ -48,13 +60,27 @@ object EventProducer {
   /**
    * The gRPC route that can be included in an Akka HTTP server.
    *
+   * The returned handler does not read the request entity of requests it does not handle. To combine it with other
+   * handlers, pass them to `ServiceHandler.concatOrNotFound(system, ...)`, which discards the entity of requests
+   * that no handler handles.
+   *
    * @param sources All sources that should be available from this event producer
    * @param interceptor An optional request interceptor applied to each request to the service
    */
   def grpcServiceHandler(
       system: ActorSystem[_],
       sources: java.util.Set[EventProducerSource],
-      interceptor: Optional[EventProducerInterceptor]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] = {
+      interceptor: Optional[EventProducerInterceptor]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] =
+    JavaHandler(partialHandler(system, sources, interceptor))
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] def partialHandler(
+      system: ActorSystem[_],
+      sources: java.util.Set[EventProducerSource],
+      interceptor: Optional[EventProducerInterceptor]): PartialFunction[ScalaRequest, Future[ScalaResponse]] = {
     val scalaProducerSources = sources.asScala.map(_.asScala).toSet
     val eventsBySlicesPerStreamId =
       akka.projection.grpc.producer.scaladsl.EventProducer
@@ -78,13 +104,7 @@ object EventProducer {
       scalaProducerSources,
       interceptor.toScala.map(new EventProducerInterceptorAdapter(_)))
 
-    val handler = EventProducerServicePowerApiHandler(eventProducerService)(system)
-    new JapiFunction[HttpRequest, CompletionStage[HttpResponse]] {
-      override def apply(request: HttpRequest): CompletionStage[HttpResponse] =
-        handler(request.asInstanceOf[akka.http.scaladsl.model.HttpRequest])
-          .map(_.asInstanceOf[HttpResponse])(ExecutionContext.parasitic)
-          .asJava
-    }
+    EventProducerServicePowerApiHandler.partial(eventProducerService)(system)
   }
 
 }

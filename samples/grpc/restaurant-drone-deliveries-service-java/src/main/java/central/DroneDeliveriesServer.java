@@ -37,6 +37,7 @@ public final class DroneDeliveriesServer {
     @SuppressWarnings("unchecked")
     var service =
         ServiceHandler.concatOrNotFound(
+            system,
             DroneOverviewServiceHandlerFactory.create(droneOverviewService, system),
             RestaurantDeliveriesServiceHandlerFactory.create(restaurantDeliveriesService, system),
             ChargingStationServiceHandlerFactory.create(chargingStationService, system),

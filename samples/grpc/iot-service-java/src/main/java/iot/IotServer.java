@@ -33,6 +33,7 @@ public final class IotServer {
     @SuppressWarnings("unchecked")
     var service =
         ServiceHandler.concatOrNotFound(
+            system,
             RegistrationServiceHandlerFactory.create(registrationService, system),
             SensorTwinServiceHandlerFactory.create(sensorTwinService, system),
             registrationEventProducerService,

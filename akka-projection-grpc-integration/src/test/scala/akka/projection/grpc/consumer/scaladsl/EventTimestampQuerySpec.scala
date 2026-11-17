@@ -89,7 +89,7 @@ class EventTimestampQuerySpec(testContainerConf: TestContainerConf)
       EventProducer.grpcServiceHandler(Set(eventProducerSource, eventProducerSourceFromSnapshot))
 
     val service: HttpRequest => Future[HttpResponse] =
-      ServiceHandler.concatOrNotFound(eventProducerService)
+      ServiceHandler.concatOrNotFound(system, eventProducerService)
 
     val bound =
       Http()

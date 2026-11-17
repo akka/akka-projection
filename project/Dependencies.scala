@@ -9,14 +9,14 @@ object Dependencies {
   // sync with Java version in .github/workflows/release.yml#documentation
   lazy val JavaDocLinkVersion = 17
 
-  val Scala213 = "2.13.17"
+  val Scala213 = "2.13.18"
   val Scala3 = "3.3.7"
 
   val Scala2Versions = Seq(Scala213)
   val ScalaVersions = Dependencies.Scala2Versions :+ Dependencies.Scala3
 
   object Versions {
-    val Akka = sys.props.getOrElse("build.akka.version", "2.10.13")
+    val Akka = sys.props.getOrElse("build.akka.version", "2.11.0")
     val AkkaVersionInDocs = VersionNumber(Akka).numbers match { case Seq(major, minor, _*) => s"$major.$minor" }
 
     val Alpakka = "10.0.0"
