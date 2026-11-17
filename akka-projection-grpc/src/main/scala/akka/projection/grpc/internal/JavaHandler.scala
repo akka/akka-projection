@@ -24,7 +24,8 @@ import akka.japi.function.{ Function => JapiFunction }
 
   /**
    * Responds with 404 without touching the request entity when the handler does not match, so that the
-   * next handler can still read it.
+   * next handler can still read it. The outermost handler should be a `ServiceHandler.concatOrNotFound(system, ...)`
+   * that discards entities nobody handled.
    */
   def apply(
       handler: PartialFunction[akka.http.scaladsl.model.HttpRequest, Future[akka.http.scaladsl.model.HttpResponse]])
@@ -33,9 +34,9 @@ import akka.japi.function.{ Function => JapiFunction }
       CompletableFuture.completedFuture[HttpResponse](HttpResponse.create().withStatus(StatusCodes.NOT_FOUND))
     (request: HttpRequest) => {
       val scalaRequest = request.asInstanceOf[akka.http.scaladsl.model.HttpRequest]
-      if (handler.isDefinedAt(scalaRequest))
-        handler(scalaRequest).map(_.asInstanceOf[HttpResponse])(ExecutionContext.parasitic).asJava
-      else notFound
+      handler
+        .andThen(f => f.map(_.asInstanceOf[HttpResponse])(ExecutionContext.parasitic).asJava)
+        .applyOrElse(scalaRequest, (_: akka.http.scaladsl.model.HttpRequest) => notFound)
     }
   }
 }

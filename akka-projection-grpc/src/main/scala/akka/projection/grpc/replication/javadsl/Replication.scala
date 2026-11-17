@@ -15,7 +15,6 @@ import akka.cluster.sharding.typed.javadsl.Entity
 import akka.cluster.sharding.typed.javadsl.EntityContext
 import akka.cluster.sharding.typed.javadsl.EntityRef
 import akka.cluster.sharding.typed.javadsl.EntityTypeKey
-import akka.grpc.javadsl.ServiceHandler
 import akka.http.javadsl.model.HttpRequest
 import akka.http.javadsl.model.HttpResponse
 import akka.persistence.query.typed.EventEnvelope
@@ -24,6 +23,7 @@ import akka.persistence.typed.internal.ReplicationContextImpl
 import akka.persistence.typed.javadsl.ReplicationContext
 import akka.persistence.typed.scaladsl.ReplicatedEventSourcing
 import akka.projection.grpc.consumer.javadsl.EventProducerPushDestination
+import akka.projection.grpc.internal.JavaHandler
 import akka.projection.grpc.producer.javadsl.EventProducer
 import akka.projection.grpc.producer.javadsl.EventProducerSource
 import akka.projection.grpc.replication.internal.ReplicationImpl
@@ -129,13 +129,14 @@ object Replication {
         jEventProducerPushDestination
 
       override def createSingleServiceHandler(): JApiFunction[HttpRequest, CompletionStage[HttpResponse]] = {
-        val handler = EventProducer.grpcServiceHandler(system, jEventProducerSource)
-        if (jEventProducerPushDestination.isPresent) {
+        val handler =
+          EventProducer.partialHandler(system, java.util.Collections.singleton(jEventProducerSource), Optional.empty())
+        JavaHandler(if (jEventProducerPushDestination.isPresent) {
           // Fold in edge push gRPC consumer service if enabled
-          val eventProducerPushHandler =
-            EventProducerPushDestination.grpcServiceHandler(jEventProducerPushDestination.get(), system)
-          ServiceHandler.concatOrNotFound(system, handler, eventProducerPushHandler)
-        } else handler
+          handler.orElse(
+            EventProducerPushDestination
+              .partialHandler(java.util.Collections.singleton(jEventProducerPushDestination.get()), system))
+        } else handler)
       }
 
       override def entityTypeKey: EntityTypeKey[Command] =

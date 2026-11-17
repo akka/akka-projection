@@ -28,6 +28,7 @@ import java.util.concurrent.CompletionStage
 import java.util.function.BiFunction
 import java.util.{ List => JList, Set => JSet }
 
+import scala.concurrent.Future
 import scala.jdk.FutureConverters._
 import scala.jdk.FutureConverters.FutureOps
 import scala.jdk.OptionConverters._
@@ -74,12 +75,18 @@ object EventProducerPushDestination {
 
   def grpcServiceHandler(
       eventConsumers: JSet[EventProducerPushDestination],
-      system: ActorSystem[_]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] = {
+      system: ActorSystem[_]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] =
+    JavaHandler(partialHandler(eventConsumers, system))
 
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] def partialHandler(eventConsumers: JSet[EventProducerPushDestination], system: ActorSystem[_])
+      : PartialFunction[akka.http.scaladsl.model.HttpRequest, Future[akka.http.scaladsl.model.HttpResponse]] = {
     val scalaConsumers = eventConsumers.asScala.map(_.asScala).toSet
-    JavaHandler(
-      EventConsumerServicePowerApiHandler
-        .partial(EventPusherConsumerServiceImpl(scalaConsumers, Prefer.Java)(system))(system))
+    EventConsumerServicePowerApiHandler.partial(EventPusherConsumerServiceImpl(scalaConsumers, Prefer.Java)(system))(
+      system)
   }
 
   /**

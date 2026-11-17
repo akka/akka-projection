@@ -5,6 +5,7 @@
 package akka.projection.grpc.producer.javadsl
 
 import akka.actor.typed.ActorSystem
+import akka.annotation.InternalApi
 import akka.http.javadsl.model.HttpRequest
 import akka.http.javadsl.model.HttpResponse
 import akka.japi.function.{ Function => JapiFunction }
@@ -16,6 +17,7 @@ import java.util.Collections
 import java.util.Optional
 import java.util.concurrent.CompletionStage
 
+import scala.concurrent.Future
 import scala.jdk.OptionConverters._
 import scala.jdk.CollectionConverters._
 
@@ -23,6 +25,9 @@ import scala.jdk.CollectionConverters._
  * The event producer implementation that can be included a gRPC route in an Akka HTTP server.
  */
 object EventProducer {
+
+  private type ScalaRequest = akka.http.scaladsl.model.HttpRequest
+  private type ScalaResponse = akka.http.scaladsl.model.HttpResponse
 
   /**
    * The gRPC route that can be included in an Akka HTTP server.
@@ -53,7 +58,17 @@ object EventProducer {
   def grpcServiceHandler(
       system: ActorSystem[_],
       sources: java.util.Set[EventProducerSource],
-      interceptor: Optional[EventProducerInterceptor]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] = {
+      interceptor: Optional[EventProducerInterceptor]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] =
+    JavaHandler(partialHandler(system, sources, interceptor))
+
+  /**
+   * INTERNAL API
+   */
+  @InternalApi
+  private[akka] def partialHandler(
+      system: ActorSystem[_],
+      sources: java.util.Set[EventProducerSource],
+      interceptor: Optional[EventProducerInterceptor]): PartialFunction[ScalaRequest, Future[ScalaResponse]] = {
     val scalaProducerSources = sources.asScala.map(_.asScala).toSet
     val eventsBySlicesPerStreamId =
       akka.projection.grpc.producer.scaladsl.EventProducer
@@ -77,7 +92,7 @@ object EventProducer {
       scalaProducerSources,
       interceptor.toScala.map(new EventProducerInterceptorAdapter(_)))
 
-    JavaHandler(EventProducerServicePowerApiHandler.partial(eventProducerService)(system))
+    EventProducerServicePowerApiHandler.partial(eventProducerService)(system)
   }
 
 }
