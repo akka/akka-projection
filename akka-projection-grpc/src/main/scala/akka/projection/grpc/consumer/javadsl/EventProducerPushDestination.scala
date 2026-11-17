@@ -68,11 +68,25 @@ object EventProducerPushDestination {
       EventProducerPushDestinationSettings.create(system),
       None)
 
+  /**
+   * The gRPC route that can be included in an Akka HTTP server.
+   *
+   * The returned handler does not read the request entity of requests it does not handle. To combine it with other
+   * handlers, pass them to `ServiceHandler.concatOrNotFound(system, ...)`, which discards the entity of requests
+   * that no handler handles.
+   */
   def grpcServiceHandler(
       eventConsumer: EventProducerPushDestination,
       system: ActorSystem[_]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] =
     grpcServiceHandler(Collections.singleton(eventConsumer), system)
 
+  /**
+   * The gRPC route that can be included in an Akka HTTP server.
+   *
+   * The returned handler does not read the request entity of requests it does not handle. To combine it with other
+   * handlers, pass them to `ServiceHandler.concatOrNotFound(system, ...)`, which discards the entity of requests
+   * that no handler handles.
+   */
   def grpcServiceHandler(
       eventConsumers: JSet[EventProducerPushDestination],
       system: ActorSystem[_]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] =

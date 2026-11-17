@@ -64,6 +64,10 @@ trait Replication[Command] {
    * If only replicating one Replicated Event Sourced Entity and not using
    * Akka Projection gRPC this endpoint factory can be used to get a partial function
    * that can be served/bound with an Akka HTTP/2 server
+   *
+   * The returned handler does not read the request entity of requests it does not handle. To combine it with other
+   * handlers, pass them to `ServiceHandler.concatOrNotFound(system, ...)`, which discards the entity of requests
+   * that no handler handles.
    */
   def createSingleServiceHandler(): JApiFunction[HttpRequest, CompletionStage[HttpResponse]]
 

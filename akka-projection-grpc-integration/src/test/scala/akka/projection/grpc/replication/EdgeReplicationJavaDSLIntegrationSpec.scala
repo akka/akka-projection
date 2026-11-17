@@ -15,6 +15,11 @@ import akka.cluster.sharding.typed.javadsl.ClusterSharding
 import akka.cluster.typed.Cluster
 import akka.cluster.typed.Join
 import akka.grpc.GrpcClientSettings
+import akka.grpc.javadsl.ServiceHandler
+import akka.http.javadsl.model.HttpRequest
+import akka.http.javadsl.model.HttpResponse
+import akka.http.javadsl.model.StatusCodes
+import akka.japi.function.{ Function => JapiFunction }
 import akka.http.javadsl.Http
 import akka.persistence.typed.ReplicaId
 import akka.projection.grpc.TestContainerConf
@@ -35,6 +40,8 @@ import org.scalatest.wordspec.AnyWordSpecLike
 import org.slf4j.LoggerFactory
 
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionStage
 import scala.jdk.FutureConverters._
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
@@ -175,6 +182,20 @@ class EdgeReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf
     }
   }
 
+  // handler placed after the replication handler in the chain, reads the request entity
+  private def echoBodyHandler(system: ActorSystem[_]): JapiFunction[HttpRequest, CompletionStage[HttpResponse]] =
+    (request: HttpRequest) => {
+      val scalaRequest = request.asInstanceOf[akka.http.scaladsl.model.HttpRequest]
+      if (scalaRequest.uri.path.toString == "/echo")
+        scalaRequest.entity
+          .toStrict(3.seconds)(akka.stream.Materializer.matFromSystem(system))
+          .map(entity => akka.http.scaladsl.model.HttpResponse(entity = entity).asInstanceOf[HttpResponse])(
+            system.executionContext)
+          .asJava
+      else
+        CompletableFuture.completedFuture(HttpResponse.create().withStatus(StatusCodes.NOT_FOUND))
+    }
+
   def assertGreeting(entityId: String, expected: String): Unit = {
     testKitsPerDc.values.foreach { testKit =>
       withClue(s"on ${testKit.system.name}") {
@@ -226,7 +247,8 @@ class EdgeReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf
             Http
               .get(system)
               .newServerAt("127.0.0.1", grpcPort)
-              .bind(started.createSingleServiceHandler())
+              .bind(
+                ServiceHandler.concatOrNotFound(system, started.createSingleServiceHandler(), echoBodyHandler(system)))
               .asScala
               .map(_.addToCoordinatedShutdown(Duration.ofSeconds(3), system))(system.executionContext)
               .map(_ => Done)
@@ -238,6 +260,21 @@ class EdgeReplicationJavaDSLIntegrationSpec(testContainerConf: TestContainerConf
 
       replicasStarted.futureValue
       logger.info("All replication/producer services bound")
+    }
+
+    "pass requests it does not handle with the entity intact to the next handler" in {
+      val body = "x" * 3000000
+      val response = akka.http.scaladsl
+        .Http()(system.classicSystem)
+        .singleRequest(
+          akka.http.scaladsl.model
+            .HttpRequest(
+              akka.http.scaladsl.model.HttpMethods.POST,
+              s"http://127.0.0.1:${grpcPorts.head}/echo",
+              entity = akka.http.scaladsl.model.HttpEntity(body)))
+        .futureValue
+      response.status should ===(akka.http.scaladsl.model.StatusCodes.OK)
+      akka.http.scaladsl.unmarshalling.Unmarshal(response.entity).to[String].futureValue should ===(body)
     }
 
     "replicate directly" in {

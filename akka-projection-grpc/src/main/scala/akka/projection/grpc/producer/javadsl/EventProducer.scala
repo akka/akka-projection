@@ -32,6 +32,10 @@ object EventProducer {
   /**
    * The gRPC route that can be included in an Akka HTTP server.
    *
+   * The returned handler does not read the request entity of requests it does not handle. To combine it with other
+   * handlers, pass them to `ServiceHandler.concatOrNotFound(system, ...)`, which discards the entity of requests
+   * that no handler handles.
+   *
    * @param source The source that should be available from this event producer
    */
   def grpcServiceHandler(
@@ -42,6 +46,10 @@ object EventProducer {
   /**
    * The gRPC route that can be included in an Akka HTTP server.
    *
+   * The returned handler does not read the request entity of requests it does not handle. To combine it with other
+   * handlers, pass them to `ServiceHandler.concatOrNotFound(system, ...)`, which discards the entity of requests
+   * that no handler handles.
+   *
    * @param sources All sources that should be available from this event producer
    */
   def grpcServiceHandler(
@@ -51,6 +59,10 @@ object EventProducer {
 
   /**
    * The gRPC route that can be included in an Akka HTTP server.
+   *
+   * The returned handler does not read the request entity of requests it does not handle. To combine it with other
+   * handlers, pass them to `ServiceHandler.concatOrNotFound(system, ...)`, which discards the entity of requests
+   * that no handler handles.
    *
    * @param sources All sources that should be available from this event producer
    * @param interceptor An optional request interceptor applied to each request to the service
