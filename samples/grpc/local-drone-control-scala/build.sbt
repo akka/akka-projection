@@ -29,12 +29,12 @@ run / javaOptions ++= sys.props
 Global / cancelable := false // ctrl-c
 
 val AkkaVersion = "2.11.0"
-val AkkaHttpVersion = "10.7.3"
-val AkkaManagementVersion = "1.6.4"
-val AkkaPersistenceR2dbcVersion = "1.3.15"
+val AkkaHttpVersion = "10.8.0"
+val AkkaManagementVersion = "1.7.0"
+val AkkaPersistenceR2dbcVersion = "1.4.1"
 val AkkaProjectionVersion =
   sys.props.getOrElse("akka-projection.version", "1.7.0")
-val AkkaDiagnosticsVersion = "2.2.0"
+val AkkaDiagnosticsVersion = "2.3.0"
 
 enablePlugins(AkkaGrpcPlugin)
 
@@ -75,8 +75,8 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion,
   // Common dependencies for logging and testing
   "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
-  "ch.qos.logback" % "logback-classic" % "1.6.5",
-  "org.scalatest" %% "scalatest" % "3.2.19" % Test,
+  "ch.qos.logback" % "logback-classic" % "1.6.8",
+  "org.scalatest" %% "scalatest" % "3.2.20" % Test,
   // Prometheus client for custom metrics
   "io.prometheus" % "simpleclient" % "0.16.0",
   "io.prometheus" % "simpleclient_httpserver" % "0.16.0",
