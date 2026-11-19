@@ -102,6 +102,16 @@ For this example, we configure as many `ShardedDaemonProcess` as tags and we def
 
 For graceful stop it is recommended to use @scala[`ProjectionBehavior.Stop`]@java[`ProjectionBehavior.stop()`] message.
 
+### Changing the number of projection instances
+
+@@@ warning
+The `numberOfInstances`/`initialNumberOfInstances` argument passed to `ShardedDaemonProcess.init`/`initWithContext` is only used the first time a given Sharded Daemon Process is started. After that the running count is kept in distributed data and is authoritative — redeploying with a different argument value alone will **not** change the number of running projection instances.
+
+To change the number at runtime send the `ChangeNumberOfProcesses` command to the `ActorRef` returned from `initWithContext`, as described in @extref:[Sharded Daemon Process dynamic scaling](akka:typed/cluster-sharded-daemon-process.html#dynamic-scaling-of-number-of-workers).
+
+When the behavior factory derives slice ranges from the configured number (the common `sliceRanges(numberOfConsumers)` pattern), compute the slice ranges *inside* the behavior factory from `daemonContext.totalProcesses` rather than from the outer `numberOfInstances` value. Otherwise a stale distributed data state (from a previous deployment that rescaled to a different number) will cause processes outside the configured range to start with an out-of-bounds slice index and fail in a restart loop.
+@@@
+
 ### Projection Behavior
 
 The `ProjectionBehavior` is an Actor `Behavior` that knows how to manage the Projection lifecyle. The Projection starts to consume the events as soon as the actor is spawned and will restart the source in case of failures (see @ref:[Projection Settings](projection-settings.md)).

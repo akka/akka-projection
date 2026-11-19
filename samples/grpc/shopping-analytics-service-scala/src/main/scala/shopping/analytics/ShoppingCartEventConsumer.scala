@@ -94,17 +94,17 @@ object ShoppingCartEventConsumer {
     implicit val sys: ActorSystem[_] = system
     val numberOfProjectionInstances = 4
     val projectionName: String = "cart-events"
-    val sliceRanges =
-      Persistence(system).sliceRanges(numberOfProjectionInstances)
 
     val eventsBySlicesQuery =
       GrpcReadJournal(List(ShoppingCartEventsProto.javaDescriptor))
 
-    ShardedDaemonProcess(system).init(
+    ShardedDaemonProcess(system).initWithContext(
       projectionName,
       numberOfProjectionInstances,
-      { idx =>
-        val sliceRange = sliceRanges(idx)
+      { daemonContext =>
+        val sliceRanges =
+          Persistence(system).sliceRanges(daemonContext.totalProcesses)
+        val sliceRange = sliceRanges(daemonContext.processNumber)
         val projectionKey =
           s"${eventsBySlicesQuery.streamId}-${sliceRange.min}-${sliceRange.max}"
         val projectionId = ProjectionId.of(projectionName, projectionKey)

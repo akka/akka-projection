@@ -16,7 +16,6 @@ import akka.projection.grpc.producer.javadsl.EventProducerPush;
 import akka.projection.grpc.producer.javadsl.EventProducerSource;
 import akka.projection.grpc.producer.javadsl.Transformation;
 import akka.projection.r2dbc.javadsl.R2dbcProjection;
-import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
@@ -84,7 +83,6 @@ public class DroneEvents {
   public static void initEventToCloudDaemonProcess(ActorSystem<Void> system, Settings settings) {
     var nrOfEventProducers =
         system.settings().config().getInt("local-drone-control.nr-of-event-producers");
-    var sliceRanges = Persistence.get(system).getSliceRanges(nrOfEventProducers);
 
     // turn events into a public protocol (protobuf) type before publishing
     var eventTransformation =
@@ -114,19 +112,22 @@ public class DroneEvents {
             GrpcClientSettings.fromConfig("central-drone-control", system));
 
     ShardedDaemonProcess.get(system)
-        .init(
+        .initWithContext(
             ProjectionBehavior.Command.class,
             "drone-event-push",
             nrOfEventProducers,
-            idx -> projectionForPartition(system, eventProducer, sliceRanges, idx));
+            daemonContext -> {
+              var sliceRanges =
+                  Persistence.get(system).getSliceRanges(daemonContext.totalProcesses());
+              return projectionForPartition(
+                  system, eventProducer, sliceRanges.get(daemonContext.processNumber()));
+            });
   }
 
   private static Behavior<ProjectionBehavior.Command> projectionForPartition(
       ActorSystem<?> system,
       EventProducerPush<Object> eventProducer,
-      List<Pair<Integer, Integer>> sliceRanges,
-      int partition) {
-    var sliceRange = sliceRanges.get(partition);
+      Pair<Integer, Integer> sliceRange) {
     var minSlice = sliceRange.first();
     var maxSlice = sliceRange.second();
 

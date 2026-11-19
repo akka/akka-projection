@@ -1,6 +1,7 @@
 package shopping.analytics;
 
 //#initProjections
+import akka.cluster.sharding.typed.ShardedDaemonProcessSettings;
 import akka.cluster.sharding.typed.javadsl.ShardedDaemonProcess;
 import akka.japi.Pair;
 import akka.persistence.Persistence;
@@ -99,18 +100,19 @@ class ShoppingCartEventConsumer {
   public static void init(ActorSystem<?> system) {
     int numberOfProjectionInstances = 4;
     String projectionName = "cart-events";
-    List<Pair<Integer, Integer>> sliceRanges = Persistence.get(system).getSliceRanges(numberOfProjectionInstances);
 
     GrpcReadJournal eventsBySlicesQuery = GrpcReadJournal.create(
         system,
         List.of(ShoppingCartEvents.getDescriptor()));
 
-    ShardedDaemonProcess.get(system).init(
+    ShardedDaemonProcess.get(system).initWithContext(
         ProjectionBehavior.Command.class,
         projectionName,
         numberOfProjectionInstances,
-        idx -> {
-          Pair<Integer, Integer> sliceRange = sliceRanges.get(idx);
+        daemonContext -> {
+          List<Pair<Integer, Integer>> sliceRanges =
+              Persistence.get(system).getSliceRanges(daemonContext.totalProcesses());
+          Pair<Integer, Integer> sliceRange = sliceRanges.get(daemonContext.processNumber());
           String projectionKey = eventsBySlicesQuery.streamId() + "-" + sliceRange.first() + "-" + sliceRange.second();
           ProjectionId projectionId = ProjectionId.of(projectionName, projectionKey);
 
@@ -130,7 +132,8 @@ class ShoppingCartEventConsumer {
                   system));
 
         },
-        ProjectionBehavior.stopMessage());
+        ShardedDaemonProcessSettings.create(system),
+        Optional.of(ProjectionBehavior.stopMessage()));
   }
 
   //#initProjections
