@@ -81,6 +81,13 @@ object Dependencies {
     val slf4j = "org.slf4j" % "slf4j-api" % "2.0.20"
     val slick = "com.typesafe.slick" %% "slick" % Versions.slick
 
+    // Override for the transitive dependency from Slick and the Cassandra driver, which Maven would pick
+    // over the newer one from Akka. Keep in sync with the version akka-actor depends on.
+    val typesafeConfig = "com.typesafe" % "config" % "1.4.10"
+
+    // Override for the transitive dependency from scalapb-runtime, which Maven would pick over the newer one from akka-grpc
+    val protobufJava = "com.google.protobuf" % "protobuf-java" % akka.grpc.gen.BuildInfo.googleProtobufVersion
+
     val alpakkaCassandra = "com.lightbend.akka" %% "akka-stream-alpakka-cassandra" % Versions.Alpakka
 
     val alpakkaKafka = "com.typesafe.akka" %% "akka-stream-kafka" % Versions.AlpakkaKafka
@@ -200,6 +207,7 @@ object Dependencies {
     deps ++= Seq(
         Compile.slick,
         Compile.slf4j,
+        Compile.typesafeConfig,
         Compile.akkaPersistenceQuery,
         Test.akkaTypedTestkit,
         Test.h2Driver,
@@ -223,7 +231,7 @@ object Dependencies {
         Test.logback)
 
   val cassandra =
-    deps ++= Seq(Compile.alpakkaCassandra, Compile.akkaPersistenceQuery)
+    deps ++= Seq(Compile.alpakkaCassandra, Compile.typesafeConfig, Compile.akkaPersistenceQuery)
 
   val cassandraIntegration =
     deps ++= Seq(Test.scalatest, Test.akkaTypedTestkit, Test.logback, Test.cassandraContainer, Test.scalatestJUnit)
@@ -251,6 +259,7 @@ object Dependencies {
         Compile.akkaStream,
         Compile.akkaPersistenceTyped,
         Compile.akkaPersistenceQuery,
+        Compile.protobufJava,
         // Only needed for Replicated Event Sourcing over gRPC,
         // and ConsumerFilter with Cluster on consumer side
         Compile.akkaClusterShardingTyped % "provided")
