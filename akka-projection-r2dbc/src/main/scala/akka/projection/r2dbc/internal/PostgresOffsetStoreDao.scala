@@ -12,6 +12,7 @@ import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 import io.r2dbc.spi.Connection
+import io.r2dbc.spi.Row
 import io.r2dbc.spi.Statement
 import org.slf4j.LoggerFactory
 import akka.Done
@@ -185,19 +186,32 @@ private[projection] class PostgresOffsetStoreDao(
 
   def readTimestampOffset(slice: Int, pid: String): Future[Option[R2dbcOffsetStore.Record]] = {
     r2dbcExecutor.selectOne("read one timestamp offset")(
-      conn => {
-        logger.trace("reading one timestamp offset for [{}] pid [{}]", projectionId, pid)
-        conn
-          .createStatement(selectOneTimestampOffsetSql)
-          .bind(0, slice)
-          .bind(1, projectionId.name)
-          .bind(2, pid)
-      },
-      row => {
-        val seqNr = row.get("seq_nr", classOf[java.lang.Long])
-        val timestamp = row.get("timestamp_offset", classOf[Instant])
-        R2dbcOffsetStore.Record(slice, pid, seqNr, timestamp)
-      })
+      conn => selectOneTimestampOffsetStatement(conn, slice, pid),
+      row => timestampOffsetRecord(slice, pid, row))
+  }
+
+  override def readTimestampOffsetInTx(
+      connection: Connection,
+      slice: Int,
+      pid: String): Future[Option[R2dbcOffsetStore.Record]] = {
+    R2dbcExecutor.selectOneInTx(
+      selectOneTimestampOffsetStatement(connection, slice, pid),
+      row => timestampOffsetRecord(slice, pid, row))(ec, system)
+  }
+
+  private def selectOneTimestampOffsetStatement(connection: Connection, slice: Int, pid: String): Statement = {
+    logger.trace("reading one timestamp offset for [{}] pid [{}]", projectionId, pid)
+    connection
+      .createStatement(selectOneTimestampOffsetSql)
+      .bind(0, slice)
+      .bind(1, projectionId.name)
+      .bind(2, pid)
+  }
+
+  private def timestampOffsetRecord(slice: Int, pid: String, row: Row): R2dbcOffsetStore.Record = {
+    val seqNr = row.get("seq_nr", classOf[java.lang.Long])
+    val timestamp = row.get("timestamp_offset", classOf[Instant])
+    R2dbcOffsetStore.Record(slice, pid, seqNr, timestamp)
   }
 
   override def readPrimitiveOffset(): Future[immutable.IndexedSeq[OffsetSerialization.SingleOffset]] =

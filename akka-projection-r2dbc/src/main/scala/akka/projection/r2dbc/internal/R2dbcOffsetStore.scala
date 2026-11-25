@@ -546,28 +546,32 @@ private[projection] class R2dbcOffsetStore(
     }
   }
 
-  def load(pids: Set[Pid]): Future[State] = {
+  // reads with the given connection, to not use another connection from the pool while saving
+  private def load(conn: Connection, pids: Set[Pid]): Future[State] = {
     checkStopped()
     val oldState = state.get()
     val pidsToLoad = pids.filterNot(oldState.contains)
     if (pidsToLoad.isEmpty)
       Future.successful(oldState)
     else {
-      val loadedRecords = pidsToLoad.map { pid =>
-        val slice = persistenceExt.sliceForPersistenceId(pid)
-        dao.readTimestampOffset(slice, pid)
+      // one statement at a time on the same connection
+      val loadedRecords = pidsToLoad.foldLeft(Future.successful(Vector.empty[Record])) { (acc, pid) =>
+        acc.flatMap { records =>
+          val slice = persistenceExt.sliceForPersistenceId(pid)
+          dao.readTimestampOffsetInTx(conn, slice, pid).map(records ++ _)
+        }
       }
-      Future.sequence(loadedRecords).flatMap { records =>
+      loadedRecords.flatMap { records =>
         if (logger.isTraceEnabled) {
-          records.flatten.foreach { record =>
+          records.foreach { record =>
             logger.trace("{} loaded pid [{}], seqNr [{}]", logPrefix, record.pid, record.seqNr)
           }
         }
-        val newState = oldState.add(records.flatten, settings.acceptSequenceNumberResetAfter)
+        val newState = oldState.add(records, settings.acceptSequenceNumberResetAfter)
         if (state.compareAndSet(oldState, newState))
           Future.successful(newState)
         else
-          load(pids) // CAS retry, concurrent update
+          load(conn, pids) // CAS retry, concurrent update
       }
     }
   }
@@ -644,7 +648,7 @@ private[projection] class R2dbcOffsetStore(
       records: immutable.IndexedSeq[Record],
       canBeConcurrent: Boolean): Future[Done] = {
     checkStopped()
-    load(records.iterator.map(_.pid).toSet).flatMap { oldState =>
+    load(conn, records.iterator.map(_.pid).toSet).flatMap { oldState =>
       val filteredRecords = {
         if (records.size <= 1)
           records.filterNot(record => oldState.isDuplicate(record, settings.acceptSequenceNumberResetAfter))
@@ -695,7 +699,7 @@ private[projection] class R2dbcOffsetStore(
         }
 
         def compareAndSwapRetry(): Future[Done] = {
-          load(records.iterator.map(_.pid).toSet).flatMap { old =>
+          load(conn, records.iterator.map(_.pid).toSet).flatMap { old =>
             val evictedNewState = addRecordsAndEvict(old)
             if (state.compareAndSet(old, evictedNewState)) {
               slices.foreach(s => triggerDeletionPerSlice.put(s, TRUE))
