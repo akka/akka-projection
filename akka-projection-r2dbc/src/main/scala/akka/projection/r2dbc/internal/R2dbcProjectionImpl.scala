@@ -27,6 +27,7 @@ import akka.persistence.query.QueryCorrelationId
 import akka.persistence.query.UpdatedDurableState
 import akka.persistence.query.typed.EventEnvelope
 import akka.persistence.query.typed.scaladsl.LoadEventQuery
+import akka.persistence.r2dbc.ConnectionFactoryProvider
 import akka.persistence.r2dbc.internal.EnvelopeOrigin
 import akka.persistence.r2dbc.internal.R2dbcExecutor
 import akka.persistence.state.scaladsl.DurableStateStore
@@ -102,6 +103,22 @@ private[projection] object R2dbcProjectionImpl {
       settings: R2dbcProjectionSettings,
       r2dbcExecutor: R2dbcExecutor)(implicit system: ActorSystem[_]) = {
     new R2dbcOffsetStore(projectionId, uuid, sourceProvider, system, settings, r2dbcExecutor)
+  }
+
+  private[projection] def createExecutor(settings: R2dbcProjectionSettings)(
+      implicit
+      system: ActorSystem[_]): R2dbcExecutor = {
+    val connectionFactoryProvider = ConnectionFactoryProvider(system)
+    val connectionFactory = settings.customConnectionFactory.getOrElse(
+      connectionFactoryProvider.connectionFactoryFor(settings.useConnectionFactory))
+    // the pool settings come from the config path also when there is a custom connection factory
+    val poolSettings = connectionFactoryProvider.connectionPoolSettingsFor(settings.useConnectionFactory)
+    new R2dbcExecutor(
+      connectionFactory,
+      log,
+      settings.logDbCallsExceeding,
+      closeCallsExceeding = poolSettings.closeCallsExceeding,
+      closeQueriesExceeding = poolSettings.closeQueriesExceeding)(system.executionContext, system)
   }
 
   /**
