@@ -37,7 +37,7 @@ object Dependencies {
     val AkkaPersistenceCassandra = "1.4.1"
     val AkkaPersistenceJdbc = "5.6.0"
 
-    val AkkaPersistenceR2dbc = "1.4.1"
+    val AkkaPersistenceR2dbc = "1.4.2"
     val AkkaPersistenceR2dbcVersionInDocs = VersionNumber(AkkaPersistenceR2dbc).numbers match {
       case Seq(major, minor, _*) => s"$major.$minor"
     }
